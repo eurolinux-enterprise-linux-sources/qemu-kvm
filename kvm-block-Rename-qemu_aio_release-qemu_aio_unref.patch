@@ -1,0 +1,312 @@
+From 0fe40e6cd089e1568b1c7376a185725b6c885526 Mon Sep 17 00:00:00 2001
+Message-Id: <0fe40e6cd089e1568b1c7376a185725b6c885526.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:39 -0500
+Subject: [CHANGE 19/29] block: Rename qemu_aio_release -> qemu_aio_unref
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-20-git-send-email-famz@redhat.com>
+Patchwork-id: 64920
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 19/28] block: Rename qemu_aio_release -> qemu_aio_unref
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Suggested-by: Benoît Canet <benoit.canet@irqsave.net>
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 8007429a99d6ea8480ba0a7a5fb5ae92473f798c)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	block/archipelago.c
+	block/blkverify.c
+	block/curl.c
+	block/iscsi.c
+	block/linux-aio.c
+	block/quorum.c
+	block/rbd.c
+	block/sheepdog.c
+	block/win32-aio.c
+	hw/ide/core.c
+	include/block/aio.h
+	thread-pool.c
+
+Extra modification:
+	block/gluster.c
+
+Mechanical rename, so all conflict resolutions are simple.
+---
+ block.c            | 8 ++++----
+ block/blkdebug.c   | 2 +-
+ block/curl.c       | 4 ++--
+ block/gluster.c    | 6 +++---
+ block/qed.c        | 2 +-
+ block/rbd.c        | 4 ++--
+ block/vdi.c        | 4 ++--
+ dma-helpers.c      | 2 +-
+ linux-aio.c        | 4 ++--
+ posix-aio-compat.c | 4 ++--
+ qemu-aio.h         | 2 +-
+ 11 files changed, 21 insertions(+), 21 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block.c            | 8 ++++----
+ block/blkdebug.c   | 2 +-
+ block/curl.c       | 4 ++--
+ block/gluster.c    | 6 +++---
+ block/qed.c        | 2 +-
+ block/rbd.c        | 4 ++--
+ block/vdi.c        | 4 ++--
+ dma-helpers.c      | 2 +-
+ linux-aio.c        | 4 ++--
+ posix-aio-compat.c | 4 ++--
+ qemu-aio.h         | 2 +-
+ 11 files changed, 21 insertions(+), 21 deletions(-)
+
+diff --git a/block.c b/block.c
+index c493a40..65427af 100644
+--- a/block.c
++++ b/block.c
+@@ -3837,7 +3837,7 @@ void bdrv_aio_cancel(BlockDriverAIOCB *acb)
+         qemu_co_queue_restart_all(&bs->throttled_reqs[1]);
+         qemu_aio_wait();
+     }
+-    qemu_aio_release(acb);
++    qemu_aio_unref(acb);
+ }
+ 
+ /* Async version of aio cancel. The caller is not blocked if the acb implements
+@@ -3877,7 +3877,7 @@ static void bdrv_aio_bh_cb(void *opaque)
+     acb->common.cb(acb->common.opaque, acb->ret);
+     qemu_bh_delete(acb->bh);
+     acb->bh = NULL;
+-    qemu_aio_release(acb);
++    qemu_aio_unref(acb);
+ }
+ 
+ static BlockDriverAIOCB *bdrv_aio_rw_vector(BlockDriverState *bs,
+@@ -3944,7 +3944,7 @@ static void bdrv_co_em_bh(void *opaque)
+     acb->common.cb(acb->common.opaque, acb->req.error);
+ 
+     qemu_bh_delete(acb->bh);
+-    qemu_aio_release(acb);
++    qemu_aio_unref(acb);
+ }
+ 
+ /* Invoke bdrv_co_do_readv/bdrv_co_do_writev */
+@@ -4073,7 +4073,7 @@ void qemu_aio_ref(void *p)
+     acb->refcnt++;
+ }
+ 
+-void qemu_aio_release(void *p)
++void qemu_aio_unref(void *p)
+ {
+     BlockDriverAIOCB *acb = p;
+     assert(acb->refcnt > 0);
+diff --git a/block/blkdebug.c b/block/blkdebug.c
+index a5dde2e..6c59694 100644
+--- a/block/blkdebug.c
++++ b/block/blkdebug.c
+@@ -311,7 +311,7 @@ static void error_callback_bh(void *opaque)
+     struct BlkdebugAIOCB *acb = opaque;
+     qemu_bh_delete(acb->bh);
+     acb->common.cb(acb->common.opaque, acb->ret);
+-    qemu_aio_release(acb);
++    qemu_aio_unref(acb);
+ }
+ 
+ static BlockDriverAIOCB *inject_error(BlockDriverState *bs,
+diff --git a/block/curl.c b/block/curl.c
+index b3afd6a..5748351 100644
+--- a/block/curl.c
++++ b/block/curl.c
+@@ -142,7 +142,7 @@ static size_t curl_read_cb(void *ptr, size_t size, size_t nmemb, void *opaque)
+             qemu_iovec_from_buffer(acb->qiov, s->orig_buf + acb->start,
+                                    acb->end - acb->start);
+             acb->common.cb(acb->common.opaque, 0);
+-            qemu_aio_release(acb);
++            qemu_aio_unref(acb);
+             s->acb[i] = NULL;
+         }
+     }
+@@ -424,7 +424,7 @@ static BlockDriverAIOCB *curl_aio_readv(BlockDriverState *bs,
+ 
+     switch (curl_find_buf(s, start, nb_sectors * SECTOR_SIZE, acb)) {
+         case FIND_RET_OK:
+-            qemu_aio_release(acb);
++            qemu_aio_unref(acb);
+             // fall through
+         case FIND_RET_WAIT:
+             return &acb->common;
+diff --git a/block/gluster.c b/block/gluster.c
+index d2a7648..53eed0f 100644
+--- a/block/gluster.c
++++ b/block/gluster.c
+@@ -250,7 +250,7 @@ static void qemu_gluster_complete_aio(GlusterAIOCB *acb, BDRVGlusterState *s)
+     }
+ 
+     s->qemu_aio_count--;
+-    qemu_aio_release(acb);
++    qemu_aio_unref(acb);
+     cb(opaque, ret);
+     if (finished) {
+         *finished = true;
+@@ -539,7 +539,7 @@ static BlockDriverAIOCB *qemu_gluster_aio_rw(BlockDriverState *bs,
+ 
+ out:
+     s->qemu_aio_count--;
+-    qemu_aio_release(acb);
++    qemu_aio_unref(acb);
+     return NULL;
+ }
+ 
+@@ -591,7 +591,7 @@ static BlockDriverAIOCB *qemu_gluster_aio_flush(BlockDriverState *bs,
+ 
+ out:
+     s->qemu_aio_count--;
+-    qemu_aio_release(acb);
++    qemu_aio_unref(acb);
+     return NULL;
+ }
+ 
+diff --git a/block/qed.c b/block/qed.c
+index ddf30ae..9dd810a 100644
+--- a/block/qed.c
++++ b/block/qed.c
+@@ -873,7 +873,7 @@ static void qed_aio_complete_bh(void *opaque)
+     int ret = acb->bh_ret;
+ 
+     qemu_bh_delete(acb->bh);
+-    qemu_aio_release(acb);
++    qemu_aio_unref(acb);
+ 
+     /* Invoke callback */
+     cb(user_opaque, ret);
+diff --git a/block/rbd.c b/block/rbd.c
+index 93d33b5..559d481 100644
+--- a/block/rbd.c
++++ b/block/rbd.c
+@@ -635,7 +635,7 @@ static void rbd_aio_bh_cb(void *opaque)
+     qemu_bh_delete(acb->bh);
+     acb->bh = NULL;
+     acb->status = 0;
+-    qemu_aio_release(acb);
++    qemu_aio_unref(acb);
+ }
+ 
+ static BlockDriverAIOCB *rbd_start_aio(BlockDriverState *bs,
+@@ -719,7 +719,7 @@ static BlockDriverAIOCB *rbd_start_aio(BlockDriverState *bs,
+ failed:
+     g_free(rcb);
+     s->qemu_aio_count--;
+-    qemu_aio_release(acb);
++    qemu_aio_unref(acb);
+     return NULL;
+ }
+ 
+diff --git a/block/vdi.c b/block/vdi.c
+index a42c568..e66f278 100644
+--- a/block/vdi.c
++++ b/block/vdi.c
+@@ -629,7 +629,7 @@ done:
+         qemu_vfree(acb->orig_buf);
+     }
+     acb->common.cb(acb->common.opaque, ret);
+-    qemu_aio_release(acb);
++    qemu_aio_unref(acb);
+ }
+ 
+ static BlockDriverAIOCB *vdi_aio_readv(BlockDriverState *bs,
+@@ -784,7 +784,7 @@ done:
+         qemu_vfree(acb->orig_buf);
+     }
+     acb->common.cb(acb->common.opaque, ret);
+-    qemu_aio_release(acb);
++    qemu_aio_unref(acb);
+ }
+ 
+ static BlockDriverAIOCB *vdi_aio_writev(BlockDriverState *bs,
+diff --git a/dma-helpers.c b/dma-helpers.c
+index 89b3313..14387d9 100644
+--- a/dma-helpers.c
++++ b/dma-helpers.c
+@@ -91,7 +91,7 @@ static void dma_complete(DMAAIOCB *dbs, int ret)
+         qemu_bh_delete(dbs->bh);
+         dbs->bh = NULL;
+     }
+-    qemu_aio_release(dbs);
++    qemu_aio_unref(dbs);
+ }
+ 
+ static void dma_bdrv_cb(void *opaque, int ret)
+diff --git a/linux-aio.c b/linux-aio.c
+index fecbb87..454ecbe 100644
+--- a/linux-aio.c
++++ b/linux-aio.c
+@@ -73,7 +73,7 @@ static void qemu_laio_process_completion(struct qemu_laio_state *s,
+     }
+     laiocb->common.cb(laiocb->common.opaque, ret);
+ 
+-    qemu_aio_release(laiocb);
++    qemu_aio_unref(laiocb);
+ }
+ 
+ static void qemu_laio_completion_cb(void *opaque)
+@@ -183,7 +183,7 @@ BlockDriverAIOCB *laio_submit(BlockDriverState *bs, void *aio_ctx, int fd,
+ out_dec_count:
+     s->count--;
+ out_free_aiocb:
+-    qemu_aio_release(laiocb);
++    qemu_aio_unref(laiocb);
+     return NULL;
+ }
+ 
+diff --git a/posix-aio-compat.c b/posix-aio-compat.c
+index c3741b4..df09e38 100644
+--- a/posix-aio-compat.c
++++ b/posix-aio-compat.c
+@@ -514,7 +514,7 @@ static void posix_aio_read(void *opaque)
+             if (ret == ECANCELED) {
+                 /* remove the request */
+                 *pacb = acb->next;
+-                qemu_aio_release(acb);
++                qemu_aio_unref(acb);
+             } else if (ret != EINPROGRESS) {
+                 /* end of aio */
+                 if (ret == 0) {
+@@ -530,7 +530,7 @@ static void posix_aio_read(void *opaque)
+                 *pacb = acb->next;
+                 /* call the callback */
+                 acb->common.cb(acb->common.opaque, ret);
+-                qemu_aio_release(acb);
++                qemu_aio_unref(acb);
+                 break;
+             } else {
+                 pacb = &acb->next;
+diff --git a/qemu-aio.h b/qemu-aio.h
+index b6c7d50..4297fe6 100644
+--- a/qemu-aio.h
++++ b/qemu-aio.h
+@@ -36,7 +36,7 @@ struct BlockDriverAIOCB {
+ 
+ void *qemu_aio_get(const AIOCBInfo *pool, BlockDriverState *bs,
+                    BlockDriverCompletionFunc *cb, void *opaque);
+-void qemu_aio_release(void *p);
++void qemu_aio_unref(void *p);
+ void qemu_aio_ref(void *p);
+ 
+ typedef struct AioHandler AioHandler;
+-- 
+2.1.0
+

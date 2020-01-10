@@ -1,0 +1,83 @@
+From 088e96d17e65f382b15521b4d7687517605331df Mon Sep 17 00:00:00 2001
+Message-Id: <088e96d17e65f382b15521b4d7687517605331df.1369899578.git.minovotn@redhat.com>
+In-Reply-To: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+References: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+From: Amos Kong <akong@redhat.com>
+Date: Wed, 29 May 2013 08:46:52 +0200
+Subject: [PATCH 15/15] acpi: drop debug port
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1369817212-27251-1-git-send-email-akong@redhat.com>
+Patchwork-id: 51665
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2] acpi: drop debug port
+Bugzilla: 952240
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=952240
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=5838126
+Test: tested in localhost
+
+I'm pretty sure this isn't needed any more.  I think this predates the
+switch to seabios, and the seabios DSDT table has a DBUG() aml macro
+which writes stuff to the seabios debug port (0x402).
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(manually backport of 3e43749882c558875f70ac5deda39cdc9797e245)
+
+ACPI_DBG_IO_ADDR occupies an I/O port and guest doesn't know that.
+This leads to a bug as the guest probably tries to map a pci bar
+to that I/O port.
+
+This patch removes the useless acpi_dbg_writel() to fix qemu crash.
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+---
+ hw/acpi.c |   11 -----------
+ 1 files changed, 0 insertions(+), 11 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/acpi.c | 11 -----------
+ 1 file changed, 11 deletions(-)
+
+diff --git a/hw/acpi.c b/hw/acpi.c
+index f824b8e..ddbbda7 100644
+--- a/hw/acpi.c
++++ b/hw/acpi.c
+@@ -34,8 +34,6 @@
+ /* i82731AB (PIIX4) compatible power management function */
+ #define PM_FREQ 3579545
+ 
+-#define ACPI_DBG_IO_ADDR  0xb044
+-
+ #define GPE_BASE 0xafe0
+ #define PROC_BASE 0xaf00
+ #define PCI_UP_BASE 0xae00
+@@ -339,13 +337,6 @@ static uint32_t pm_smi_readb(void *opaque, uint32_t addr)
+     return val;
+ }
+ 
+-static void acpi_dbg_writel(void *opaque, uint32_t addr, uint32_t val)
+-{
+-#if defined(DEBUG)
+-    printf("ACPI: DBG: 0x%08x\n", val);
+-#endif
+-}
+-
+ static void smb_transaction(PIIX4PMState *s)
+ {
+     uint8_t prot = (s->smb_ctl >> 2) & 0x07;
+@@ -702,8 +693,6 @@ static int piix4_pm_initfn(PCIDevice *dev)
+     register_ioport_write(0xb2, 2, 1, pm_smi_writeb, s);
+     register_ioport_read(0xb2, 2, 1, pm_smi_readb, s);
+ 
+-    register_ioport_write(ACPI_DBG_IO_ADDR, 4, 4, acpi_dbg_writel, s);
+-
+     if (kvm_enabled()) {
+         /* Mark SMM as already inited to prevent SMM from running.  KVM does not
+          * support SMM mode. */
+-- 
+1.7.11.7
+

@@ -1,0 +1,62 @@
+From 515db5c3fb0cb1f183de8478eceec99daf6e4175 Mon Sep 17 00:00:00 2001
+From: Amos Kong <akong@redhat.com>
+Date: Tue, 10 Sep 2013 06:08:05 +0200
+Subject: [PATCH 23/39] introduce qemu_close()
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1378793288-3371-24-git-send-email-akong@redhat.com>
+Patchwork-id: 54258
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v3 23/26] introduce qemu_close()
+Bugzilla: 786407
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Upstream wrapped a help function qemu_close() in
+commit 2e1e79dae7a7e0a3d698fbd359d75e3a0239bdaa
+This patch just add this function, which will be
+used by next patch.
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+---
+ osdep.c       |    5 +++++
+ qemu-common.h |    1 +
+ 2 files changed, 6 insertions(+), 0 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ osdep.c       |    5 +++++
+ qemu-common.h |    1 +
+ 2 files changed, 6 insertions(+), 0 deletions(-)
+
+diff --git a/osdep.c b/osdep.c
+index 2a446ed..afab41e 100644
+--- a/osdep.c
++++ b/osdep.c
+@@ -292,6 +292,11 @@ int qemu_open(const char *name, int flags, ...)
+     return ret;
+ }
+ 
++int qemu_close(int fd)
++{
++    return close(fd);
++}
++
+ /*
+  * A variant of write(2) which handles partial write.
+  *
+diff --git a/qemu-common.h b/qemu-common.h
+index d808a84..54fb151 100644
+--- a/qemu-common.h
++++ b/qemu-common.h
+@@ -171,6 +171,7 @@ void qemu_mutex_lock_iothread(void);
+ void qemu_mutex_unlock_iothread(void);
+ 
+ int qemu_open(const char *name, int flags, ...);
++int qemu_close(int fd);
+ ssize_t qemu_write_full(int fd, const void *buf, size_t count)
+     QEMU_WARN_UNUSED_RESULT;
+ void qemu_set_cloexec(int fd);
+-- 
+1.7.1
+

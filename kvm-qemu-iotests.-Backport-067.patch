@@ -1,0 +1,187 @@
+From db5c4d70fa81eae13f81502a6aecf8b42007d65c Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:48 -0500
+Subject: [CHANGE 26/31] qemu-iotests. Backport 067
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-27-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60386
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 26/29] qemu-iotests. Backport 067
+Bugzilla: 1122410
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+The test needs the following adjustments for RHEL 6:
+
+* sleep 1 before piping QMP commands into qemu, otherwise qemu would
+  crash (see BZ 1123904)
+
+* The drive_add HMP command is disabled, but instead we have a
+  downstream-only QMP command __com.redhat_drive_add, so changed the
+  test to use that
+
+* blockdev-add isn't supported, removed that part
+
+* Random harmless output changes
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ tests/qemu-iotests/067     | 36 ++++------------------------------
+ tests/qemu-iotests/067.out | 49 ++++++++++------------------------------------
+ 2 files changed, 14 insertions(+), 71 deletions(-)
+
+diff --git a/tests/qemu-iotests/067 b/tests/qemu-iotests/067
+index d025192..fd40578 100755
+--- a/tests/qemu-iotests/067
++++ b/tests/qemu-iotests/067
+@@ -39,7 +39,7 @@ _supported_os Linux
+ function do_run_qemu()
+ {
+     echo Testing: "$@"
+-    $QEMU -nographic -qmp stdio -serial none "$@"
++    (sleep 1; cat) | $QEMU -nographic -qmp stdio -serial none "$@"
+     echo
+ }
+ 
+@@ -82,41 +82,13 @@ run_qemu -drive file=$TEST_IMG,format=$IMGFMT,if=none,id=disk <<EOF
+ EOF
+ 
+ echo
+-echo === drive_add/device_add and device_del ===
++echo === __com.redhat_drive_add/device_add and device_del ===
+ echo
+ 
+ run_qemu <<EOF
+ { "execute": "qmp_capabilities" }
+-{ "execute": "human-monitor-command",
+-  "arguments": { "command-line": "drive_add 0 file=$TEST_IMG,format=$IMGFMT,if=none,id=disk" } }
+-{ "execute": "query-block" }
+-{ "execute": "device_add",
+-   "arguments": { "driver": "virtio-blk-pci", "drive": "disk",
+-                  "id": "virtio0" } }
+-{ "execute": "device_del", "arguments": { "id": "virtio0" } }
+-{ "execute": "system_reset" }
+-{ "execute": "query-block" }
+-{ "execute": "quit" }
+-EOF
+-
+-echo
+-echo === blockdev_add/device_add and device_del ===
+-echo
+-
+-run_qemu <<EOF
+-{ "execute": "qmp_capabilities" }
+-{ "execute": "blockdev-add",
+-  "arguments": {
+-      "options": {
+-        "driver": "$IMGFMT",
+-        "id": "disk",
+-        "file": {
+-            "driver": "file",
+-            "filename": "$TEST_IMG"
+-        }
+-      }
+-    }
+-  }
++{ "execute": "__com.redhat_drive_add",
++  "arguments": { "file": "$TEST_IMG", "format": "$IMGFMT", "id": "disk" } }
+ { "execute": "query-block" }
+ { "execute": "device_add",
+    "arguments": { "driver": "virtio-blk-pci", "drive": "disk",
+diff --git a/tests/qemu-iotests/067.out b/tests/qemu-iotests/067.out
+index 7e090b9..f879dfd 100644
+--- a/tests/qemu-iotests/067.out
++++ b/tests/qemu-iotests/067.out
+@@ -6,17 +6,14 @@ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=134217728
+ Testing: -drive file=TEST_DIR/t.qcow2,format=qcow2,if=none,id=disk -device virtio-blk-pci,drive=disk,id=virtio0
+ QMP_VERSION
+ {"return": {}}
+-{"return": [{"io-status": "ok", "device": "disk", "locked": false, "removable": false, "inserted": {"iops_rd": 0, "detect_zeroes": "off", "image": {"virtual-size": 134217728, "filename": "TEST_DIR/t.qcow2", "cluster-size": 65536, "format": "qcow2", "actual-size": SIZE, "format-specific": {"type": "qcow2", "data": {"compat": "1.1", "lazy-refcounts": false}}, "dirty-flag": false}, "iops_wr": 0, "ro": false, "backing_file_depth": 0, "drv": "qcow2", "iops": 0, "bps_wr": 0, "encrypted": false, "bps": 0, "bps_rd": 0, "file": "TEST_DIR/t.qcow2", "encryption_key_missing": false}, "type": "unknown"}, {"io-status": "ok", "device": "ide1-cd0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}, {"device": "floppy0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}, {"device": "sd0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}]}
++{"return": [{"io-status": "ok", "device": "disk", "locked": false, "removable": false, "inserted": {"iops_rd": 0, "iops_wr": 0, "ro": false, "drv": "qcow2", "iops": 0, "bps_wr": 0, "encrypted": false, "bps": 0, "bps_rd": 0, "file": "TEST_DIR/t.qcow2"}, "type": "unknown"}, {"io-status": "ok", "device": "ide1-cd0", "locked": false, "removable": true, "tray-open": false, "type": "unknown"}, {"device": "floppy0", "locked": false, "removable": true, "tray-open": false, "type": "unknown"}, {"device": "sd0", "locked": false, "removable": true, "tray-open": false, "type": "unknown"}]}
+ {"return": {}}
+ {"return": {}}
+-{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "DEVICE_DELETED", "data": {"path": "/machine/peripheral/virtio0/virtio-backend"}}
+-{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "DEVICE_DELETED", "data": {"device": "virtio0", "path": "/machine/peripheral/virtio0"}}
++{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "DEVICE_DELETED", "data": {"device": "virtio0"}}
+ {"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "RESET"}
+-{"return": [{"io-status": "ok", "device": "ide1-cd0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}, {"device": "floppy0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}, {"device": "sd0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}]}
++{"return": [{"io-status": "ok", "device": "ide1-cd0", "locked": false, "removable": true, "tray-open": false, "type": "unknown"}, {"device": "floppy0", "locked": false, "removable": true, "tray-open": false, "type": "unknown"}, {"device": "sd0", "locked": false, "removable": true, "tray-open": false, "type": "unknown"}]}
+ {"return": {}}
+ {"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "SHUTDOWN"}
+-{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "DEVICE_TRAY_MOVED", "data": {"device": "ide1-cd0", "tray-open": true}}
+-{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "DEVICE_TRAY_MOVED", "data": {"device": "floppy0", "tray-open": true}}
+ 
+ 
+ === -drive/device_add and device_del ===
+@@ -24,57 +21,31 @@ QMP_VERSION
+ Testing: -drive file=TEST_DIR/t.qcow2,format=qcow2,if=none,id=disk
+ QMP_VERSION
+ {"return": {}}
+-{"return": [{"device": "disk", "locked": false, "removable": true, "inserted": {"iops_rd": 0, "detect_zeroes": "off", "image": {"virtual-size": 134217728, "filename": "TEST_DIR/t.qcow2", "cluster-size": 65536, "format": "qcow2", "actual-size": SIZE, "format-specific": {"type": "qcow2", "data": {"compat": "1.1", "lazy-refcounts": false}}, "dirty-flag": false}, "iops_wr": 0, "ro": false, "backing_file_depth": 0, "drv": "qcow2", "iops": 0, "bps_wr": 0, "encrypted": false, "bps": 0, "bps_rd": 0, "file": "TEST_DIR/t.qcow2", "encryption_key_missing": false}, "tray_open": false, "type": "unknown"}, {"io-status": "ok", "device": "ide1-cd0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}, {"device": "floppy0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}, {"device": "sd0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}]}
++{"return": [{"device": "disk", "locked": false, "removable": true, "inserted": {"iops_rd": 0, "iops_wr": 0, "ro": false, "drv": "qcow2", "iops": 0, "bps_wr": 0, "encrypted": false, "bps": 0, "bps_rd": 0, "file": "TEST_DIR/t.qcow2"}, "tray-open": false, "type": "unknown"}, {"io-status": "ok", "device": "ide1-cd0", "locked": false, "removable": true, "tray-open": false, "type": "unknown"}, {"device": "floppy0", "locked": false, "removable": true, "tray-open": false, "type": "unknown"}, {"device": "sd0", "locked": false, "removable": true, "tray-open": false, "type": "unknown"}]}
+ {"return": {}}
+ {"return": {}}
+ {"return": {}}
+-{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "DEVICE_DELETED", "data": {"path": "/machine/peripheral/virtio0/virtio-backend"}}
+-{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "DEVICE_DELETED", "data": {"device": "virtio0", "path": "/machine/peripheral/virtio0"}}
++{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "DEVICE_DELETED", "data": {"device": "virtio0"}}
+ {"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "RESET"}
+-{"return": [{"io-status": "ok", "device": "ide1-cd0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}, {"device": "floppy0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}, {"device": "sd0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}]}
++{"return": [{"io-status": "ok", "device": "ide1-cd0", "locked": false, "removable": true, "tray-open": false, "type": "unknown"}, {"device": "floppy0", "locked": false, "removable": true, "tray-open": false, "type": "unknown"}, {"device": "sd0", "locked": false, "removable": true, "tray-open": false, "type": "unknown"}]}
+ {"return": {}}
+ {"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "SHUTDOWN"}
+-{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "DEVICE_TRAY_MOVED", "data": {"device": "ide1-cd0", "tray-open": true}}
+-{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "DEVICE_TRAY_MOVED", "data": {"device": "floppy0", "tray-open": true}}
+ 
+ 
+-=== drive_add/device_add and device_del ===
++=== __com.redhat_drive_add/device_add and device_del ===
+ 
+ Testing:
+ QMP_VERSION
+ {"return": {}}
+-{"return": "OK\r\n"}
+-{"return": [{"io-status": "ok", "device": "ide1-cd0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}, {"device": "floppy0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}, {"device": "sd0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}, {"device": "disk", "locked": false, "removable": true, "inserted": {"iops_rd": 0, "detect_zeroes": "off", "image": {"virtual-size": 134217728, "filename": "TEST_DIR/t.qcow2", "cluster-size": 65536, "format": "qcow2", "actual-size": SIZE, "format-specific": {"type": "qcow2", "data": {"compat": "1.1", "lazy-refcounts": false}}, "dirty-flag": false}, "iops_wr": 0, "ro": false, "backing_file_depth": 0, "drv": "qcow2", "iops": 0, "bps_wr": 0, "encrypted": false, "bps": 0, "bps_rd": 0, "file": "TEST_DIR/t.qcow2", "encryption_key_missing": false}, "tray_open": false, "type": "unknown"}]}
+ {"return": {}}
+-{"return": {}}
+-{"return": {}}
+-{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "DEVICE_DELETED", "data": {"path": "/machine/peripheral/virtio0/virtio-backend"}}
+-{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "DEVICE_DELETED", "data": {"device": "virtio0", "path": "/machine/peripheral/virtio0"}}
+-{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "RESET"}
+-{"return": [{"io-status": "ok", "device": "ide1-cd0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}, {"device": "floppy0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}, {"device": "sd0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}]}
+-{"return": {}}
+-{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "SHUTDOWN"}
+-{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "DEVICE_TRAY_MOVED", "data": {"device": "ide1-cd0", "tray-open": true}}
+-{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "DEVICE_TRAY_MOVED", "data": {"device": "floppy0", "tray-open": true}}
+-
+-
+-=== blockdev_add/device_add and device_del ===
+-
+-Testing:
+-QMP_VERSION
+-{"return": {}}
+-{"return": {}}
+-{"return": [{"io-status": "ok", "device": "ide1-cd0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}, {"device": "floppy0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}, {"device": "sd0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}, {"device": "disk", "locked": false, "removable": true, "inserted": {"iops_rd": 0, "detect_zeroes": "off", "image": {"virtual-size": 134217728, "filename": "TEST_DIR/t.qcow2", "cluster-size": 65536, "format": "qcow2", "actual-size": SIZE, "format-specific": {"type": "qcow2", "data": {"compat": "1.1", "lazy-refcounts": false}}, "dirty-flag": false}, "iops_wr": 0, "ro": false, "backing_file_depth": 0, "drv": "qcow2", "iops": 0, "bps_wr": 0, "encrypted": false, "bps": 0, "bps_rd": 0, "file": "TEST_DIR/t.qcow2", "encryption_key_missing": false}, "tray_open": false, "type": "unknown"}]}
++{"return": [{"io-status": "ok", "device": "ide1-cd0", "locked": false, "removable": true, "tray-open": false, "type": "unknown"}, {"device": "floppy0", "locked": false, "removable": true, "tray-open": false, "type": "unknown"}, {"device": "sd0", "locked": false, "removable": true, "tray-open": false, "type": "unknown"}, {"device": "disk", "locked": false, "removable": true, "inserted": {"iops_rd": 0, "iops_wr": 0, "ro": false, "drv": "qcow2", "iops": 0, "bps_wr": 0, "encrypted": false, "bps": 0, "bps_rd": 0, "file": "TEST_DIR/t.qcow2"}, "tray-open": false, "type": "unknown"}]}
+ {"return": {}}
+ {"return": {}}
+ {"return": {}}
+-{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "DEVICE_DELETED", "data": {"path": "/machine/peripheral/virtio0/virtio-backend"}}
+-{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "DEVICE_DELETED", "data": {"device": "virtio0", "path": "/machine/peripheral/virtio0"}}
++{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "DEVICE_DELETED", "data": {"device": "virtio0"}}
+ {"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "RESET"}
+-{"return": [{"io-status": "ok", "device": "ide1-cd0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}, {"device": "floppy0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}, {"device": "sd0", "locked": false, "removable": true, "tray_open": false, "type": "unknown"}, {"io-status": "ok", "device": "disk", "locked": false, "removable": true, "inserted": {"iops_rd": 0, "detect_zeroes": "off", "image": {"virtual-size": 134217728, "filename": "TEST_DIR/t.qcow2", "cluster-size": 65536, "format": "qcow2", "actual-size": SIZE, "format-specific": {"type": "qcow2", "data": {"compat": "1.1", "lazy-refcounts": false}}, "dirty-flag": false}, "iops_wr": 0, "ro": false, "backing_file_depth": 0, "drv": "qcow2", "iops": 0, "bps_wr": 0, "encrypted": false, "bps": 0, "bps_rd": 0, "file": "TEST_DIR/t.qcow2", "encryption_key_missing": false}, "tray_open": false, "type": "unknown"}]}
++{"return": [{"io-status": "ok", "device": "ide1-cd0", "locked": false, "removable": true, "tray-open": false, "type": "unknown"}, {"device": "floppy0", "locked": false, "removable": true, "tray-open": false, "type": "unknown"}, {"device": "sd0", "locked": false, "removable": true, "tray-open": false, "type": "unknown"}]}
+ {"return": {}}
+ {"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "SHUTDOWN"}
+-{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "DEVICE_TRAY_MOVED", "data": {"device": "ide1-cd0", "tray-open": true}}
+-{"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "DEVICE_TRAY_MOVED", "data": {"device": "floppy0", "tray-open": true}}
+ 
+ *** done
+-- 
+1.9.3
+

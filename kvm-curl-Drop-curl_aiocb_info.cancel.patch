@@ -1,0 +1,54 @@
+From b29152e1d6664ac5a5fa528672a8252e41725730 Mon Sep 17 00:00:00 2001
+Message-Id: <b29152e1d6664ac5a5fa528672a8252e41725730.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:33 -0500
+Subject: [CHANGE 13/29] curl: Drop curl_aiocb_info.cancel
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-14-git-send-email-famz@redhat.com>
+Patchwork-id: 64914
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 13/28] curl: Drop curl_aiocb_info.cancel
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit facb5539d6662e8208fc9a763719a5367d4e65d4)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/curl.c | 6 ------
+ 1 file changed, 6 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/curl.c | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/block/curl.c b/block/curl.c
+index 647805f..b3afd6a 100644
+--- a/block/curl.c
++++ b/block/curl.c
+@@ -399,14 +399,8 @@ out_noclean:
+     return -EINVAL;
+ }
+ 
+-static void curl_aio_cancel(BlockDriverAIOCB *blockacb)
+-{
+-    // Do we have to implement canceling? Seems to work without...
+-}
+-
+ static const AIOCBInfo curl_aiocb_info = {
+     .aiocb_size         = sizeof(CURLAIOCB),
+-    .cancel             = curl_aio_cancel,
+ };
+ 
+ static BlockDriverAIOCB *curl_aio_readv(BlockDriverState *bs,
+-- 
+2.1.0
+

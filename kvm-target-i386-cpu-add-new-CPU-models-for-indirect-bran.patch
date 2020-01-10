@@ -1,0 +1,321 @@
+From 04982c06692749a33350538a029934781ff22b4a Mon Sep 17 00:00:00 2001
+From: Eduardo Habkost <ehabkost@redhat.com>
+Date: Wed, 13 Dec 2017 15:41:04 -0200
+Subject: [PATCH 3/3] target-i386: cpu: add new CPU models for indirect branch
+ predictor restrictions
+
+RHEL-6 backport notes:
+
+The simple parts:
+* The Skylake-*-IBRS and EPYC-IBPB CPU models are not included.
+* It includes Broadwell-noTSX-IBRS even though we don't have
+  Broadwell-noTSX in RHEL-6, just in case the user is running on
+  a host that had TSX removed.
+
+The tricky part:
+
+The CPU models being added are copies of the ones in RHEL-6 with
+just the spec-ctrl feature added (plus
+level/xlevel/stepping/model_id changes).  All the features
+missing from the original CPU models are documented on code
+comments.
+
+The RHEL-7 code will include compat_props entries for the *-IBRS
+CPU models that are copies of the existing ones for the original
+CPU models.  This will ensure compatibility will be kept for the
+new CPU models.
+
+RH-Author: Eduardo Habkost <ehabkost@redhat.com>
+Message-id: <20171213174104.20121-4-ehabkost@redhat.com>
+Patchwork-id: n/a
+O-Subject: [CONFIDENTIAL][RHEL-6.9.z qemu-kvm PATCH v2 3/3] target-i386: cpu: add new CPU models for indirect branch predictor restrictions
+Bugzilla: CVE-2017-5715
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+RH-Acked-by: Wainer dos Santos Moschetta <wainersm@redhat.com>
+---
+ target-i386/cpu.h   |   4 +
+ target-i386/cpuid.c | 224 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 228 insertions(+)
+
+diff --git a/target-i386/cpu.h b/target-i386/cpu.h
+index 938e48e99d..06ed95c42d 100644
+--- a/target-i386/cpu.h
++++ b/target-i386/cpu.h
+@@ -492,6 +492,10 @@
+ #define CPUID_7_0_EBX_ADX      (1 << 19)
+ #define CPUID_7_0_EBX_SMAP     (1 << 20)
+ 
++#define CPUID_7_0_EDX_SPEC_CTRL     (1U << 26) /* Indirect Branch - Restrict Speculation */
++
++#define CPUID_8000_0008_EBX_IBPB    (1U << 12) /* Indirect Branch Prediction Barrier */
++
+ #define CPUID_VENDOR_INTEL_1 0x756e6547 /* "Genu" */
+ #define CPUID_VENDOR_INTEL_2 0x49656e69 /* "ineI" */
+ #define CPUID_VENDOR_INTEL_3 0x6c65746e /* "ntel" */
+diff --git a/target-i386/cpuid.c b/target-i386/cpuid.c
+index 2c61678451..f51c7007ba 100644
+--- a/target-i386/cpuid.c
++++ b/target-i386/cpuid.c
+@@ -605,6 +605,32 @@ static x86_def_t builtin_x86_defs[] = {
+         .model_id = "Intel Core i7 9xx (Nehalem Class Core i7)",
+     },
+     {
++        .name = "Nehalem-IBRS",
++        .level = 11,
++        .vendor1 = CPUID_VENDOR_INTEL_1,
++        .vendor2 = CPUID_VENDOR_INTEL_2,
++        .vendor3 = CPUID_VENDOR_INTEL_3,
++        .family = 6,
++        .model = 26,
++        .stepping = 3,
++        /* Missing: CPUID_VME */
++        .features = CPUID_SSE2 | CPUID_SSE | CPUID_FXSR | CPUID_MMX |
++             CPUID_CLFLUSH | CPUID_PSE36 | CPUID_PAT | CPUID_CMOV | CPUID_MCA |
++             CPUID_PGE | CPUID_MTRR | CPUID_SEP | CPUID_APIC | CPUID_CX8 |
++             CPUID_MCE | CPUID_PAE | CPUID_MSR | CPUID_TSC | CPUID_PSE |
++             CPUID_DE | CPUID_FP87,
++        /* Extra: CPUID_X2APIC */
++        .ext_features = CPUID_EXT_POPCNT | CPUID_EXT_X2APIC | CPUID_EXT_SSE42 |
++             CPUID_EXT_SSE41 | CPUID_EXT_CX16 | CPUID_EXT_SSSE3 |
++             CPUID_EXT_SSE3,
++        .cpuid_7_0_edx_features =
++             CPUID_7_0_EDX_SPEC_CTRL,
++        .ext2_features = CPUID_EXT2_LM | CPUID_EXT2_SYSCALL | CPUID_EXT2_NX,
++        .ext3_features = CPUID_EXT3_LAHF_LM,
++        .xlevel = 0x80000008,
++        .model_id = "Intel Core i7 9xx (Nehalem Core i7, IBRS update)",
++    },
++    {
+         .name = "Westmere",
+         .level = 11,
+         .vendor1 = CPUID_VENDOR_INTEL_1,
+@@ -631,6 +657,41 @@ static x86_def_t builtin_x86_defs[] = {
+         .model_id = "Westmere E56xx/L56xx/X56xx (Nehalem-C)",
+     },
+     {
++        .name = "Westmere-IBRS",
++        .level = 11,
++        .vendor1 = CPUID_VENDOR_INTEL_1,
++        .vendor2 = CPUID_VENDOR_INTEL_2,
++        .vendor3 = CPUID_VENDOR_INTEL_3,
++        .family = 6,
++        .model = 44,
++        .stepping = 1,
++        /* Missing: CPUID_VME */
++        .features = CPUID_SSE2 | CPUID_SSE | CPUID_FXSR | CPUID_MMX |
++             CPUID_PAT | CPUID_CMOV | CPUID_PGE | CPUID_SEP | CPUID_APIC |
++             CPUID_CX8 | CPUID_MCE | CPUID_PAE | CPUID_MSR | CPUID_TSC |
++             CPUID_PSE | CPUID_DE | CPUID_FP87 | CPUID_MTRR | CPUID_CLFLUSH |
++             CPUID_MCA | CPUID_PSE36,
++        /* Missing: CPUID_EXT_PCLMULQDQ */
++        /* Extra: CPUID_EXT_X2APIC */
++        .ext_features = CPUID_EXT_SSE3 | CPUID_EXT_CX16 | CPUID_EXT_SSSE3 |
++             CPUID_EXT_SSE41 | CPUID_EXT_SSE42 | CPUID_EXT_X2APIC |
++             CPUID_EXT_POPCNT | CPUID_EXT_AES,
++        .ext2_features = CPUID_EXT2_FXSR | CPUID_EXT2_MMX | CPUID_EXT2_PAT |
++             CPUID_EXT2_CMOV | CPUID_EXT2_PGE | CPUID_EXT2_APIC |
++             CPUID_EXT2_CX8 | CPUID_EXT2_MCE | CPUID_EXT2_PAE | CPUID_EXT2_MSR |
++             CPUID_EXT2_TSC | CPUID_EXT2_PSE | CPUID_EXT2_DE | CPUID_EXT2_FPU |
++             CPUID_EXT2_LM | CPUID_EXT2_SYSCALL | CPUID_EXT2_NX,
++        .ext3_features = CPUID_EXT3_LAHF_LM,
++        .cpuid_7_0_edx_features =
++             CPUID_7_0_EDX_SPEC_CTRL,
++        /* Missing: CPUID_6_EAX_ARAT. not available in the RHEL-6 tree (and
++         * disabled by compat code in pc-i440fx-rhel7.2.0 and older on
++         * qemu-kvm-rhev)
++         */
++        .xlevel = 0x80000008,
++        .model_id = "Westmere E56xx/L56xx/X56xx (IBRS update)",
++    },
++    {
+         .name = "SandyBridge",
+         .level = 0xd,
+         .vendor1 = CPUID_VENDOR_INTEL_1,
+@@ -655,6 +716,38 @@ static x86_def_t builtin_x86_defs[] = {
+         .model_id = "Intel Xeon E312xx (Sandy Bridge)",
+     },
+     {
++        .name = "SandyBridge-IBRS",
++        .level = 0xd,
++        .vendor1 = CPUID_VENDOR_INTEL_1,
++        .vendor2 = CPUID_VENDOR_INTEL_2,
++        .vendor3 = CPUID_VENDOR_INTEL_3,
++        .family = 6,
++        .model = 42,
++        .stepping = 1,
++        /* Missing: CPUID_VME */
++        .features = CPUID_SSE2 | CPUID_SSE | CPUID_FXSR | CPUID_MMX |
++             CPUID_CLFLUSH | CPUID_PSE36 | CPUID_PAT | CPUID_CMOV | CPUID_MCA |
++             CPUID_PGE | CPUID_MTRR | CPUID_SEP | CPUID_APIC | CPUID_CX8 |
++             CPUID_MCE | CPUID_PAE | CPUID_MSR | CPUID_TSC | CPUID_PSE |
++             CPUID_DE | CPUID_FP87,
++        .ext_features = CPUID_EXT_AVX | CPUID_EXT_XSAVE | CPUID_EXT_AES |
++             CPUID_EXT_POPCNT | CPUID_EXT_X2APIC | CPUID_EXT_SSE42 |
++             CPUID_EXT_SSE41 | CPUID_EXT_CX16 | CPUID_EXT_SSSE3 |
++             CPUID_EXT_PCLMULQDQ | CPUID_EXT_SSE3 |
++             CPUID_EXT_TSC_DEADLINE_TIMER,
++        /* MIssing: CPUID_EXT2_RDTSCP */
++        .ext2_features = CPUID_EXT2_LM | CPUID_EXT2_NX | CPUID_EXT2_SYSCALL,
++        .ext3_features = CPUID_EXT3_LAHF_LM,
++        .cpuid_7_0_edx_features =
++            CPUID_7_0_EDX_SPEC_CTRL,
++        /* Missing: CPUID_6_EAX_ARAT. not available in the RHEL-6 tree (and
++         * disabled by compat code in pc-i440fx-rhel7.2.0 and older on
++         * qemu-kvm-rhev)
++         */
++        .xlevel = 0x80000008,
++        .model_id = "Intel Xeon E312xx (Sandy Bridge, IBRS update)",
++    },
++    {
+         .name = "Haswell",
+         .level = 0xd,
+         .vendor1 = CPUID_VENDOR_INTEL_1,
+@@ -684,6 +777,90 @@ static x86_def_t builtin_x86_defs[] = {
+         .model_id = "Intel Core Processor (Haswell)",
+     },
+     {
++        .name = "Haswell-IBRS",
++        .level = 0xd,
++        .vendor1 = CPUID_VENDOR_INTEL_1,
++        .vendor2 = CPUID_VENDOR_INTEL_2,
++        .vendor3 = CPUID_VENDOR_INTEL_3,
++        .family = 6,
++        .model = 60,
++        .stepping = 4,
++        /* Missing: CPUID_VME */
++        .features = CPUID_SSE2 | CPUID_SSE | CPUID_FXSR | CPUID_MMX |
++             CPUID_CLFLUSH | CPUID_PSE36 | CPUID_PAT | CPUID_CMOV | CPUID_MCA |
++             CPUID_PGE | CPUID_MTRR | CPUID_SEP | CPUID_APIC | CPUID_CX8 |
++             CPUID_MCE | CPUID_PAE | CPUID_MSR | CPUID_TSC | CPUID_PSE |
++             CPUID_DE | CPUID_FP87,
++        /* Missing: CPUID_EXT_F16C, CPUID_EXT_RDRAND */
++        .ext_features = CPUID_EXT_AVX | CPUID_EXT_XSAVE | CPUID_EXT_AES |
++             CPUID_EXT_POPCNT | CPUID_EXT_X2APIC | CPUID_EXT_SSE42 |
++             CPUID_EXT_SSE41 | CPUID_EXT_CX16 | CPUID_EXT_SSSE3 |
++             CPUID_EXT_PCLMULQDQ | CPUID_EXT_SSE3 |
++             CPUID_EXT_TSC_DEADLINE_TIMER | CPUID_EXT_FMA | CPUID_EXT_MOVBE |
++             CPUID_EXT_PCID,
++        /* Missing: CPUID_EXT2_RDTSCP */
++        .ext2_features = CPUID_EXT2_LM | CPUID_EXT2_NX | CPUID_EXT2_SYSCALL,
++        /* Missing: CPUID_EXT3_ABM */
++        .ext3_features = CPUID_EXT3_LAHF_LM,
++        .cpuid_7_0_edx_features =
++            CPUID_7_0_EDX_SPEC_CTRL,
++        .cpuid_7_0_ebx_features = CPUID_7_0_EBX_FSGSBASE | CPUID_7_0_EBX_BMI1 |
++            CPUID_7_0_EBX_HLE | CPUID_7_0_EBX_AVX2 | CPUID_7_0_EBX_SMEP |
++            CPUID_7_0_EBX_BMI2 | CPUID_7_0_EBX_ERMS | CPUID_7_0_EBX_INVPCID |
++            CPUID_7_0_EBX_RTM,
++        /* Missing: CPUID_6_EAX_ARAT. not available in the RHEL-6 tree (and
++         * disabled by compat code in pc-i440fx-rhel7.2.0 and older on
++         * qemu-kvm-rhev)
++         */
++        .xlevel = 0x80000008,
++        .model_id = "Intel Core Processor (Haswell, IBRS)",
++    },
++    {
++        .name = "Broadwell-noTSX-IBRS",
++        .level = 0xd,
++        .vendor1 = CPUID_VENDOR_INTEL_1,
++        .vendor2 = CPUID_VENDOR_INTEL_2,
++        .vendor3 = CPUID_VENDOR_INTEL_3,
++        .family = 6,
++        .model = 61,
++        .stepping = 2,
++        /* Missing: CPUID_VME */
++        .features =
++            CPUID_SSE2 | CPUID_SSE | CPUID_FXSR | CPUID_MMX |
++            CPUID_CLFLUSH | CPUID_PSE36 | CPUID_PAT | CPUID_CMOV | CPUID_MCA |
++            CPUID_PGE | CPUID_MTRR | CPUID_SEP | CPUID_APIC | CPUID_CX8 |
++            CPUID_MCE | CPUID_PAE | CPUID_MSR | CPUID_TSC | CPUID_PSE |
++            CPUID_DE | CPUID_FP87,
++        /* Missing: CPUID_EXT_F16C, CPUID_EXT_RDRAND */
++        .ext_features =
++            CPUID_EXT_AVX | CPUID_EXT_XSAVE | CPUID_EXT_AES |
++            CPUID_EXT_POPCNT | CPUID_EXT_X2APIC | CPUID_EXT_SSE42 |
++            CPUID_EXT_SSE41 | CPUID_EXT_CX16 | CPUID_EXT_SSSE3 |
++            CPUID_EXT_PCLMULQDQ | CPUID_EXT_SSE3 |
++            CPUID_EXT_TSC_DEADLINE_TIMER | CPUID_EXT_FMA | CPUID_EXT_MOVBE |
++            CPUID_EXT_PCID,
++        /* Missing: CPUID_EXT2_RDTSCP */
++        .ext2_features =
++            CPUID_EXT2_LM | CPUID_EXT2_NX | CPUID_EXT2_SYSCALL,
++        /* Missing: CPUID_EXT3_ABM */
++        .ext3_features =
++            CPUID_EXT3_LAHF_LM | CPUID_EXT3_3DNOWPREFETCH,
++        /* Missing: CPUID_7_0_EBX_SMAP, */
++        .cpuid_7_0_ebx_features =
++            CPUID_7_0_EBX_FSGSBASE | CPUID_7_0_EBX_BMI1 |
++            CPUID_7_0_EBX_AVX2 | CPUID_7_0_EBX_SMEP |
++            CPUID_7_0_EBX_BMI2 | CPUID_7_0_EBX_ERMS | CPUID_7_0_EBX_INVPCID |
++            CPUID_7_0_EBX_RDSEED | CPUID_7_0_EBX_ADX,
++        .cpuid_7_0_edx_features =
++            CPUID_7_0_EDX_SPEC_CTRL,
++        /* Missing: CPUID_6_EAX_ARAT. not available in the RHEL-6 tree (and
++         * disabled by compat code in pc-i440fx-rhel7.2.0 and older on
++         * qemu-kvm-rhev)
++         */
++        .xlevel = 0x80000008,
++        .model_id = "Intel Core Processor (Broadwell, no TSX, IBRS)",
++    },
++    {
+         .name = "Broadwell",
+         .level = 0xd,
+         .vendor1 = CPUID_VENDOR_INTEL_1,
+@@ -718,6 +895,53 @@ static x86_def_t builtin_x86_defs[] = {
+         .model_id = "Intel Core Processor (Broadwell)",
+     },
+     {
++        .name = "Broadwell-IBRS",
++        .level = 0xd,
++        .vendor1 = CPUID_VENDOR_INTEL_1,
++        .vendor2 = CPUID_VENDOR_INTEL_2,
++        .vendor3 = CPUID_VENDOR_INTEL_3,
++        .family = 6,
++        .model = 61,
++        .stepping = 2,
++        /* Missing: CPUID_VME */
++        .features =
++            CPUID_SSE2 | CPUID_SSE | CPUID_FXSR | CPUID_MMX |
++            CPUID_CLFLUSH | CPUID_PSE36 | CPUID_PAT | CPUID_CMOV | CPUID_MCA |
++            CPUID_PGE | CPUID_MTRR | CPUID_SEP | CPUID_APIC | CPUID_CX8 |
++            CPUID_MCE | CPUID_PAE | CPUID_MSR | CPUID_TSC | CPUID_PSE |
++            CPUID_DE | CPUID_FP87,
++        /* Missing: CPUID_EXT_F16C, CPUID_EXT_RDRAND */
++        .ext_features =
++            CPUID_EXT_AVX | CPUID_EXT_XSAVE | CPUID_EXT_AES |
++            CPUID_EXT_POPCNT | CPUID_EXT_X2APIC | CPUID_EXT_SSE42 |
++            CPUID_EXT_SSE41 | CPUID_EXT_CX16 | CPUID_EXT_SSSE3 |
++            CPUID_EXT_PCLMULQDQ | CPUID_EXT_SSE3 |
++            CPUID_EXT_TSC_DEADLINE_TIMER | CPUID_EXT_FMA | CPUID_EXT_MOVBE |
++            CPUID_EXT_PCID,
++        /* Missing: CPUID_EXT2_RDTSCP */
++        .ext2_features =
++            CPUID_EXT2_LM | CPUID_EXT2_NX | CPUID_EXT2_SYSCALL,
++        /* Missing: CPUID_EXT3_ABM */
++        .ext3_features =
++            CPUID_EXT3_LAHF_LM | CPUID_EXT3_3DNOWPREFETCH,
++        .cpuid_7_0_edx_features =
++            CPUID_7_0_EDX_SPEC_CTRL,
++        /* Missing: CPUID_7_0_EBX_SMAP, */
++        .cpuid_7_0_ebx_features =
++            CPUID_7_0_EBX_FSGSBASE | CPUID_7_0_EBX_BMI1 |
++            CPUID_7_0_EBX_HLE | CPUID_7_0_EBX_AVX2 | CPUID_7_0_EBX_SMEP |
++            CPUID_7_0_EBX_BMI2 | CPUID_7_0_EBX_ERMS | CPUID_7_0_EBX_INVPCID |
++            CPUID_7_0_EBX_RTM | CPUID_7_0_EBX_RDSEED | CPUID_7_0_EBX_ADX,
++        .cpuid_7_0_edx_features =
++           CPUID_7_0_EDX_SPEC_CTRL,
++        /* Missing: CPUID_6_EAX_ARAT. not available in the RHEL-6 tree (and
++         * disabled by compat code in pc-i440fx-rhel7.2.0 and older on
++         * qemu-kvm-rhev)
++         */
++        .xlevel = 0x80000008,
++        .model_id = "Intel Core Processor (Broadwell, IBRS)",
++    },
++    {
+         .name = "Opteron_G1",
+         .level = 5,
+         .vendor1 = CPUID_VENDOR_AMD_1,
+-- 
+2.13.6
+

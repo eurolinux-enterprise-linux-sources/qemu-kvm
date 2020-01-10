@@ -1,0 +1,89 @@
+From 09f412f33138bc9d62ddb4e4fc722d76d8ae4678 Mon Sep 17 00:00:00 2001
+Message-Id: <09f412f33138bc9d62ddb4e4fc722d76d8ae4678.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:21:54 -0500
+Subject: [CHANGE 11/42] iotests: Add test for image header overlap
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-12-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64476
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 11/39] iotests: Add test for image header overlap
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1129892
+
+Add a test for an image with an unallocated image header; instead of an
+assertion, this should result in the image being marked corrupt.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit a42f8a3d05c5598cee893c9cf5ffeee48bacb83e)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	tests/qemu-iotests/060
+	tests/qemu-iotests/060.out
+
+Some tests are missing downstream, and the corruption message is
+different (because the image cannot be marked corrupt).
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ tests/qemu-iotests/060     | 9 +++++++++
+ tests/qemu-iotests/060.out | 8 ++++++++
+ 2 files changed, 17 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ tests/qemu-iotests/060     | 9 +++++++++
+ tests/qemu-iotests/060.out | 8 ++++++++
+ 2 files changed, 17 insertions(+)
+
+diff --git a/tests/qemu-iotests/060 b/tests/qemu-iotests/060
+index 441925e..0ab0c46 100755
+--- a/tests/qemu-iotests/060
++++ b/tests/qemu-iotests/060
+@@ -116,6 +116,15 @@ $PYTHON qcow2.py "$TEST_IMG" dump-header | grep incompatible_features
+ $QEMU_IO -c "$OPEN_RW" -c "write -P 0x2a 0 512" | _filter_qemu_io
+ $PYTHON qcow2.py "$TEST_IMG" dump-header | grep incompatible_features
+ 
++echo
++echo "=== Testing unallocated image header ==="
++echo
++_make_test_img 64M
++# Create L1/L2
++$QEMU_IO -c "$OPEN_RW" -c "write 0 64k" | _filter_qemu_io
++poke_file "$TEST_IMG" "$rb_offset" "\x00\x00"
++$QEMU_IO -c "$OPEN_RW" -c "write 64k 64k" | _filter_qemu_io
++
+ # success, all done
+ echo "*** done"
+ rm -f $seq.full
+diff --git a/tests/qemu-iotests/060.out b/tests/qemu-iotests/060.out
+index 0345053..427e0d7 100644
+--- a/tests/qemu-iotests/060.out
++++ b/tests/qemu-iotests/060.out
+@@ -40,4 +40,12 @@ incompatible_features     0x0
+ wrote 512/512 bytes at offset 0
+ 512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+ incompatible_features     0x0
++
++=== Testing unallocated image header ===
++
++Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
++wrote 65536/65536 bytes at offset 0
++64 KiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
++qcow2: Preventing invalid write on metadata (overlaps with qcow2_header); please use qemu-img check -r.
++write failed: Input/output error
+ *** done
+-- 
+2.1.0
+

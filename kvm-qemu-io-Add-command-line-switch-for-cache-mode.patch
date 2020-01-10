@@ -1,0 +1,80 @@
+From 3486bf5c773740d51ac94c2a02067520da25602b Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:36 -0500
+Subject: [CHANGE 14/31] qemu-io: Add command line switch for cache mode
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-15-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60383
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 14/29] qemu-io: Add command line switch for cache mode
+Bugzilla: 1122410
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+To be used as in 'qemu-io -t writeback test.img'
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 592fa07043095ba3141fb9d413693d3c202cba9a)
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	qemu-io.c
+
+Conflicts because we haven't backported qemu-io options, including -T
+for tracing.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ qemu-io.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/qemu-io.c b/qemu-io.c
+index 734d9b9..ea6457f 100644
+--- a/qemu-io.c
++++ b/qemu-io.c
+@@ -1540,6 +1540,7 @@ static void usage(const char *name)
+ "  -g, --growable       allow file to grow (only applies to protocols)\n"
+ "  -m, --misalign       misalign allocations for O_DIRECT\n"
+ "  -k, --native-aio     use kernel AIO implementation (on Linux only)\n"
++"  -t, --cache=MODE     use the given cache mode for the image\n"
+ "  -h, --help           display this help and exit\n"
+ "  -V, --version        output version information and exit\n"
+ "\n",
+@@ -1551,7 +1552,7 @@ int main(int argc, char **argv)
+ {
+     int readonly = 0;
+     int growable = 0;
+-    const char *sopt = "hVc:Crsnmgk";
++    const char *sopt = "hVc:Crsnmgkt:";
+     struct option lopt[] = {
+         { "help", 0, NULL, 'h' },
+         { "version", 0, NULL, 'V' },
+@@ -1564,6 +1565,7 @@ int main(int argc, char **argv)
+         { "misalign", 0, NULL, 'm' },
+         { "growable", 0, NULL, 'g' },
+         { "native-aio", 0, NULL, 'k' },
++        { "cache", 1, NULL, 't' },
+         { NULL, 0, NULL, 0 }
+     };
+     int c;
+@@ -1598,6 +1600,12 @@ int main(int argc, char **argv)
+         case 'k':
+             flags |= BDRV_O_NATIVE_AIO;
+             break;
++        case 't':
++            if (bdrv_parse_cache_flags(optarg, &flags) < 0) {
++                error_report("Invalid cache option: %s", optarg);
++                exit(1);
++            }
++            break;
+         case 'V':
+             printf("%s version %s\n", progname, VERSION);
+             exit(0);
+-- 
+1.9.3
+

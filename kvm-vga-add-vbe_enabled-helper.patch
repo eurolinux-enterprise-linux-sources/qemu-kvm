@@ -1,0 +1,105 @@
+From ae84cb2f91100c9e38f3dc38a2ec2c6f1617db2a Mon Sep 17 00:00:00 2001
+Message-Id: <ae84cb2f91100c9e38f3dc38a2ec2c6f1617db2a.1467309786.git.jen@redhat.com>
+In-Reply-To: <b75cb6f28f374e6cee8f45cb30d017d2cf77dcf6.1467309786.git.jen@redhat.com>
+References: <b75cb6f28f374e6cee8f45cb30d017d2cf77dcf6.1467309786.git.jen@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 14 Jun 2016 08:53:43 -0500
+Subject: [CHANGE 06/10] vga: add vbe_enabled() helper
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1465894427-26109-7-git-send-email-kraxel@redhat.com>
+Patchwork-id: 70594
+O-Subject: [RHEL-6.9 qemu-kvm PATCH v3 06/10] vga: add vbe_enabled() helper
+Bugzilla: 1331408
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Makes code a bit easier to read.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+
+(Upstream commit ID: bfa0f151a564a83b5a26f3e917da98674bf3cf62)
+
+Conflicts:
+	hw/vga.c
+
+[ RHEL-6 note: conflicts due to different context, mostly b/c
+               CONFIG_BOCHS_VBE which is gone upstream ]
+---
+ hw/vga.c | 17 ++++++++++-------
+ 1 file changed, 10 insertions(+), 7 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/vga.c | 17 ++++++++++-------
+ 1 file changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/hw/vga.c b/hw/vga.c
+index 5435f70..65174b4 100644
+--- a/hw/vga.c
++++ b/hw/vga.c
+@@ -151,8 +151,11 @@ static uint16_t expand2[256];
+ static uint8_t expand4to8[16];
+ 
+ static void vga_screen_dump(void *opaque, const char *filename);
+-static const char *screen_dump_filename;
+-static DisplayChangeListener *screen_dump_dcl;
++
++static inline bool vbe_enabled(VGACommonState *s)
++{
++    return s->vbe_regs[VBE_DISPI_INDEX_ENABLE] & VBE_DISPI_ENABLED;
++}
+ 
+ static void vga_dumb_update_retrace_info(VGACommonState *s)
+ {
+@@ -529,7 +532,7 @@ static void vbe_fixup_regs(VGACommonState *s)
+     uint16_t *r = s->vbe_regs;
+     uint32_t bits, linelength, maxy, offset;
+ 
+-    if (!(r[VBE_DISPI_INDEX_ENABLE] & VBE_DISPI_ENABLED)) {
++    if (!vbe_enabled(s)) {
+         /* vbe is turned off -- nothing to do */
+         return;
+     }
+@@ -712,7 +715,7 @@ static void vbe_ioport_write_data(void *opaque, uint32_t addr, uint32_t val)
+                 /* width */
+                 s->cr[VGA_CRTC_H_DISP] =
+                     (s->vbe_regs[VBE_DISPI_INDEX_XRES] >> 3) - 1;
+-                /* height (only meaningful if < 1024) */
++                 /* height (only meaningful if < 1024) */
+                 h = s->vbe_regs[VBE_DISPI_INDEX_YRES] - 1;
+                 s->cr[VGA_CRTC_V_DISP_END] = h;
+                 s->cr[VGA_CRTC_OVERFLOW] = (s->cr[VGA_CRTC_OVERFLOW] & ~0x42) |
+@@ -1165,7 +1168,7 @@ static void vga_get_offsets(VGACommonState *s,
+ {
+     uint32_t start_addr, line_offset, line_compare;
+ #ifdef CONFIG_BOCHS_VBE
+-    if (s->vbe_regs[VBE_DISPI_INDEX_ENABLE] & VBE_DISPI_ENABLED) {
++    if (vbe_enabled(s)) {
+         line_offset = s->vbe_line_offset;
+         start_addr = s->vbe_start_addr;
+         line_compare = 65535;
+@@ -1601,7 +1604,7 @@ static int vga_get_bpp(VGACommonState *s)
+ {
+     int ret;
+ #ifdef CONFIG_BOCHS_VBE
+-    if (s->vbe_regs[VBE_DISPI_INDEX_ENABLE] & VBE_DISPI_ENABLED) {
++    if (vbe_enabled(s)) {
+         ret = s->vbe_regs[VBE_DISPI_INDEX_BPP];
+     } else
+ #endif
+@@ -1616,7 +1619,7 @@ static void vga_get_resolution(VGACommonState *s, int *pwidth, int *pheight)
+     int width, height;
+ 
+ #ifdef CONFIG_BOCHS_VBE
+-    if (s->vbe_regs[VBE_DISPI_INDEX_ENABLE] & VBE_DISPI_ENABLED) {
++    if (vbe_enabled(s)) {
+         width = s->vbe_regs[VBE_DISPI_INDEX_XRES];
+         height = s->vbe_regs[VBE_DISPI_INDEX_YRES];
+     } else
+-- 
+2.5.5
+

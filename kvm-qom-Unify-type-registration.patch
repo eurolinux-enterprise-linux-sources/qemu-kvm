@@ -1,0 +1,82 @@
+From 54c0a33f918f56728c369d4aae4be64dcecb18b2 Mon Sep 17 00:00:00 2001
+From: Amos Kong <akong@redhat.com>
+Date: Tue, 10 Sep 2013 06:07:48 +0200
+Subject: [PATCH 06/39] qom: Unify type registration
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1378793288-3371-7-git-send-email-akong@redhat.com>
+Patchwork-id: 54241
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v3 06/26] qom: Unify type registration
+Bugzilla: 786407
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Andreas Färber <afaerber@suse.de>
+
+Replace device_init() with generalized type_init().
+
+While at it, unify naming convention: type_init([$prefix_]register_types)
+Also, type_init() is a function, so add preceding blank line where
+necessary and don't put a semicolon after the closing brace.
+
+Signed-off-by: Andreas Färber <afaerber@suse.de>
+Cc: Anthony Liguori <anthony@codemonkey.ws>
+Cc: malc <av1474@comtv.ru>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(backported from commit 83f7d43a9ef70b1b91e465173e18c845420e931e)
+
+We don't replace original device_init(), the new type_init() will
+only be used by qom/qobject.
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+---
+ module.h |    2 ++
+ vl.c     |    2 ++
+ 2 files changed, 4 insertions(+), 0 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ module.h |    2 ++
+ vl.c     |    2 ++
+ 2 files changed, 4 insertions(+), 0 deletions(-)
+
+diff --git a/module.h b/module.h
+index ef66730..6a68ca1 100644
+--- a/module.h
++++ b/module.h
+@@ -25,6 +25,7 @@ typedef enum {
+     MODULE_INIT_DEVICE,
+     MODULE_INIT_MACHINE,
+     MODULE_INIT_QAPI,
++    MODULE_INIT_QOM,
+     MODULE_INIT_MAX
+ } module_init_type;
+ 
+@@ -32,6 +33,7 @@ typedef enum {
+ #define device_init(function) module_init(function, MODULE_INIT_DEVICE)
+ #define machine_init(function) module_init(function, MODULE_INIT_MACHINE)
+ #define qapi_init(function) module_init(function, MODULE_INIT_QAPI)
++#define type_init(function) module_init(function, MODULE_INIT_QOM)
+ 
+ void register_module_init(void (*fn)(void), module_init_type type);
+ 
+diff --git a/vl.c b/vl.c
+index bcd73f0..711ceec 100644
+--- a/vl.c
++++ b/vl.c
+@@ -5227,6 +5227,8 @@ int main(int argc, char **argv, char **envp)
+     QLIST_INIT (&vm_change_state_head);
+     os_setup_early_signal_handling();
+ 
++    module_call_init(MODULE_INIT_QOM);
++
+     module_call_init(MODULE_INIT_MACHINE);
+     machine = find_default_machine();
+     cpu_model = NULL;
+-- 
+1.7.1
+

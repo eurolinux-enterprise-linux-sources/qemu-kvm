@@ -1,0 +1,66 @@
+From c1282446efcc662c03fe4436d8e4036e68d2d80b Mon Sep 17 00:00:00 2001
+Message-Id: <c1282446efcc662c03fe4436d8e4036e68d2d80b.1376484223.git.minovotn@redhat.com>
+In-Reply-To: <ac0ba67dff2049ff8601fe686b870bba1879b99f.1376484223.git.minovotn@redhat.com>
+References: <ac0ba67dff2049ff8601fe686b870bba1879b99f.1376484223.git.minovotn@redhat.com>
+From: "Michael S. Tsirkin" <mst@redhat.com>
+Date: Tue, 13 Aug 2013 18:30:15 +0200
+Subject: [PATCH 6/6] hw/misc: make pvpanic known to user
+
+RH-Author: Michael S. Tsirkin <mst@redhat.com>
+Message-id: <1376418595-5369-3-git-send-email-mst@redhat.com>
+Patchwork-id: 53278
+O-Subject: [PATCH RHEL6.5 v2 2/2] hw/misc: make pvpanic known to user
+Bugzilla: 991100
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Eric Blake <eblake@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+From: Marcel Apfelbaum <marcel.a@redhat.com>
+
+This patch is based on Hu Tao's:
+http://lists.nongnu.org/archive/html/qemu-devel/2013-08/msg00125.html
+
+The pvpanic device may be enabled now with "-device pvpanic"
+from command line.
+
+Signed-off-by: Marcel Apfelbaum <marcel.a@redhat.com>
+Reviewed-by: Hu Tao <hutao@cn.fujitsu.com>
+Message-id: 1376233843-19410-3-git-send-email-marcel.a@redhat.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry-picked from commit a5d3f640a0fa56eaed712c9361150568e32e1d08)
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=991100
+Brew build: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=6162125
+
+Backport notes:
+This patch was rewritten for RHEL6.
+upstream's device was insufficiently qomified, so -device didn't work
+while rhel6's was adqueately qdevified, so all we have to do
+is make it available with -device.
+
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+---
+ hw/pvpanic.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/pvpanic.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/hw/pvpanic.c b/hw/pvpanic.c
+index bfad31c..ebc29bd 100644
+--- a/hw/pvpanic.c
++++ b/hw/pvpanic.c
+@@ -93,7 +93,6 @@ static int pvpanic_isa_init(ISADevice *dev)
+ static ISADeviceInfo pvpanic_isa_info = {
+     .qdev.name     = "pvpanic",
+     .qdev.size     = sizeof(PVPanicState),
+-    .qdev.no_user  = 1,
+     .qdev.props = (Property[]) {
+         DEFINE_PROP_UINT16("ioport", PVPanicState, ioport, 0x505),
+         DEFINE_PROP_END_OF_LIST()
+-- 
+1.7.11.7
+

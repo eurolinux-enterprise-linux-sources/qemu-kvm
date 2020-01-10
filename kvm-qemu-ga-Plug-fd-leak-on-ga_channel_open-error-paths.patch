@@ -1,0 +1,53 @@
+From 5b9237628f3f1fa9d474c716de5179d785dfa5bb Mon Sep 17 00:00:00 2001
+Message-Id: <5b9237628f3f1fa9d474c716de5179d785dfa5bb.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:27:58 +0200
+Subject: [PATCH 093/114] qemu-ga: Plug fd leak on ga_channel_open() error
+ paths
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-36-git-send-email-lersek@redhat.com>
+Patchwork-id: 51134
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 35/56] qemu-ga: Plug fd leak on ga_channel_open() error paths
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Markus Armbruster <armbru@redhat.com>
+
+Spotted by Coverity.
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Reviewed-by: Luiz Capitulino <lcapitulino@redhat.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit d4f4a3efdf0a71621ae5351176f5f15b522d0026)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qga/channel-posix.c |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/channel-posix.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/qga/channel-posix.c b/qga/channel-posix.c
+index 2a1fe03..53dc044 100644
+--- a/qga/channel-posix.c
++++ b/qga/channel-posix.c
+@@ -154,6 +154,7 @@ static gboolean ga_channel_open(GAChannel *c, const gchar *path, GAChannelMethod
+         ret = ga_channel_client_add(c, fd);
+         if (ret) {
+             g_critical("error adding channel to main loop");
++            close(fd);
+             return false;
+         }
+         break;
+-- 
+1.7.11.7
+

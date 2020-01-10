@@ -1,0 +1,79 @@
+From b09254c0c0a39bef08d6c793a53ceed96431a530 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:30 -0500
+Subject: [CHANGE 08/31] QMP: add get_events(wait=True) option
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-9-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60361
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 08/29] QMP: add get_events(wait=True) option
+Bugzilla: 1122410
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+
+The get_events() function polls for new QMP events and then returns.  It
+can be useful to wait for the next QMP event so add the boolean 'wait'
+keyword argument.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 91b8eddf41fd62ecbc61cb901c40f50287126fac)
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ QMP/qmp.py | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/QMP/qmp.py b/QMP/qmp.py
+index 14ce8b0..2565508 100644
+--- a/QMP/qmp.py
++++ b/QMP/qmp.py
+@@ -43,7 +43,7 @@ class QEMUMonitorProtocol:
+             family = socket.AF_UNIX
+         return socket.socket(family, socket.SOCK_STREAM)
+ 
+-    def __json_read(self):
++    def __json_read(self, only_event=False):
+         while True:
+             data = self.__sockfile.readline()
+             if not data:
+@@ -51,7 +51,8 @@ class QEMUMonitorProtocol:
+             resp = json.loads(data)
+             if 'event' in resp:
+                 self.__events.append(resp)
+-                continue
++                if not only_event:
++                    continue
+             return resp
+ 
+     error = socket.error
+@@ -106,9 +107,11 @@ class QEMUMonitorProtocol:
+             qmp_cmd['id'] = id
+         return self.cmd_obj(qmp_cmd)
+ 
+-    def get_events(self):
++    def get_events(self, wait=False):
+         """
+         Get a list of available QMP events.
++
++        @param wait: block until an event is available (bool)
+         """
+         self.__sock.setblocking(0)
+         try:
+@@ -118,6 +121,8 @@ class QEMUMonitorProtocol:
+                 # No data available
+                 pass
+         self.__sock.setblocking(1)
++        if not self.__events and wait:
++            self.__json_read(only_event=True)
+         return self.__events
+ 
+     def clear_events(self):
+-- 
+1.9.3
+

@@ -1,0 +1,51 @@
+From 91b262d96b67704958999759b407a5c75edb8301 Mon Sep 17 00:00:00 2001
+Message-Id: <91b262d96b67704958999759b407a5c75edb8301.1427148003.git.jen@redhat.com>
+In-Reply-To: <b8c4fd0ae93c624609d61e4789afa7daaf50a8f1.1427148003.git.jen@redhat.com>
+References: <b8c4fd0ae93c624609d61e4789afa7daaf50a8f1.1427148003.git.jen@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Wed, 11 Mar 2015 15:10:58 -0500
+Subject: [CHANGE 4/9] qxl: add 4k + 8k resolutions
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1426086663-17937-5-git-send-email-kraxel@redhat.com>
+Patchwork-id: 64283
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v4 4/9] qxl: add 4k + 8k resolutions
+Bugzilla: 1053039
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit d4bcb199fb15f9f079ef280e7e6f9ccdfaa49ced)
+---
+ hw/qxl.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/qxl.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/hw/qxl.c b/hw/qxl.c
+index 314f057..9dc9241 100644
+--- a/hw/qxl.c
++++ b/hw/qxl.c
+@@ -131,6 +131,10 @@ static QXLMode qxl_modes[] = {
+     QXL_MODE_EX(2560, 2048),
+     QXL_MODE_EX(2800, 2100),
+     QXL_MODE_EX(3200, 2400),
++    QXL_MODE_EX(3840, 2160), /* 4k mainstream */
++    QXL_MODE_EX(4096, 2160), /* 4k            */
++    QXL_MODE_EX(7680, 4320), /* 8k mainstream */
++    QXL_MODE_EX(8192, 4320), /* 8k            */
+ };
+ 
+ static PCIQXLDevice *qxl0;
+-- 
+2.1.0
+

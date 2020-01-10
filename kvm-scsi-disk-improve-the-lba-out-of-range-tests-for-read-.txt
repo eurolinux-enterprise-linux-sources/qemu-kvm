@@ -1,0 +1,67 @@
+From 11ce09142a774076b0578f44a409b68c6f128df8 Mon Sep 17 00:00:00 2001
+From: Markus Armbruster <armbru@redhat.com>
+Date: Tue, 22 Jul 2014 09:15:56 -0500
+Subject: [CHANGE 07/17] scsi-disk: improve the lba-out-of-range tests for
+ read/write/verify
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1406020565-25364-3-git-send-email-armbru@redhat.com>
+Patchwork-id: 59992
+O-Subject: [PATCH 6.6 qemu-kvm v2 02/11] scsi-disk: improve the lba-out-of-range tests for read/write/verify
+Bugzilla: 1064643
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Ronnie Sahlberg <ronniesahlberg@gmail.com>
+
+Improve the tests for the LBA to cover more cases.
+
+For the 16 byte opcodes, the lba is a uint64, so we need to check is to
+make sure that we do not wrap.  For example if an opcode would specify
+the LBA:0xffffffffffffffff and LEN:2 then lba+len would wrap to 1.
+
+Also verify that ALL requested blocks are available, not just the first one.
+
+Signed-off-by: Ronnie Sahlberg <ronniesahlberg@gmail.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit ba6095cd6b497783e3621606b6b2320781aa3f52)
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+---
+ hw/scsi-disk.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/scsi-disk.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/hw/scsi-disk.c b/hw/scsi-disk.c
+index 4e5e55e..6667b1c 100644
+--- a/hw/scsi-disk.c
++++ b/hw/scsi-disk.c
+@@ -1495,7 +1495,8 @@ static int32_t scsi_send_command(SCSIRequest *req, uint8_t *buf)
+         if (r->req.cmd.buf[1] & 0xe0) {
+             goto illegal_request;
+         }
+-        if (r->req.cmd.lba > s->qdev.max_lba) {
++        if (r->req.cmd.lba > r->req.cmd.lba + len ||
++            r->req.cmd.lba + len - 1 > s->qdev.max_lba) {
+             goto illegal_lba;
+         }
+         r->sector = r->req.cmd.lba * (s->qdev.blocksize / 512);
+@@ -1523,7 +1524,8 @@ static int32_t scsi_send_command(SCSIRequest *req, uint8_t *buf)
+         if (r->req.cmd.buf[1] & 0xe0) {
+             goto illegal_request;
+         }
+-        if (r->req.cmd.lba > s->qdev.max_lba) {
++        if (r->req.cmd.lba > r->req.cmd.lba + len ||
++            r->req.cmd.lba + len - 1 > s->qdev.max_lba) {
+             goto illegal_lba;
+         }
+         r->sector = r->req.cmd.lba * (s->qdev.blocksize / 512);
+-- 
+1.9.3
+

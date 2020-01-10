@@ -1,0 +1,62 @@
+From 09b93495ed918520d0b76d13418f8f13307d5d28 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Wed, 28 May 2014 08:14:21 +0200
+Subject: [PATCH 1/9] qcow2: preserve free_byte_offset when qcow2_alloc_bytes() fails
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1401264861-10284-1-git-send-email-kwolf@redhat.com>
+Patchwork-id: 59043
+O-Subject: [RHEL-6.6 qemu-kvm PATCH] qcow2: preserve free_byte_offset when qcow2_alloc_bytes() fails
+Bugzilla: 1101701
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1101701
+
+When qcow2_alloc_clusters() error handling code was introduced in commit
+5d757b563d59142ca81e1073a8e8396750a0ad1a, the value of free_byte_offset
+was clobbered in the error case.  This patch keeps free_byte_offset at 0
+so we will try to allocate clusters again next time this function is
+called.
+
+Downstream note: Also, s->free_byte_offset is unsigned, whereas offset
+is signed, so this change happened to fix the error check.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 206e6d8551839008b6858cf8f500d2e644d2b561)
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/qcow2-refcount.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ block/qcow2-refcount.c |    7 ++++---
+ 1 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/block/qcow2-refcount.c b/block/qcow2-refcount.c
+index 1d35695..5c79fc8 100644
+--- a/block/qcow2-refcount.c
++++ b/block/qcow2-refcount.c
+@@ -609,10 +609,11 @@ int64_t qcow2_alloc_bytes(BlockDriverState *bs, int size)
+     BLKDBG_EVENT(bs->file, BLKDBG_CLUSTER_ALLOC_BYTES);
+     assert(size > 0 && size <= s->cluster_size);
+     if (s->free_byte_offset == 0) {
+-        s->free_byte_offset = qcow2_alloc_clusters(bs, s->cluster_size);
+-        if (s->free_byte_offset < 0) {
+-            return s->free_byte_offset;
++        offset = qcow2_alloc_clusters(bs, s->cluster_size);
++        if (offset < 0) {
++            return offset;
+         }
++        s->free_byte_offset = offset;
+     }
+  redo:
+     free_in_cluster = s->cluster_size -
+-- 
+1.7.1
+

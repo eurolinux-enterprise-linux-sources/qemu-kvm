@@ -1,0 +1,64 @@
+From 4214a74496cbad987dd3229a00205857b35eff8f Mon Sep 17 00:00:00 2001
+Message-Id: <4214a74496cbad987dd3229a00205857b35eff8f.1369899578.git.minovotn@redhat.com>
+In-Reply-To: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+References: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Wed, 22 May 2013 11:31:08 +0200
+Subject: [PATCH 09/15] fw_cfg: add required header files
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1369222273-3298-5-git-send-email-lersek@redhat.com>
+Patchwork-id: 51523
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 4/9] fw_cfg: add required header files
+Bugzilla: 833530
+RH-Acked-by: Andrew Jones <drjones@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+From: Hu Tao <hutao@cn.fujitsu.com>
+
+If fw_cfg.h is included alone, gcc gives error messages like these:
+
+  error: unknown type name 'uint32_t'
+  error: unknown type name 'size_t'
+  error: unknown type name 'hwaddr'
+  ...
+
+Signed-off-by: Hu Tao <hutao@cn.fujitsu.com>
+Reviewed-by: Markus Armbruster <armbru@redhat.com>
+Message-id: d63f8bcdbfbec8135b1b57f9247c513a3e25762c.1366945969.git.hutao@cn.fujitsu.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 1dfe5057e5cf45b296ae67a7f84bdc6fa618d602)
+
+RHEL-6 notes:
+- no "hwaddr.h",
+- commit messages should be 7-bit ASCII, please.
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ hw/fw_cfg.h |    5 +++++
+ 1 files changed, 5 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/fw_cfg.h | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/hw/fw_cfg.h b/hw/fw_cfg.h
+index 8bb549b..5ec13ac 100644
+--- a/hw/fw_cfg.h
++++ b/hw/fw_cfg.h
+@@ -1,6 +1,11 @@
+ #ifndef FW_CFG_H
+ #define FW_CFG_H
+ 
++#ifndef NO_QEMU_PROTOS
++#include <stdint.h>
++#include <stddef.h>
++#endif
++
+ #define FW_CFG_SIGNATURE        0x00
+ #define FW_CFG_ID               0x01
+ #define FW_CFG_UUID             0x02
+-- 
+1.7.11.7
+

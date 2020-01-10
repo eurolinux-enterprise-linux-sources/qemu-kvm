@@ -1,0 +1,50 @@
+From 9a19b355a01077692f1973ee5cc5e632e0f911ac Mon Sep 17 00:00:00 2001
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Sat, 1 Aug 2015 08:39:29 -0400
+Subject: [PATCH 5/9] rtl8139: skip offload on short Ethernet/IP header
+ (CVE-2015-5165)
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1438418373-7324-4-git-send-email-stefanha@redhat.com>
+Patchwork-id: 67260
+O-Subject: [virt-devel] [RHEL-6.7.z qemu-kvm EMBARGOED PATCH 3/7] rtl8139: skip offload on short Ethernet/IP header (CVE-2015-5165)
+Bugzilla: 1248763
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+RH-Acked-by: Xiao Wang <jasowang@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Transmit offload features access Ethernet and IP headers the packet.  If
+the packet is too short we must not attempt to access header fields:
+
+  int proto = be16_to_cpu(*(uint16_t *)(saved_buffer + 12));
+  ...
+  eth_payload_data = saved_buffer + ETH_HLEN;
+  ...
+  ip = (ip_header*)eth_payload_data;
+  if (IP_HEADER_VERSION(ip) != IP_HEADER_VERSION_4) {
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/rtl8139.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/hw/rtl8139.c b/hw/rtl8139.c
+index 04cc14b..f4a983b 100644
+--- a/hw/rtl8139.c
++++ b/hw/rtl8139.c
+@@ -2146,6 +2146,11 @@ static int rtl8139_cplus_transmit_one(RTL8139State *s)
+         {
+             DEBUG_PRINT(("RTL8139: +++ C+ mode offloaded task checksum\n"));
+ 
++            /* Large enough for Ethernet and IP headers? */
++            if (saved_size < ETH_HLEN + sizeof(ip_header)) {
++                goto skip_offload;
++            }
++
+             /* ip packet header */
+             ip_header *ip = NULL;
+             int hlen = 0;
+-- 
+2.1.0
+

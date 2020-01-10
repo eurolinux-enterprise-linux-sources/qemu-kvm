@@ -1,0 +1,55 @@
+From 30b413b1845ead6a599063753b02fbb8c4dbb732 Mon Sep 17 00:00:00 2001
+From: Fam Zheng <famz@redhat.com>
+Date: Tue, 15 Jul 2014 12:27:23 -0500
+Subject: [CHANGE 05/17] vmdk: Fix big flat extent IO
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1405427243-28134-6-git-send-email-famz@redhat.com>
+Patchwork-id: 59903
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 5/5] vmdk: Fix big flat extent IO
+Bugzilla: 1088788
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Local variable "n" as int64_t avoids overflow with large sector number
+calculation. See test case change for failure case.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 585ea0c841df47c1542d33e17c5c6d532316ef74)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	tests/qemu-iotests/059
+	tests/qemu-iotests/059.out
+---
+ block/vmdk.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ block/vmdk.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 0050de5..d8366bf 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -1290,8 +1290,8 @@ static int vmdk_write(BlockDriverState *bs, int64_t sector_num,
+ {
+     BDRVVmdkState *s = bs->opaque;
+     VmdkExtent *extent = NULL;
+-    int n, ret;
+-    int64_t index_in_cluster;
++    int ret;
++    int64_t index_in_cluster, n;
+     uint64_t extent_begin_sector, extent_relative_sector_num;
+     uint64_t cluster_offset;
+     VmdkMetaData m_data;
+-- 
+1.9.3
+

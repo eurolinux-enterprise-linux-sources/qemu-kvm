@@ -1,0 +1,69 @@
+From f916d9fba915528660b7083596d042637b048404 Mon Sep 17 00:00:00 2001
+Message-Id: <f916d9fba915528660b7083596d042637b048404.1429739396.git.jen@redhat.com>
+In-Reply-To: <933ebfcd0e18f4ed2c68553cf4bc257652872678.1429739396.git.jen@redhat.com>
+References: <933ebfcd0e18f4ed2c68553cf4bc257652872678.1429739396.git.jen@redhat.com>
+From: John Snow <jsnow@redhat.com>
+Date: Mon, 6 Apr 2015 18:46:20 -0500
+Subject: [CHANGE 07/11] curl: Fix local build issue
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: John Snow <jsnow@redhat.com>
+Message-id: <1428345980-16249-6-git-send-email-jsnow@redhat.com>
+Patchwork-id: 64722
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 5/5] curl: Fix local build issue
+Bugzilla: 1208605
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Bandan Das <bsd@redhat.com>
+
+From: Vladislav Yasevich <vyasevic@redhat.com>
+
+Upstream: none
+
+Rhel6 commit 62bcbdfa92d45124829b3c9d7f6ab2ee98e48a84
+    aio: remove process_queue callback and qemu_aio_process_queue
+
+add curl_aio_flush calls, but we do not have that function
+in Rhel6 tree.  This doesn't impact package builds since we
+disable curl, but it does break local builds since curl may
+be present and configure may detect it.
+
+Remove curl_aio_flush symbols to re-enable local build.
+
+Signed-off-by: Vladislav Yasevich <vyasevic@redhat.com>
+Signed-off-by: John Snow <jsnow@redhat.com>
+---
+ block/curl.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/curl.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/block/curl.c b/block/curl.c
+index 24b0079..3807aa9 100644
+--- a/block/curl.c
++++ b/block/curl.c
+@@ -83,14 +83,14 @@ static int curl_sock_cb(CURL *curl, curl_socket_t fd, int action,
+     DPRINTF("CURL (AIO): Sock action %d on fd %d\n", action, fd);
+     switch (action) {
+         case CURL_POLL_IN:
+-            qemu_aio_set_fd_handler(fd, curl_multi_do, NULL, curl_aio_flush, s);
++            qemu_aio_set_fd_handler(fd, curl_multi_do, NULL, NULL, s);
+             break;
+         case CURL_POLL_OUT:
+-            qemu_aio_set_fd_handler(fd, NULL, curl_multi_do, curl_aio_flush, s);
++            qemu_aio_set_fd_handler(fd, NULL, curl_multi_do, NULL, s);
+             break;
+         case CURL_POLL_INOUT:
+             qemu_aio_set_fd_handler(fd, curl_multi_do, curl_multi_do,
+-                                    curl_aio_flush, s);
++                                    NULL, s);
+             break;
+         case CURL_POLL_REMOVE:
+             qemu_aio_set_fd_handler(fd, NULL, NULL, NULL, NULL);
+-- 
+2.1.0
+

@@ -1,0 +1,331 @@
+From 73ea13f27624cb0fb73ba7404df25ff5c66af770 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:51 -0500
+Subject: [CHANGE 29/31] qemu-iotests: Trivial test case backports
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-30-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60384
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 29/29] qemu-iotests: Trivial test case backports
+Bugzilla: 1122410
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ tests/qemu-iotests/043.out |  6 +++---
+ tests/qemu-iotests/044.out |  1 -
+ tests/qemu-iotests/048     |  1 -
+ tests/qemu-iotests/048.out |  1 -
+ tests/qemu-iotests/054.out |  4 ++--
+ tests/qemu-iotests/068     |  1 -
+ tests/qemu-iotests/069.out |  2 +-
+ tests/qemu-iotests/074.out |  8 ++++----
+ tests/qemu-iotests/079.out | 22 ++++++++++++----------
+ tests/qemu-iotests/085.out | 46 +++++++++++++++++++++++-----------------------
+ tests/qemu-iotests/095     |  2 +-
+ tests/qemu-iotests/095.out | 10 ++--------
+ 12 files changed, 48 insertions(+), 56 deletions(-)
+
+diff --git a/tests/qemu-iotests/043.out b/tests/qemu-iotests/043.out
+index ad23337..7f12147 100644
+--- a/tests/qemu-iotests/043.out
++++ b/tests/qemu-iotests/043.out
+@@ -2,19 +2,19 @@ QA output created by 043
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=134217728 
+ 
+ == backing file references self ==
+-qemu-img: Backing file 'TEST_DIR/t.IMGFMT' creates an infinite loop.
++Backing file 'TEST_DIR/t.IMGFMT' creates an infinite loop.
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=134217728 
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=134217728 backing_file='TEST_DIR/t.IMGFMT.base' 
+ 
+ == parent references self ==
+-qemu-img: Backing file 'TEST_DIR/t.IMGFMT' creates an infinite loop.
++Backing file 'TEST_DIR/t.IMGFMT' creates an infinite loop.
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=134217728 
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=134217728 backing_file='TEST_DIR/t.IMGFMT.1.base' 
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=134217728 backing_file='TEST_DIR/t.IMGFMT.2.base' 
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=134217728 backing_file='TEST_DIR/t.IMGFMT.3.base' 
+ 
+ == ancestor references another ancestor ==
+-qemu-img: Backing file 'TEST_DIR/t.IMGFMT.2.base' creates an infinite loop.
++Backing file 'TEST_DIR/t.IMGFMT.2.base' creates an infinite loop.
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=134217728 
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=134217728 backing_file='TEST_DIR/t.IMGFMT.1.base' 
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=134217728 backing_file='TEST_DIR/t.IMGFMT.2.base' 
+diff --git a/tests/qemu-iotests/044.out b/tests/qemu-iotests/044.out
+index 4789a53..8488999 100644
+--- a/tests/qemu-iotests/044.out
++++ b/tests/qemu-iotests/044.out
+@@ -1,5 +1,4 @@
+ No errors were found on the image.
+-7292415/33554432 = 21.73% allocated, 0.00% fragmented, 0.00% compressed clusters
+ Image end offset: 4296152064
+ .
+ ----------------------------------------------------------------------
+diff --git a/tests/qemu-iotests/048 b/tests/qemu-iotests/048
+index 65da46d..d8652ec 100755
+--- a/tests/qemu-iotests/048
++++ b/tests/qemu-iotests/048
+@@ -61,7 +61,6 @@ io_pattern write 524288 $CLUSTER_SIZE $CLUSTER_SIZE 4 45
+ # Compare identical images
+ cp "$TEST_IMG" "${TEST_IMG2}"
+ _compare
+-_compare -q
+ 
+ # Compare images with different size
+ $QEMU_IMG resize "$TEST_IMG" +512M
+diff --git a/tests/qemu-iotests/048.out b/tests/qemu-iotests/048.out
+index c0f380d..b11dfae 100644
+--- a/tests/qemu-iotests/048.out
++++ b/tests/qemu-iotests/048.out
+@@ -11,7 +11,6 @@ wrote 4096/4096 bytes at offset 536576
+ 4 KiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+ Images are identical.
+ 0
+-0
+ Image resized.
+ Warning: Image size mismatch!
+ Images are identical.
+diff --git a/tests/qemu-iotests/054.out b/tests/qemu-iotests/054.out
+index 7161d6e..f125c88 100644
+--- a/tests/qemu-iotests/054.out
++++ b/tests/qemu-iotests/054.out
+@@ -1,10 +1,10 @@
+ QA output created by 054
+ 
+ creating too large image (1 EB)
+-qemu-img: TEST_DIR/t.IMGFMT: The image size is too large for file format 'IMGFMT' (try using a larger cluster size)
++The image size is too large for file format 'IMGFMT'
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=1152921504606846976 
+ 
+ creating too large image (1 EB) using qcow2.py
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=4294967296 
+-qemu-img: Could not open 'TEST_DIR/t.qcow2': Image is too big
++Could not open 'TEST_DIR/t.qcow2': File too large
+ *** done
+diff --git a/tests/qemu-iotests/068 b/tests/qemu-iotests/068
+index b72e555..6e833b2 100755
+--- a/tests/qemu-iotests/068
++++ b/tests/qemu-iotests/068
+@@ -43,7 +43,6 @@ _supported_fmt qcow2
+ _supported_proto generic
+ _supported_os Linux
+ 
+-IMGOPTS="compat=1.1"
+ IMG_SIZE=128K
+ 
+ echo
+diff --git a/tests/qemu-iotests/069.out b/tests/qemu-iotests/069.out
+index b48306d..cad1ebc 100644
+--- a/tests/qemu-iotests/069.out
++++ b/tests/qemu-iotests/069.out
+@@ -4,5 +4,5 @@ QA output created by 069
+ 
+ Formatting 'TEST_DIR/t.IMGFMT.base', fmt=IMGFMT size=131072 
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=131072 backing_file='TEST_DIR/t.IMGFMT.base' 
+-qemu-io: can't open device TEST_DIR/t.IMGFMT: Could not open backing file: Could not open 'TEST_DIR/t.IMGFMT.base': No such file or directory
++qemu-io: can't open device TEST_DIR/t.IMGFMT
+ *** done
+diff --git a/tests/qemu-iotests/074.out b/tests/qemu-iotests/074.out
+index 8fba5ae..d24662b 100644
+--- a/tests/qemu-iotests/074.out
++++ b/tests/qemu-iotests/074.out
+@@ -3,16 +3,16 @@ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=1073741824
+ === IO: pattern 102
+ wrote 512/512 bytes at offset 512
+ 512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-qemu-img: Error while reading offset 0 of blkdebug:TEST_DIR/blkdebug.conf:TEST_DIR/t.IMGFMT: Input/output error
+-qemu-img: Error while reading offset 0: Input/output error
++Error while reading offset 0 of blkdebug:TEST_DIR/blkdebug.conf:TEST_DIR/t.IMGFMT: Input/output error
++Error while reading offset 0: Input/output error
+ 4
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=1073741824
+ Formatting 'TEST_DIR/t.IMGFMT.2', fmt=IMGFMT size=0
+ === IO: pattern 102
+ wrote 512/512 bytes at offset 512
+ 512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-qemu-img: Error while reading offset 0 of blkdebug:TEST_DIR/blkdebug.conf:TEST_DIR/t.IMGFMT: Input/output error
+-qemu-img: Error while reading offset 0 of blkdebug:TEST_DIR/blkdebug.conf:TEST_DIR/t.IMGFMT: Input/output error
++Error while reading offset 0 of blkdebug:TEST_DIR/blkdebug.conf:TEST_DIR/t.IMGFMT: Input/output error
++Error while reading offset 0 of blkdebug:TEST_DIR/blkdebug.conf:TEST_DIR/t.IMGFMT: Input/output error
+ Warning: Image size mismatch!
+ 4
+ Cleanup
+diff --git a/tests/qemu-iotests/079.out b/tests/qemu-iotests/079.out
+index ef4b8c9..7c1c62a 100644
+--- a/tests/qemu-iotests/079.out
++++ b/tests/qemu-iotests/079.out
+@@ -2,31 +2,33 @@ QA output created by 079
+ === Check option preallocation and cluster_size ===
+ 
+ qemu-img create -f qcow2 -o preallocation=metadata,cluster_size=16384 TEST_DIR/t.qcow2 4G
+-Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=4294967296 encryption=off cluster_size=16384 preallocation='metadata' lazy_refcounts=off
++Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=4294967296 encryption=off cluster_size=16384 preallocation='metadata' 
+ 
+ qemu-img create -f qcow2 -o preallocation=metadata,cluster_size=32768 TEST_DIR/t.qcow2 4G
+-Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=4294967296 encryption=off cluster_size=32768 preallocation='metadata' lazy_refcounts=off
++Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=4294967296 encryption=off cluster_size=32768 preallocation='metadata' 
+ 
+ qemu-img create -f qcow2 -o preallocation=metadata,cluster_size=65536 TEST_DIR/t.qcow2 4G
+-Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=4294967296 encryption=off cluster_size=65536 preallocation='metadata' lazy_refcounts=off
++Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=4294967296 encryption=off cluster_size=65536 preallocation='metadata' 
+ 
+ qemu-img create -f qcow2 -o preallocation=metadata,cluster_size=131072 TEST_DIR/t.qcow2 4G
+-Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=4294967296 encryption=off cluster_size=131072 preallocation='metadata' lazy_refcounts=off
++Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=4294967296 encryption=off cluster_size=131072 preallocation='metadata' 
+ 
+ qemu-img create -f qcow2 -o preallocation=metadata,cluster_size=262144 TEST_DIR/t.qcow2 4G
+-Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=4294967296 encryption=off cluster_size=262144 preallocation='metadata' lazy_refcounts=off
++Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=4294967296 encryption=off cluster_size=262144 preallocation='metadata' 
+ 
+ qemu-img create -f qcow2 -o preallocation=metadata,cluster_size=524288 TEST_DIR/t.qcow2 4G
+-Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=4294967296 encryption=off cluster_size=524288 preallocation='metadata' lazy_refcounts=off
++Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=4294967296 encryption=off cluster_size=524288 preallocation='metadata' 
+ 
+ qemu-img create -f qcow2 -o preallocation=metadata,cluster_size=1048576 TEST_DIR/t.qcow2 4G
+-Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=4294967296 encryption=off cluster_size=1048576 preallocation='metadata' lazy_refcounts=off
++Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=4294967296 encryption=off cluster_size=1048576 preallocation='metadata' 
+ 
+ qemu-img create -f qcow2 -o preallocation=metadata,cluster_size=2097152 TEST_DIR/t.qcow2 4G
+-Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=4294967296 encryption=off cluster_size=2097152 preallocation='metadata' lazy_refcounts=off
++Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=4294967296 encryption=off cluster_size=2097152 preallocation='metadata' 
+ 
+ qemu-img create -f qcow2 -o preallocation=metadata,cluster_size=4194304 TEST_DIR/t.qcow2 4G
+-qemu-img: TEST_DIR/t.qcow2: Cluster size must be a power of two between 512 and 2048k
+-Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=4294967296 encryption=off cluster_size=4194304 preallocation='metadata' lazy_refcounts=off
++Cluster size must be a power of two between 512 and 2048k
++
++TEST_DIR/t.qcow2: error while creating qcow2: Invalid argument
++Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=4294967296 encryption=off cluster_size=4194304 preallocation='metadata' 
+ 
+ *** done
+diff --git a/tests/qemu-iotests/085.out b/tests/qemu-iotests/085.out
+index 0f2b17f..07a1b3e 100644
+--- a/tests/qemu-iotests/085.out
++++ b/tests/qemu-iotests/085.out
+@@ -1,6 +1,6 @@
+ QA output created by 085
+-Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=134217728
+-Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=134217728
++Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=134217728 
++Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=134217728 
+ 
+ === Running QEMU ===
+ 
+@@ -11,45 +11,45 @@ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=134217728
+ 
+ === Create a single snapshot on virtio0 ===
+ 
+-Formatting 'TEST_DIR/1-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/t.qcow2.orig' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
++Formatting 'TEST_DIR/1-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/t.qcow2.orig' backing_fmt='qcow2' encryption=off cluster_size=65536
+ {"return": {}}
+ 
+ === Invalid command - missing device and nodename ===
+ 
+-{"error": {"class": "GenericError", "desc": "Cannot find device= nor node_name="}}
++{"error": {"class": "MissingParameter", "desc": "Parameter 'device' is missing", "data": {"name": "device"}}}
+ 
+ === Invalid command - missing snapshot-file ===
+ 
+-{"error": {"class": "GenericError", "desc": "Parameter 'snapshot-file' is missing"}}
++{"error": {"class": "MissingParameter", "desc": "Parameter 'snapshot-file' is missing", "data": {"name": "snapshot-file"}}}
+ 
+ 
+ === Create several transactional group snapshots ===
+ 
+-Formatting 'TEST_DIR/2-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/1-snapshot-v0.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
+-Formatting 'TEST_DIR/2-snapshot-v1.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/t.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
++Formatting 'TEST_DIR/2-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/1-snapshot-v0.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536
++Formatting 'TEST_DIR/2-snapshot-v1.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/t.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536
+ {"return": {}}
+-Formatting 'TEST_DIR/3-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/2-snapshot-v0.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
+-Formatting 'TEST_DIR/3-snapshot-v1.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/2-snapshot-v1.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
++Formatting 'TEST_DIR/3-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/2-snapshot-v0.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536
++Formatting 'TEST_DIR/3-snapshot-v1.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/2-snapshot-v1.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536
+ {"return": {}}
+-Formatting 'TEST_DIR/4-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/3-snapshot-v0.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
+-Formatting 'TEST_DIR/4-snapshot-v1.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/3-snapshot-v1.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
++Formatting 'TEST_DIR/4-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/3-snapshot-v0.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536
++Formatting 'TEST_DIR/4-snapshot-v1.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/3-snapshot-v1.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536
+ {"return": {}}
+-Formatting 'TEST_DIR/5-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/4-snapshot-v0.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
+-Formatting 'TEST_DIR/5-snapshot-v1.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/4-snapshot-v1.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
++Formatting 'TEST_DIR/5-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/4-snapshot-v0.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536
++Formatting 'TEST_DIR/5-snapshot-v1.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/4-snapshot-v1.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536
+ {"return": {}}
+-Formatting 'TEST_DIR/6-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/5-snapshot-v0.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
+-Formatting 'TEST_DIR/6-snapshot-v1.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/5-snapshot-v1.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
++Formatting 'TEST_DIR/6-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/5-snapshot-v0.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536
++Formatting 'TEST_DIR/6-snapshot-v1.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/5-snapshot-v1.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536
+ {"return": {}}
+-Formatting 'TEST_DIR/7-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/6-snapshot-v0.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
+-Formatting 'TEST_DIR/7-snapshot-v1.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/6-snapshot-v1.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
++Formatting 'TEST_DIR/7-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/6-snapshot-v0.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536
++Formatting 'TEST_DIR/7-snapshot-v1.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/6-snapshot-v1.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536
+ {"return": {}}
+-Formatting 'TEST_DIR/8-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/7-snapshot-v0.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
+-Formatting 'TEST_DIR/8-snapshot-v1.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/7-snapshot-v1.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
++Formatting 'TEST_DIR/8-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/7-snapshot-v0.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536
++Formatting 'TEST_DIR/8-snapshot-v1.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/7-snapshot-v1.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536
+ {"return": {}}
+-Formatting 'TEST_DIR/9-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/8-snapshot-v0.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
+-Formatting 'TEST_DIR/9-snapshot-v1.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/8-snapshot-v1.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
++Formatting 'TEST_DIR/9-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/8-snapshot-v0.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536
++Formatting 'TEST_DIR/9-snapshot-v1.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/8-snapshot-v1.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536
+ {"return": {}}
+-Formatting 'TEST_DIR/10-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/9-snapshot-v0.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
+-Formatting 'TEST_DIR/10-snapshot-v1.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/9-snapshot-v1.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
++Formatting 'TEST_DIR/10-snapshot-v0.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/9-snapshot-v0.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536
++Formatting 'TEST_DIR/10-snapshot-v1.qcow2', fmt=qcow2 size=134217728 backing_file='TEST_DIR/9-snapshot-v1.qcow2' backing_fmt='qcow2' encryption=off cluster_size=65536
+ {"return": {}}
+ *** done
+diff --git a/tests/qemu-iotests/095 b/tests/qemu-iotests/095
+index acc7dbf..cfa4f16 100755
+--- a/tests/qemu-iotests/095
++++ b/tests/qemu-iotests/095
+@@ -72,7 +72,7 @@ h=$QEMU_HANDLE
+ 
+ _send_qemu_cmd $h "{ 'execute': 'qmp_capabilities' }" "return"
+ 
+-_send_qemu_cmd $h "{ 'execute': 'block-commit',
++_send_qemu_cmd $h "{ 'execute': '__com.redhat_block-commit',
+                                  'arguments': { 'device': 'test',
+                                  'top': '"${TEST_IMG}.snp1"' } }" "BLOCK_JOB_COMPLETED"
+ 
+diff --git a/tests/qemu-iotests/095.out b/tests/qemu-iotests/095.out
+index 5864dda..f1a3911 100644
+--- a/tests/qemu-iotests/095.out
++++ b/tests/qemu-iotests/095.out
+@@ -7,11 +7,8 @@ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=104857600 backing_file='TEST_DIR
+ image: TEST_DIR/t.qcow2.base
+ file format: qcow2
+ virtual size: 5.0M (5242880 bytes)
+-disk size: 196K
++disk size: 136K
+ cluster_size: 65536
+-Format specific information:
+-    compat: 1.1
+-    lazy refcounts: false
+ 
+ === Running QEMU Live Commit Test ===
+ 
+@@ -23,9 +20,6 @@ Format specific information:
+ image: TEST_DIR/t.qcow2.base
+ file format: qcow2
+ virtual size: 100M (104857600 bytes)
+-disk size: 196K
++disk size: 136K
+ cluster_size: 65536
+-Format specific information:
+-    compat: 1.1
+-    lazy refcounts: false
+ *** done
+-- 
+1.9.3
+

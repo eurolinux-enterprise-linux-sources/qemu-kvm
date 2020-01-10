@@ -1,0 +1,56 @@
+From 89ee9558edbbd38f3f54a1e41aba3d52e4a13e56 Mon Sep 17 00:00:00 2001
+Message-Id: <89ee9558edbbd38f3f54a1e41aba3d52e4a13e56.1376387172.git.minovotn@redhat.com>
+In-Reply-To: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+References: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Thu, 8 Aug 2013 06:09:33 +0200
+Subject: [PATCH 03/13] vmdk: byteswap VMDK4Header.desc_offset field
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1375942181-5262-4-git-send-email-famz@redhat.com>
+Patchwork-id: 53068
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 03/11] vmdk: byteswap VMDK4Header.desc_offset field
+Bugzilla: 994804
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@redhat.com>
+
+Remember to byteswap VMDK4Header.desc_offset on big-endian machines.
+
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 5a394b9e96eb3c39676353bdf8a230180ae8d6f4)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index deb6743..8d17b9b 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -505,8 +505,11 @@ static int vmdk_open_vmdk4(BlockDriverState *bs,
+     if (ret < 0) {
+         return ret;
+     }
+-    if (header.capacity == 0 && header.desc_offset) {
+-        return vmdk_open_desc_file(bs, flags, header.desc_offset << 9);
++    if (header.capacity == 0) {
++        int64_t desc_offset = le64_to_cpu(header.desc_offset);
++        if (desc_offset) {
++            return vmdk_open_desc_file(bs, flags, desc_offset << 9);
++        }
+     }
+ 
+     if (le64_to_cpu(header.gd_offset) == VMDK4_GD_AT_END) {
+-- 
+1.7.11.7
+

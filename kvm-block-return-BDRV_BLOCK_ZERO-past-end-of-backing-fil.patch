@@ -1,0 +1,45 @@
+From 2a217cc07005b53a55d7f197d550ea211b0e8008 Mon Sep 17 00:00:00 2001
+Message-Id: <2a217cc07005b53a55d7f197d550ea211b0e8008.1379425497.git.minovotn@redhat.com>
+In-Reply-To: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+References: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Fri, 6 Sep 2013 18:12:41 +0200
+Subject: [PATCH 21/25] block: return BDRV_BLOCK_ZERO past end of backing file
+
+If the sectors are unallocated and we are past the end of the
+backing file, they will read as zero.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit f0ad5712d5d15ff272b9e107910be4aae468fb3d)
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.c | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/block.c b/block.c
+index 947b1b2..2306994 100644
+--- a/block.c
++++ b/block.c
+@@ -2777,8 +2777,16 @@ static int64_t coroutine_fn bdrv_co_get_block_status(BlockDriverState *bs,
+         return ret;
+     }
+ 
+-    if (!(ret & BDRV_BLOCK_DATA) && bdrv_has_zero_init(bs)) {
+-        ret |= BDRV_BLOCK_ZERO;
++    if (!(ret & BDRV_BLOCK_DATA)) {
++        if (bdrv_has_zero_init(bs)) {
++            ret |= BDRV_BLOCK_ZERO;
++        } else {
++            BlockDriverState *bs2 = bs->backing_hd;
++            int64_t length2 = bdrv_getlength(bs2);
++            if (length2 >= 0 && sector_num >= (length2 >> BDRV_SECTOR_BITS)) {
++                ret |= BDRV_BLOCK_ZERO;
++            }
++        }
+     }
+     return ret;
+ }
+-- 
+1.7.11.7
+

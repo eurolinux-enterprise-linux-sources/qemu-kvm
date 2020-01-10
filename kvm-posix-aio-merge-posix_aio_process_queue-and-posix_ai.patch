@@ -1,0 +1,162 @@
+From cd1e5c640073fe9f6f79125f2cbb3f434f1c7897 Mon Sep 17 00:00:00 2001
+Message-Id: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+From: Vlad Yasevich <vyasevic@redhat.com>
+Date: Thu, 12 Mar 2015 19:12:57 -0500
+Subject: [CHANGE 01/33] posix-aio: merge posix_aio_process_queue and
+ posix_aio_read
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Vlad Yasevich <vyasevic@redhat.com>
+Message-id: <1426187601-21396-2-git-send-email-vyasevic@redhat.com>
+Patchwork-id: 64341
+O-Subject: [RHEL6.7 qemu-kvm PATCH v2 01/25] posix-aio: merge posix_aio_process_queue and posix_aio_read
+Bugzilla: 1005016
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+posix_aio_read already calls qemu_aio_process_queue, and dually
+qemu_aio_process_queue is always followed by a select loop that calls
+posix_aio_read.
+
+No races are possible, so there is no need for a separate process_queue
+callback.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry-picked from upstream adfe92f6d18c0e0a3694e19abb58eb55fd0c5993)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	posix-aio-compat.c
+
+Signed-off-by: Vladislav Yasevich <vyasevic@redhat.com>
+---
+ posix-aio-compat.c | 66 ++++++++++++++++++++++--------------------------------
+ 1 file changed, 27 insertions(+), 39 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ posix-aio-compat.c | 66 ++++++++++++++++++++++--------------------------------
+ 1 file changed, 27 insertions(+), 39 deletions(-)
+
+diff --git a/posix-aio-compat.c b/posix-aio-compat.c
+index 25851a7..378b281 100644
+--- a/posix-aio-compat.c
++++ b/posix-aio-compat.c
+@@ -473,26 +473,48 @@ static int qemu_paio_error(struct qemu_paiocb *aiocb)
+     return ret;
+ }
+ 
+-static int posix_aio_process_queue(void *opaque)
++static void posix_aio_read(void *opaque)
+ {
+     PosixAioState *s = opaque;
++    union {
++        struct qemu_signalfd_siginfo siginfo;
++        char buf[128];
++    } sig;
+     struct qemu_paiocb *acb, **pacb;
+     int ret;
+-    int result = 0;
++    size_t offset;
++
++    /* try to read from signalfd, don't freak out if we can't read anything */
++    offset = 0;
++    while (offset < 128) {
++        ssize_t len;
++
++        len = read(s->fd, sig.buf + offset, 128 - offset);
++        if (len == -1 && errno == EINTR)
++            continue;
++        if (len == -1 && errno == EAGAIN) {
++            /* there is no natural reason for this to happen,
++             * so we'll spin hard until we get everything just
++             * to be on the safe side. */
++            if (offset > 0)
++                continue;
++        }
++
++        offset += len;
++    }
+ 
+     for(;;) {
+         pacb = &s->first_aio;
+         for(;;) {
+             acb = *pacb;
+             if (!acb)
+-                return result;
++                return;
+ 
+             ret = qemu_paio_error(acb);
+             if (ret == ECANCELED) {
+                 /* remove the request */
+                 *pacb = acb->next;
+                 qemu_aio_release(acb);
+-                result = 1;
+             } else if (ret != EINPROGRESS) {
+                 /* end of aio */
+                 if (ret == 0) {
+@@ -509,46 +531,12 @@ static int posix_aio_process_queue(void *opaque)
+                 /* call the callback */
+                 acb->common.cb(acb->common.opaque, ret);
+                 qemu_aio_release(acb);
+-                result = 1;
+                 break;
+             } else {
+                 pacb = &acb->next;
+             }
+         }
+     }
+-
+-    return result;
+-}
+-
+-static void posix_aio_read(void *opaque)
+-{
+-    PosixAioState *s = opaque;
+-    union {
+-        struct qemu_signalfd_siginfo siginfo;
+-        char buf[128];
+-    } sig;
+-    size_t offset;
+-
+-    /* try to read from signalfd, don't freak out if we can't read anything */
+-    offset = 0;
+-    while (offset < 128) {
+-        ssize_t len;
+-
+-        len = read(s->fd, sig.buf + offset, 128 - offset);
+-        if (len == -1 && errno == EINTR)
+-            continue;
+-        if (len == -1 && errno == EAGAIN) {
+-            /* there is no natural reason for this to happen,
+-             * so we'll spin hard until we get everything just
+-             * to be on the safe side. */
+-            if (offset > 0)
+-                continue;
+-        }
+-
+-        offset += len;
+-    }
+-
+-    posix_aio_process_queue(s);
+ }
+ 
+ static int posix_aio_flush(void *opaque)
+@@ -685,7 +673,7 @@ int paio_init(void)
+     fcntl(s->fd, F_SETFL, O_NONBLOCK);
+ 
+     qemu_aio_set_fd_handler(s->fd, posix_aio_read, NULL, posix_aio_flush,
+-        posix_aio_process_queue, s);
++        NULL, s);
+ 
+     ret = pthread_attr_init(&attr);
+     if (ret)
+-- 
+2.1.0
+

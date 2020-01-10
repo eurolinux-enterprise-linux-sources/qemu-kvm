@@ -1,0 +1,57 @@
+From 61b268aa329b87c733bcad3e988f0ac28145c47e Mon Sep 17 00:00:00 2001
+Message-Id: <61b268aa329b87c733bcad3e988f0ac28145c47e.1422637807.git.jen@redhat.com>
+In-Reply-To: <d57bff8cf3457c2e855eeca4b18266bf5956270d.1422637807.git.jen@redhat.com>
+References: <d57bff8cf3457c2e855eeca4b18266bf5956270d.1422637807.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Mon, 19 Jan 2015 14:52:09 -0500
+Subject: [CHANGE 08/10] block/raw-posix: Only sync after successful
+ preallocation
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1421679130-22714-9-git-send-email-mreitz@redhat.com>
+Patchwork-id: 63368
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 8/9] block/raw-posix: Only sync after successful preallocation
+Bugzilla: 1040220
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1040220
+
+The loop which filled the file with zeroes may have been left early due
+to an error. In that case, the fsync() should be skipped.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 731de38052b245eab79e417aeac5e1dcebe6437f)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/raw-posix.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/raw-posix.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/block/raw-posix.c b/block/raw-posix.c
+index 4941a5f..79a2253 100644
+--- a/block/raw-posix.c
++++ b/block/raw-posix.c
+@@ -678,7 +678,9 @@ static int raw_create(const char *filename, QEMUOptionParameter *options)
+             }
+             left -= result;
+         }
+-        fsync(fd);
++        if (result >= 0) {
++            fsync(fd);
++        }
+         g_free(buf);
+     } else if (prealloc != PREALLOC_MODE_OFF) {
+         result = -EINVAL;
+-- 
+2.1.0
+

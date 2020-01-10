@@ -1,0 +1,162 @@
+From aefb5be5bb2e1e9cff25a846b497bc0d4368f495 Mon Sep 17 00:00:00 2001
+Message-Id: <aefb5be5bb2e1e9cff25a846b497bc0d4368f495.1367330031.git.minovotn@redhat.com>
+From: Amos Kong <akong@redhat.com>
+Date: Mon, 8 Apr 2013 07:14:38 +0200
+Subject: [PATCH 1/4] add a boot option to do strict boot
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1365405278-10192-1-git-send-email-akong@redhat.com>
+Patchwork-id: 50270
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2] add a boot option to do strict boot
+Bugzilla: 903204
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Alex Williamson <alex.williamson@redhat.com>
+
+Bugzilla: 903204
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=5595309
+Test: tested in localhost
+
+Seabios already added a new device type to halt booting.
+Qemu can add "HALT" at the end of bootindex string, then
+seabios will halt booting after trying to boot from all
+selected devices.
+
+This patch added a new boot option to configure if boot
+from un-selected devices.
+
+This option only effects when boot priority is changed by
+bootindex options, the old style(-boot order=..) will still
+try to boot from un-selected devices.
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+Message-id: 1363674207-31496-1-git-send-email-akong@redhat.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry-picked from c8a6ae8bb95477d5ac11d9b491b603b2d190a96e)
+
+Manually merged commit 4690579e9bafa0a2a49d7b12dae905279a552cd6
+to this patch, fix of terminating '\0'.
+
+Conflicts:
+    qemu-config.c
+    qemu-options.hx
+    vl.c
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+---
+Seabios support patch:
+ http://post-office.corp.redhat.com/archives/rhvirt-patches/2013-March/msg00198.html
+V2: fixed terminating '\0' issue
+---
+ qemu-config.c   |    3 +++
+ qemu-options.hx |    8 ++++++--
+ vl.c            |   22 +++++++++++++++++++++-
+ 3 files changed, 30 insertions(+), 3 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-config.c   |  3 +++
+ qemu-options.hx |  8 ++++++--
+ vl.c            | 22 +++++++++++++++++++++-
+ 3 files changed, 30 insertions(+), 3 deletions(-)
+
+diff --git a/qemu-config.c b/qemu-config.c
+index cfadf12..48792b1 100644
+--- a/qemu-config.c
++++ b/qemu-config.c
+@@ -460,6 +460,9 @@ QemuOptsList qemu_boot_opts = {
+         }, {
+             .name = "reboot-timeout",
+             .type = QEMU_OPT_STRING,
++        }, {
++            .name = "strict",
++            .type = QEMU_OPT_STRING,
+         },
+         { /*End of list */ }
+     },
+diff --git a/qemu-options.hx b/qemu-options.hx
+index 4bffa74..a60c02a 100644
+--- a/qemu-options.hx
++++ b/qemu-options.hx
+@@ -268,11 +268,11 @@ ETEXI
+ 
+ DEF("boot", HAS_ARG, QEMU_OPTION_boot,
+     "-boot [order=drives][,once=drives][,menu=on|off]\n"
+-    "      [,reboot-timeout=rb_time]\n"
++    "      [,reboot-timeout=rb_time][,strict=on|off]\n"
+     "                'drives': floppy (a), hard disk (c), CD-ROM (d), network (n)\n"
+     "                'rb_timeout': the timeout before guest reboot when boot failed, unit is ms\n")
+ STEXI
+-@item -boot [order=@var{drives}][,once=@var{drives}][,menu=on|off][,reboot-timeout=@var{rb_timeout}]
++@item -boot [order=@var{drives}][,once=@var{drives}][,menu=on|off][,reboot-timeout=@var{rb_timeout}][,strict=on|off]
+ @findex -boot
+ Specify boot order @var{drives} as a string of drive letters. Valid
+ drive letters depend on the target achitecture. The x86 PC uses: a, b
+@@ -289,6 +289,10 @@ when boot failed, then reboot. If @var{rb_timeout} is '-1', guest will not
+ reboot, qemu passes '-1' to bios by default. Currently Seabios for X86
+ system support it.
+ 
++Do strict boot via @option{strict=on} as far as firmware/BIOS
++supports it. This only effects when boot priority is changed by
++bootindex options. The default is non-strict boot.
++
+ @example
+ # try to boot from network first, then from hard disk
+ qemu -boot order=nc
+diff --git a/vl.c b/vl.c
+index 45fd410..6f0e9e3 100644
+--- a/vl.c
++++ b/vl.c
+@@ -268,6 +268,7 @@ int boot_menu;
+ #ifdef CONFIG_FAKE_MACHINE
+ int fake_machine = 0;
+ #endif
++bool boot_strict;
+ 
+ typedef struct FWBootEntry FWBootEntry;
+ 
+@@ -2367,6 +2368,12 @@ char *get_boot_devices_list(uint32_t *size)
+ 
+     *size = total;
+ 
++    if (boot_strict && *size > 0) {
++        list[total-1] = '\n';
++        list = g_realloc(list, total + 5);
++        memcpy(&list[total], "HALT", 5);
++        *size = total + 5;
++    }
+     return list;
+ }
+ 
+@@ -5402,7 +5409,7 @@ int main(int argc, char **argv, char **envp)
+                 {
+                     static const char * const params[] = {
+                         "order", "once", "menu",
+-                        "reboot-timeout", NULL
++                        "reboot-timeout", "strict", NULL
+                     };
+                     char buf[sizeof(boot_devices)];
+                     char *standard_boot_devices;
+@@ -5445,6 +5452,19 @@ int main(int argc, char **argv, char **envp)
+                                 exit(1);
+                             }
+                         }
++                        if (get_param_value(buf, sizeof(buf),
++                                            "strict", optarg)) {
++                            if (!strcmp(buf, "on")) {
++                                boot_strict = true;
++                            } else if (!strcmp(buf, "off")) {
++                                boot_strict = false;
++                            } else {
++                                fprintf(stderr,
++                                        "qemu: invalid option value '%s'\n",
++                                        buf);
++                                exit(1);
++                            }
++                        }
+                         qemu_opts_parse(qemu_find_opts("boot-opts"),
+                                         optarg, 0);
+                     }
+-- 
+1.7.11.7
+

@@ -1,0 +1,99 @@
+From 7ac81e8080f258f8c11a51c941c6422a2c552133 Mon Sep 17 00:00:00 2001
+Message-Id: <7ac81e8080f258f8c11a51c941c6422a2c552133.1453755329.git.jen@redhat.com>
+In-Reply-To: <1a2959ea5623b8fef311aec41db86995284141a9.1453755329.git.jen@redhat.com>
+References: <1a2959ea5623b8fef311aec41db86995284141a9.1453755329.git.jen@redhat.com>
+From: Miroslav Rezanina <mrezanin@redhat.com>
+Date: Mon, 25 Jan 2016 08:11:51 -0500
+Subject: [CHANGE 2/2] fw_cfg: add check to validate current entry value
+ (CVE-2016-1714)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Miroslav Rezanina <mrezanin@redhat.com>
+Message-id: <1453709511-30580-1-git-send-email-mrezanin@redhat.com>
+Patchwork-id: 68851
+O-Subject: [RHEL-6.8/RHEL-6.7.z qemu-kvm PATCH] fw_cfg: add check to validate current entry value (CVE-2016-1714)
+Bugzilla: 1298433 1298434
+RH-Acked-by: Wei Huang <wei@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Laurent Vivier <lvivier@redhat.com>
+
+From: Miroslav Rezanina <mrezanin@redhat.com>
+
+BZ: https://bugzilla.redhat.com/show_bug.cgi?id=1298046 (RHEL 6.8)
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=10386660 (RHEL 6.8)
+
+This patch is based on upstream commit 66f8fd9dda312191b78d2a2ba2848bcee76127a2
+  Author: Gabriel L. Somlo <somlo@cmu.edu>
+  Date:   Thu Nov 5 09:32:50 2015 -0500
+
+    fw_cfg: avoid calculating invalid current entry pointer
+
+    When calculating a pointer to the currently selected fw_cfg item, the
+    following is used:
+
+      FWCfgEntry *e = &s->entries[arch][s->cur_entry & FW_CFG_ENTRY_MASK];
+
+    When s->cur_entry is FW_CFG_INVALID, we are calculating the address of
+    a non-existent element in s->entries[arch][...], which is undefined.
+
+    This patch ensures the resulting entry pointer is set to NULL whenever
+    s->cur_entry is FW_CFG_INVALID.
+
+    Reported-by: Laszlo Ersek <lersek@redhat.com>
+    Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+    Signed-off-by: Gabriel Somlo <somlo@cmu.edu>
+    Message-id: 1446733972-1602-5-git-send-email-somlo@cmu.edu
+    Cc: Marc Marí <markmb@redhat.com>
+    Signed-off-by: Gabriel Somlo <somlo@cmu.edu>
+    Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+    Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+
+with added chunk for fw_cfg_write() that was removed upstream by
+commit 023e3148567ac898c7258138f8e86c3c2bb40d07 and missing chunk
+for fw_cfg_dma_transfer that was added later by upstream commit
+a4c0d1deb785611c96a455f65ec032976b00b36f.
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/fw_cfg.c | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/hw/fw_cfg.c b/hw/fw_cfg.c
+index c34b095..80f8ff0 100644
+--- a/hw/fw_cfg.c
++++ b/hw/fw_cfg.c
+@@ -80,11 +80,14 @@ static void fw_cfg_reboot(FWCfgState *s)
+ static void fw_cfg_write(FWCfgState *s, uint8_t value)
+ {
+     int arch = !!(s->cur_entry & FW_CFG_ARCH_LOCAL);
+-    FWCfgEntry *e = &s->entries[arch][s->cur_entry & FW_CFG_ENTRY_MASK];
++    FWCfgEntry *e = (s->cur_entry == FW_CFG_INVALID) ? NULL :
++                    &s->entries[arch][s->cur_entry & FW_CFG_ENTRY_MASK];
+ 
+     FW_CFG_DPRINTF("write %d\n", value);
+ 
+-    if (s->cur_entry & FW_CFG_WRITE_CHANNEL && s->cur_offset < e->len) {
++    if (s->cur_entry & FW_CFG_WRITE_CHANNEL &&
++            e != NULL &&
++            s->cur_offset < e->len) {
+         e->data[s->cur_offset++] = value;
+         if (s->cur_offset == e->len) {
+             e->callback(e->callback_opaque, e->data);
+@@ -114,7 +117,8 @@ static int fw_cfg_select(FWCfgState *s, uint16_t key)
+ static uint8_t fw_cfg_read(FWCfgState *s)
+ {
+     int arch = !!(s->cur_entry & FW_CFG_ARCH_LOCAL);
+-    FWCfgEntry *e = &s->entries[arch][s->cur_entry & FW_CFG_ENTRY_MASK];
++    FWCfgEntry *e = (s->cur_entry == FW_CFG_INVALID) ? NULL :
++                     &s->entries[arch][s->cur_entry & FW_CFG_ENTRY_MASK];
+     uint8_t ret;
+ 
+     if (s->cur_entry == FW_CFG_INVALID || !e->data || s->cur_offset >= e->len)
+-- 
+2.1.0
+

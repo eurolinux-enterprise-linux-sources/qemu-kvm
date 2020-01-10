@@ -1,0 +1,110 @@
+From 1a2959ea5623b8fef311aec41db86995284141a9 Mon Sep 17 00:00:00 2001
+Message-Id: <1a2959ea5623b8fef311aec41db86995284141a9.1453755329.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 22 Jan 2016 02:37:59 -0500
+Subject: [CHANGE 1/2] blockdev: Error out on negative throttling option values
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1453430279-12966-1-git-send-email-famz@redhat.com>
+Patchwork-id: 68841
+O-Subject: [RHEL-6.8 qemu-kvm PATCH] blockdev: Error out on negative throttling option values
+Bugzilla: 1294619
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Thomas Huth <thuth@redhat.com>
+
+BZ: https://bugzilla.redhat.com/show_bug.cgi?id=1294619
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=10380742 (RHEL)
+      http://brewweb.devel.redhat.com/brew/taskinfo?taskID=10380748 (RHEV)
+
+extract_common_blockdev_options() uses qemu_opt_get_number() to parse
+the bps/iops numbers to uint64_t, then converts to double and stores in
+ThrottleConfig.  The actual parsing is done by strtoull() in
+parse_option_number().  Negative numbers are wrapped to large positive
+ones, and stored.
+
+We used to reject negative numbers since 7d81c1413c9, but this regressed
+when the option parsing code was changed later. Now fix this again.
+
+This time, define an arbitrary large upper limit (1e15),  and check the
+values so both negative and impractically big numbers are caught and
+reported.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Reviewed-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Alberto Garcia <berto@igalia.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 972606c4db826f286f7f475551180502859f49b9)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ blockdev.c              |  3 ++-
+ include/qemu/throttle.h |  2 ++
+ util/throttle.c         | 16 ++++++----------
+ 3 files changed, 10 insertions(+), 11 deletions(-)
+
+diff --git a/blockdev.c b/blockdev.c
+index 963ab87..88a0e40 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -328,7 +328,8 @@ static bool check_throttle_config(ThrottleConfig *cfg, Error **errp)
+     }
+ 
+     if (!throttle_is_valid(cfg)) {
+-        error_setg(errp, "bps/iops/maxs values must be 0 or greater");
++        error_setg(errp, "bps/iops/max values must be within [0, %lld]",
++                   THROTTLE_VALUE_MAX);
+         return false;
+     }
+ 
+diff --git a/include/qemu/throttle.h b/include/qemu/throttle.h
+index d23accc..449ba7f 100644
+--- a/include/qemu/throttle.h
++++ b/include/qemu/throttle.h
+@@ -28,6 +28,8 @@
+ 
+ #define NANOSECONDS_PER_SECOND  1000000000.0
+ 
++#define THROTTLE_VALUE_MAX 1000000000000000LL
++
+ typedef enum {
+     THROTTLE_BPS_TOTAL,
+     THROTTLE_BPS_READ,
+diff --git a/util/throttle.c b/util/throttle.c
+index cd08cb5..0fe7614 100644
+--- a/util/throttle.c
++++ b/util/throttle.c
+@@ -252,22 +252,18 @@ bool throttle_conflicting(ThrottleConfig *cfg)
+  */
+ bool throttle_is_valid(ThrottleConfig *cfg)
+ {
+-    bool invalid = false;
+     int i;
+ 
+     for (i = 0; i < BUCKETS_COUNT; i++) {
+-        if (cfg->buckets[i].avg < 0) {
+-            invalid = true;
++        if (cfg->buckets[i].avg < 0 ||
++            cfg->buckets[i].max < 0 ||
++            cfg->buckets[i].avg > THROTTLE_VALUE_MAX ||
++            cfg->buckets[i].max > THROTTLE_VALUE_MAX) {
++            return false;
+         }
+     }
+ 
+-    for (i = 0; i < BUCKETS_COUNT; i++) {
+-        if (cfg->buckets[i].max < 0) {
+-            invalid = true;
+-        }
+-    }
+-
+-    return !invalid;
++    return true;
+ }
+ 
+ /* fix bucket parameters */
+-- 
+2.1.0
+

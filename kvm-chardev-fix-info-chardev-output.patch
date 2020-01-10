@@ -1,0 +1,50 @@
+From 0513e81ad06b073a9ba6e949063b1eb91f9d3606 Mon Sep 17 00:00:00 2001
+Message-Id: <0513e81ad06b073a9ba6e949063b1eb91f9d3606.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:06:16 +0200
+Subject: [PATCH 65/65] chardev: fix "info chardev" output
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-66-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52171
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 65/65] chardev: fix "info chardev" output
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+Fill unset CharDriverState->filename with the backend name, so
+'info chardev' will return at least the chardev type.  Don't
+touch it in case the chardev init function filled it already,
+like the socket+pty chardevs do for example.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 60d95386abf1f5f37ded6a812d12ac458df2491b)
+---
+ qemu-char.c |    3 +++
+ 1 file changed, 3 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 9078c17..7459f15 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -3307,6 +3307,9 @@ ChardevReturn *qmp_chardev_add(const char *id, ChardevBackend *backend,
+         chr->label = g_strdup(id);
+         chr->avail_connections =
+             (backend->kind == CHARDEV_BACKEND_KIND_MUX) ? MAX_MUX : 1;
++        if (!chr->filename) {
++            chr->filename = g_strdup(ChardevBackendKind_lookup[backend->kind]);
++        }
+         QTAILQ_INSERT_TAIL(&chardevs, chr, next);
+         return ret;
+     } else {
+-- 
+1.7.11.7
+

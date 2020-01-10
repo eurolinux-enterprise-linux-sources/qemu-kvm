@@ -1,0 +1,65 @@
+From 7f1593780d859e25f511c90edc896740939a9dd0 Mon Sep 17 00:00:00 2001
+Message-Id: <7f1593780d859e25f511c90edc896740939a9dd0.1429739396.git.jen@redhat.com>
+In-Reply-To: <933ebfcd0e18f4ed2c68553cf4bc257652872678.1429739396.git.jen@redhat.com>
+References: <933ebfcd0e18f4ed2c68553cf4bc257652872678.1429739396.git.jen@redhat.com>
+From: John Snow <jsnow@redhat.com>
+Date: Mon, 6 Apr 2015 18:46:19 -0500
+Subject: [CHANGE 06/11] configure: duplicate/incorrect order of -lrt
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: John Snow <jsnow@redhat.com>
+Message-id: <1428345980-16249-5-git-send-email-jsnow@redhat.com>
+Patchwork-id: 64720
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 4/5] configure: duplicate/incorrect order of -lrt
+Bugzilla: 1208605
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Bandan Das <bsd@redhat.com>
+
+From: Rick Liu <yrliu.ca@gmail.com>
+
+'-lrt' flag duplication/incorrect order
+would cause 'undefined reference to clock_gettime' error during compilation time.
+
+Before fix:
+... -o qemu-bridge-helper qemu-bridge-helper.o    -lrt -pthread -lgthread-2.0 -lrt -lglib-2.0
+After fix:
+... -o qemu-bridge-helper qemu-bridge-helper.o    -pthread -lgthread-2.0 -lrt -lglib-2.0
+
+Reference:
+http://hi.baidu.com/sanitywolf/item/7a8b69c1e76dd220a0b50ab1
+
+Signed-off-by: Rick Liu <yrliu.ca@gmail.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 18e588b197545412cad65f0b07e13c161cac4bea)
+Signed-off-by: John Snow <jsnow@redhat.com>
+---
+ configure | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ configure | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/configure b/configure
+index dfcb906..4f98ad3 100755
+--- a/configure
++++ b/configure
+@@ -2114,9 +2114,9 @@ EOF
+ if compile_prog "" "" ; then
+   :
+ # we need pthread for static linking. use previous pthread test result
+-elif compile_prog "" "-lrt $pthread_lib" ; then
+-  LIBS="-lrt $LIBS"
+-  libs_qga="-lrt $libs_qga"
++elif compile_prog "" "$pthread_lib -lrt" ; then
++  LIBS="$LIBS -lrt"
++  libs_qga="$libs_qga -lrt"
+ fi
+ 
+ if test "$darwin" != "yes" -a "$mingw32" != "yes" -a "$solaris" != yes -a \
+-- 
+2.1.0
+

@@ -1,0 +1,59 @@
+From 0299fe4ab88515eed3938d6b079d6b438e2be72e Mon Sep 17 00:00:00 2001
+Message-Id: <0299fe4ab88515eed3938d6b079d6b438e2be72e.1376387172.git.minovotn@redhat.com>
+In-Reply-To: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+References: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Thu, 8 Aug 2013 06:09:37 +0200
+Subject: [PATCH 07/13] vmdk: check l2 table size when opening
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1375942181-5262-8-git-send-email-famz@redhat.com>
+Patchwork-id: 53072
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 07/11] vmdk: check l2 table size when opening
+Bugzilla: 994804
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+header.num_gtes_per_gte determines size for L2 table. Check for too big
+value before using it. Limit to 512M entries (2GB per one L2 table).
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit f8ce04036e333aae480b1d06d969f6436652633d)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+
+Conflicts:
+	tests/qemu-iotests/059
+	tests/qemu-iotests/059.out
+    Manually remove test script from commit
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 8744780..4bdc315 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -583,6 +583,11 @@ static int vmdk_open_vmdk4(BlockDriverState *bs,
+         return -ENOTSUP;
+     }
+ 
++    if (le32_to_cpu(header.num_gtes_per_gte) > 512) {
++        error_report("L2 table size too big");
++        return -EINVAL;
++    }
++
+     l1_entry_sectors = le32_to_cpu(header.num_gtes_per_gte)
+                         * le64_to_cpu(header.granularity);
+     if (l1_entry_sectors == 0) {
+-- 
+1.7.11.7
+

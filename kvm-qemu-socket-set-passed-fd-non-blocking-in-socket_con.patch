@@ -1,0 +1,56 @@
+From 963d75efcb7c5745219fddb43983bd4a144cf544 Mon Sep 17 00:00:00 2001
+Message-Id: <963d75efcb7c5745219fddb43983bd4a144cf544.1374754301.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:36 +0200
+Subject: [PATCH 25/65] qemu-socket: set passed fd non-blocking in
+ socket_connect()
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-26-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52128
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 25/65] qemu-socket: set passed fd non-blocking in socket_connect()
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@redhat.com>
+
+socket_connect() sets non-blocking on TCP or UNIX domain sockets if a
+callback function is passed.  Do the same for file descriptor passing,
+otherwise we could unexpectedly be using a blocking file descriptor.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 1a751ebfbb2d7a696b889d8208cb5ffc83c090b1)
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+
+[ rhel6: s/qemu_set_nonblock/socket_set_nonblock/ ]
+---
+ qemu-sockets.c |    1 +
+ 1 file changed, 1 insertion(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-sockets.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/qemu-sockets.c b/qemu-sockets.c
+index afd7e1c..29e88e2 100644
+--- a/qemu-sockets.c
++++ b/qemu-sockets.c
+@@ -913,6 +913,7 @@ int socket_connect(SocketAddress *addr, Error **errp,
+             break;
+         }
+         if (callback) {
++            socket_set_nonblock(fd);
+             callback(fd, opaque);
+         }
+         break;
+-- 
+1.7.11.7
+

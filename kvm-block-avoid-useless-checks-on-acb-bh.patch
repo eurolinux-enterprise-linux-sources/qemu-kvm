@@ -1,0 +1,58 @@
+From 167537380706cbdedae56a1c6445daa9e414396d Mon Sep 17 00:00:00 2001
+Message-Id: <167537380706cbdedae56a1c6445daa9e414396d.1430931597.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Wed, 6 May 2015 05:29:42 -0500
+Subject: [CHANGE 1/9] block: avoid useless checks on acb->bh
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1430890182-29575-1-git-send-email-famz@redhat.com>
+Patchwork-id: 65005
+O-Subject: [RHEL-6.7 qemu-kvm PATCH] block: avoid useless checks on acb->bh
+Bugzilla: 1130014
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+BZ: 1130014
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=9114594
+
+Coverity is confused by this "if" and reports leaks on acb->bh.
+The bottom half is always deleted before releasing the AIOCB,
+in either bdrv_aio_cancel_em or bdrv_aio_bh_cb.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 3f3aace83046a6740d4e6f92811d333c6741db00)
+
+RHEL 6 note: As we are switching to glib slice allocator (commit
+b9900cb7f41ab), acb->bh is not initialized, so it's actually wrong to
+check it. This is a fix for program crash.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/block.c b/block.c
+index d77ccd8..d12218f 100644
+--- a/block.c
++++ b/block.c
+@@ -3923,9 +3923,7 @@ static BlockDriverAIOCB *bdrv_aio_rw_vector(BlockDriverState *bs,
+     acb->is_write = is_write;
+     acb->qiov = qiov;
+     acb->bounce = qemu_blockalign(bs, qiov->size);
+-
+-    if (!acb->bh)
+-        acb->bh = qemu_bh_new(bdrv_aio_bh_cb, acb);
++    acb->bh = qemu_bh_new(bdrv_aio_bh_cb, acb);
+ 
+     if (is_write) {
+         qemu_iovec_to_buffer(acb->qiov, acb->bounce);
+-- 
+2.1.0
+

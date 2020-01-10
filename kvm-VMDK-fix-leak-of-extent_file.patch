@@ -1,0 +1,78 @@
+From 0a4f510afd6e4b0f9f1eabead443bdff3c790cda Mon Sep 17 00:00:00 2001
+Message-Id: <0a4f510afd6e4b0f9f1eabead443bdff3c790cda.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:40 +0200
+Subject: [PATCH 25/47] VMDK: fix leak of extent_file
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-26-git-send-email-famz@redhat.com>
+Patchwork-id: 51461
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 25/47] VMDK: fix leak of extent_file
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Fam Zheng <famcool@gmail.com>
+
+Release extent_file on error in vmdk_parse_extents. Added closing files
+in freeing extents.
+
+Signed-off-by: Fam Zheng <famcool@gmail.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit b3c0bfb6f949d8f1c97f390f951c0bab3e703810)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index c532bb4..4fbcd0b 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -180,11 +180,16 @@ static void vmdk_free_extents(BlockDriverState *bs)
+ {
+     int i;
+     BDRVVmdkState *s = bs->opaque;
++    VmdkExtent *e;
+ 
+     for (i = 0; i < s->num_extents; i++) {
+-        g_free(s->extents[i].l1_table);
+-        g_free(s->extents[i].l2_cache);
+-        g_free(s->extents[i].l1_backup_table);
++        e = &s->extents[i];
++        g_free(e->l1_table);
++        g_free(e->l2_cache);
++        g_free(e->l1_backup_table);
++        if (e->file != bs->file) {
++            bdrv_delete(e->file);
++        }
+     }
+     g_free(s->extents);
+ }
+@@ -620,12 +625,13 @@ static int vmdk_open_desc_file(BlockDriverState *bs, int flags,
+     s->desc_offset = 0;
+     ret = vmdk_parse_extents(buf, bs, bs->file->filename);
+     if (ret) {
++        vmdk_free_extents(bs);
+         return ret;
+     }
+ 
+     /* try to open parent images, if exist */
+     if (vmdk_parent_open(bs)) {
+-        g_free(s->extents);
++        vmdk_free_extents(bs);
+         return -EINVAL;
+     }
+     s->parent_cid = vmdk_read_cid(bs, 1);
+-- 
+1.7.11.7
+

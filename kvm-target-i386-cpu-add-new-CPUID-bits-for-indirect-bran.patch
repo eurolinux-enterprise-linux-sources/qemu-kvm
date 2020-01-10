@@ -1,0 +1,253 @@
+From d49fd675f5d4440db1f0885a0cc25492d1071553 Mon Sep 17 00:00:00 2001
+From: Eduardo Habkost <ehabkost@redhat.com>
+Date: Wed, 13 Dec 2017 15:41:03 -0200
+Subject: [PATCH 2/3] target-i386: cpu: add new CPUID bits for indirect branch
+ predictor restrictions
+
+RH-Author: Eduardo Habkost <ehabkost@redhat.com>
+Message-id: <20171213174104.20121-3-ehabkost@redhat.com>
+Patchwork-id: n/a
+O-Subject: [CONFIDENTIAL][RHEL-6.9.z qemu-kvm PATCH v2 2/3] target-i386: cpu: add new CPUID bits for indirect branch predictor restrictions
+Bugzilla: CVE-2017-5715
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+RH-Acked-by: Wainer dos Santos Moschetta <wainersm@redhat.com>
+---
+ target-i386/cpu.h   |  2 ++
+ target-i386/cpuid.c | 75 ++++++++++++++++++++++++++++++++++++++++++++++-------
+ 2 files changed, 67 insertions(+), 10 deletions(-)
+
+diff --git a/target-i386/cpu.h b/target-i386/cpu.h
+index dc60dd146a..938e48e99d 100644
+--- a/target-i386/cpu.h
++++ b/target-i386/cpu.h
+@@ -791,8 +791,10 @@ typedef struct CPUX86State {
+     uint32_t cpuid_ext3_features;
+     /* Flags from CPUID[EAX=7,ECX=0].EBX */
+     uint32_t cpuid_7_0_ebx_features;
++    uint32_t cpuid_7_0_edx_features;
+     uint32_t cpuid_apic_id;
+     uint32_t cpuid_apm_edx_features;
++    uint32_t cpuid_8000_0008_ebx_features;
+     /* Enables direct passthrough of PMU CPUID leaf (0xA) from the kernel */
+     bool cpuid_pmu_passthrough;
+     int cpuid_vendor_override;
+diff --git a/target-i386/cpuid.c b/target-i386/cpuid.c
+index a88437f023..2c61678451 100644
+--- a/target-i386/cpuid.c
++++ b/target-i386/cpuid.c
+@@ -81,6 +81,17 @@ static const char *cpuid_7_0_ebx_feature_name[] = {
+     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+ };
+ 
++static const char *cpuid_7_0_edx_feature_name[] = {
++    NULL, NULL, NULL, NULL,
++    NULL, NULL, NULL, NULL,
++    NULL, NULL, NULL, NULL,
++    NULL, NULL, NULL, NULL,
++    NULL, NULL, NULL, NULL,
++    NULL, NULL, NULL, NULL,
++    NULL, NULL, "spec-ctrl", "stibp",
++    NULL, "arch-facilities", NULL, NULL,
++};
++
+ static const char *cpuid_apm_edx_feature_name[] = {
+     NULL, NULL, NULL, NULL,
+     NULL, NULL, NULL, NULL,
+@@ -92,6 +103,17 @@ static const char *cpuid_apm_edx_feature_name[] = {
+     NULL, NULL, NULL, NULL,
+ };
+ 
++static const char *cpuid_8000_0008_ebx_feature_name[] = {
++    NULL, NULL, NULL, NULL,
++    NULL, NULL, NULL, NULL,
++    NULL, NULL, NULL, NULL,
++    "ibpb", NULL, NULL, NULL,
++    NULL, NULL, NULL, NULL,
++    NULL, NULL, NULL, NULL,
++    NULL, NULL, NULL, NULL,
++    NULL, NULL, NULL, NULL,
++};
++
+ typedef struct ExtSaveArea {
+     bool (*enabled)(const CPUX86State *);
+     uint32_t offset, size;
+@@ -205,7 +227,9 @@ static void add_flagname_to_bitmaps(const char *flagname, uint32_t *features,
+                                     uint32_t *ext3_features,
+                                     uint32_t *kvm_features,
+                                     uint32_t *cpuid_7_0_ebx_features,
+-                                    uint32_t *apm_edx_features)
++                                    uint32_t *cpuid_7_0_edx_features,
++                                    uint32_t *apm_edx_features,
++                                    uint32_t *cpuid_8000_0008_ebx_features)
+ {
+     if (!lookup_feature(features, flagname, NULL, feature_name) &&
+         !lookup_feature(ext_features, flagname, NULL, ext_feature_name) &&
+@@ -214,8 +238,12 @@ static void add_flagname_to_bitmaps(const char *flagname, uint32_t *features,
+         !lookup_feature(kvm_features, flagname, NULL, kvm_feature_name) &&
+         !lookup_feature(cpuid_7_0_ebx_features, flagname, NULL,
+                         cpuid_7_0_ebx_feature_name) &&
++        !lookup_feature(cpuid_7_0_edx_features, flagname, NULL,
++                        cpuid_7_0_edx_feature_name) &&
+         !lookup_feature(apm_edx_features, flagname, NULL,
+-                        cpuid_apm_edx_feature_name))
++                        cpuid_apm_edx_feature_name) &&
++        !lookup_feature(cpuid_8000_0008_ebx_features, flagname, NULL,
++                        cpuid_8000_0008_ebx_feature_name))
+             fprintf(stderr, "CPU feature %s not found\n", flagname);
+ }
+ 
+@@ -234,6 +262,10 @@ typedef struct x86_def_t {
+     int vendor_override;
+     /* The feature bits on CPUID[EAX=7,ECX=0].EBX */
+     uint32_t cpuid_7_0_ebx_features;
++    /* The feature bits on CPUID[EAX=7,ECX=0].EDX */
++    uint32_t cpuid_7_0_edx_features;
++    /* The feature bits on CPUID[8000_0008h].EBX */
++    uint32_t cpuid_8000_0008_ebx_features;
+     bool pmu_passthrough;
+ } x86_def_t;
+ 
+@@ -872,8 +904,11 @@ static void kvm_cpu_fill_host(x86_def_t *x86_cpu_def)
+     if (x86_cpu_def->level >= 7) {
+         x86_cpu_def->cpuid_7_0_ebx_features =
+                     kvm_arch_get_supported_cpuid(s, 0x7, 0, R_EBX);
++        x86_cpu_def->cpuid_7_0_edx_features =
++                    kvm_arch_get_supported_cpuid(s, 0x7, 0, R_EDX);
+     } else {
+         x86_cpu_def->cpuid_7_0_ebx_features = 0;
++        x86_cpu_def->cpuid_7_0_edx_features = 0;
+     }
+ 
+     x86_cpu_def->xlevel = kvm_arch_get_supported_cpuid(s, 0x80000000, 0, R_EAX);
+@@ -883,6 +918,8 @@ static void kvm_cpu_fill_host(x86_def_t *x86_cpu_def)
+                 kvm_arch_get_supported_cpuid(s, 0x80000001, 0, R_ECX);
+     x86_cpu_def->apm_edx_features =
+                 kvm_arch_get_supported_cpuid(s, 0x80000007, 0, R_EDX);
++    x86_cpu_def->cpuid_8000_0008_ebx_features =
++                kvm_arch_get_supported_cpuid(s, 0x80000008, 0, R_EBX);
+ 
+     cpu_x86_fill_model_id(x86_cpu_def->model_id);
+     x86_cpu_def->vendor_override = 0;
+@@ -919,7 +956,9 @@ static void summary_cpuid_features(CPUX86State *env, x86_def_t *hd)
+             {&hd->ext2_features, 0x80000001, R_EDX, 0},
+             {&hd->ext3_features, 0x80000001, R_ECX, 0},
+             {&hd->cpuid_7_0_ebx_features, 0x7, R_EBX, 0},
++            {&hd->cpuid_7_0_edx_features, 0x7, R_EDX, 0},
+             {&hd->apm_edx_features, 0x80000007, R_EDX, 0},
++            {&hd->cpuid_8000_0008_ebx_features, 0x80000008, R_EBX, 0},
+             {NULL}}, *p;
+ 
+     kvm_cpu_fill_host(hd);
+@@ -957,9 +996,15 @@ static int kvm_check_features_against_host(CPUX86State *env, x86_def_t *guest_de
+         {&guest_def->cpuid_7_0_ebx_features, &host_def.cpuid_7_0_ebx_features,
+             ~0, 0,
+             cpuid_7_0_ebx_feature_name, "EAX=7,ECX=0:ebx"},
++        {&guest_def->cpuid_7_0_edx_features, &host_def.cpuid_7_0_edx_features,
++            ~0, 0,
++            cpuid_7_0_edx_feature_name, "EAX=7,ECX=0:edx"},
+         {&guest_def->apm_edx_features, &host_def.apm_edx_features,
+             ~0, 0,
+             cpuid_apm_edx_feature_name, "8000_0007:edx"},
++        {&guest_def->cpuid_8000_0008_ebx_features, &host_def.cpuid_8000_0008_ebx_features,
++            ~0, 0,
++            cpuid_8000_0008_ebx_feature_name, "8000_0008:ebx"},
+         {NULL}}, *p;
+ 
+     assert(kvm_enabled());
+@@ -984,10 +1029,14 @@ static int cpu_x86_find_by_name(x86_def_t *x86_cpu_def, const char *cpu_model)
+     char *featurestr, *name = strtok(s, ",");
+     uint32_t plus_features = 0, plus_ext_features = 0, plus_ext2_features = 0, plus_ext3_features = 0, plus_kvm_features = 0;
+     uint32_t plus_7_0_ebx_features = 0;
++    uint32_t plus_7_0_edx_features = 0;
+     uint32_t plus_apm_edx_features = 0;
++    uint32_t plus_cpuid_8000_0008_ebx_features = 0;
+     uint32_t minus_features = 0, minus_ext_features = 0, minus_ext2_features = 0, minus_ext3_features = 0, minus_kvm_features = 0;
+     uint32_t minus_7_0_ebx_features = 0;
++    uint32_t minus_7_0_edx_features = 0;
+     uint32_t minus_apm_edx_features = 0;
++    uint32_t minus_cpuid_8000_0008_ebx_features = 0;
+     uint32_t numvalue;
+ 
+     for (def = x86_defs; def; def = def->next)
+@@ -1031,8 +1080,8 @@ static int cpu_x86_find_by_name(x86_def_t *x86_cpu_def, const char *cpu_model)
+ 
+     add_flagname_to_bitmaps("hypervisor", &plus_features,
+         &plus_ext_features, &plus_ext2_features, &plus_ext3_features,
+-        &plus_kvm_features, &plus_7_0_ebx_features,
+-        &plus_apm_edx_features);
++        &plus_kvm_features, &plus_7_0_ebx_features, &plus_7_0_edx_features,
++        &plus_apm_edx_features, &plus_cpuid_8000_0008_ebx_features);
+ 
+     featurestr = strtok(NULL, ",");
+ 
+@@ -1042,14 +1091,14 @@ static int cpu_x86_find_by_name(x86_def_t *x86_cpu_def, const char *cpu_model)
+             add_flagname_to_bitmaps(featurestr + 1, &plus_features,
+                             &plus_ext_features, &plus_ext2_features,
+                             &plus_ext3_features, &plus_kvm_features,
+-                            &plus_7_0_ebx_features,
+-                            &plus_apm_edx_features);
++                            &plus_7_0_ebx_features, &plus_7_0_edx_features,
++                            &plus_apm_edx_features, &plus_cpuid_8000_0008_ebx_features);
+         } else if (featurestr[0] == '-') {
+             add_flagname_to_bitmaps(featurestr + 1, &minus_features,
+                             &minus_ext_features, &minus_ext2_features,
+                             &minus_ext3_features, &minus_kvm_features,
+-                            &minus_7_0_ebx_features,
+-                            &minus_apm_edx_features);
++                            &minus_7_0_ebx_features, &minus_7_0_edx_features,
++                            &minus_apm_edx_features, &minus_cpuid_8000_0008_ebx_features);
+         } else if ((val = strchr(featurestr, '='))) {
+             *val = 0; val++;
+             if (!strcmp(featurestr, "family")) {
+@@ -1134,14 +1183,18 @@ static int cpu_x86_find_by_name(x86_def_t *x86_cpu_def, const char *cpu_model)
+     x86_cpu_def->ext3_features |= plus_ext3_features;
+     x86_cpu_def->kvm_features |= plus_kvm_features;
+     x86_cpu_def->cpuid_7_0_ebx_features |= plus_7_0_ebx_features;
++    x86_cpu_def->cpuid_7_0_edx_features |= plus_7_0_edx_features;
+     x86_cpu_def->apm_edx_features |= plus_apm_edx_features;
++    x86_cpu_def->cpuid_8000_0008_ebx_features |= plus_cpuid_8000_0008_ebx_features;
+     x86_cpu_def->features &= ~minus_features;
+     x86_cpu_def->ext_features &= ~minus_ext_features;
+     x86_cpu_def->ext2_features &= ~minus_ext2_features;
+     x86_cpu_def->ext3_features &= ~minus_ext3_features;
+     x86_cpu_def->kvm_features &= ~minus_kvm_features;
+     x86_cpu_def->cpuid_7_0_ebx_features &= ~minus_7_0_ebx_features;
++    x86_cpu_def->cpuid_7_0_edx_features &= ~minus_7_0_edx_features;
+     x86_cpu_def->apm_edx_features &= ~minus_apm_edx_features;
++    x86_cpu_def->cpuid_8000_0008_ebx_features &= ~minus_cpuid_8000_0008_ebx_features;
+     if (x86_cpu_def->cpuid_7_0_ebx_features && x86_cpu_def->level < 7) {
+         x86_cpu_def->level = 7;
+     }
+@@ -1238,8 +1291,10 @@ int cpu_x86_register (CPUX86State *env, const char *cpu_model)
+     env->cpuid_xlevel = def->xlevel;
+     env->cpuid_ext3_features = def->ext3_features;
+     env->cpuid_7_0_ebx_features = def->cpuid_7_0_ebx_features;
++    env->cpuid_7_0_edx_features = def->cpuid_7_0_edx_features;
+     env->cpuid_kvm_features = def->kvm_features;
+     env->cpuid_apm_edx_features = def->apm_edx_features;
++    env->cpuid_8000_0008_ebx_features = def->cpuid_8000_0008_ebx_features;
+     env->cpuid_pmu_passthrough = def->pmu_passthrough;
+     {
+         const char *model_id = def->model_id;
+@@ -1420,7 +1475,7 @@ void cpu_x86_cpuid(CPUX86State *env, uint32_t index, uint32_t count,
+             *eax = 0; /* Maximum ECX value for sub-leaves */
+             *ebx = env->cpuid_7_0_ebx_features; /* Feature flags */
+             *ecx = 0; /* Reserved */
+-            *edx = 0; /* Reserved */
++            *edx = env->cpuid_7_0_edx_features; /* Feature flags */
+        } else {
+            *eax = 0;
+            *ebx = 0;
+@@ -1595,7 +1650,7 @@ void cpu_x86_cpuid(CPUX86State *env, uint32_t index, uint32_t count,
+             else
+                 *eax = 0x00000020; /* 32 bits physical */
+         }
+-        *ebx = 0;
++        *ebx = env->cpuid_8000_0008_ebx_features;
+         *ecx = 0;
+         *edx = 0;
+         if (env->nr_cores * env->nr_threads > 1) {
+-- 
+2.13.6
+

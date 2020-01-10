@@ -1,0 +1,83 @@
+From 0335e42d2f413d09422deabcdcf5c14e00c7f792 Mon Sep 17 00:00:00 2001
+Message-Id: <0335e42d2f413d09422deabcdcf5c14e00c7f792.1368111913.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:17:43 +0200
+Subject: [PATCH 09/65] Revert "char: Add framework for a 'write unblocked'
+ callback"
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <b08b974aa77a71f3933443437f83d1e87504f332.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50787
+O-Subject: [RHEL6.5 qemu-kvm PATCH 09/65] Revert "char: Add framework for a 'write unblocked' callback"
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+This reverts commit bd6143f9f61e840c97b49888b4d4cffdc6f1e089.
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	qemu-char.c
+	qemu-char.h
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ qemu-char.c | 3 ---
+ qemu-char.h | 5 -----
+ 2 files changed, 8 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 3 ---
+ qemu-char.h | 5 -----
+ 2 files changed, 8 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index d6731d4..6df63b3 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -210,14 +210,11 @@ void qemu_chr_add_handlers(CharDriverState *s,
+     }
+     s->chr_can_read = handlers->fd_can_read;
+     s->chr_read = handlers->fd_read;
+-    s->chr_write_unblocked = handlers->fd_write_unblocked;
+     s->chr_event = handlers->fd_event;
+     s->handler_opaque = opaque;
+     if (s->chr_update_read_handler)
+         s->chr_update_read_handler(s);
+ 
+-    s->write_blocked = false;
+-
+     /* We're connecting to an already opened device, so let's make sure we
+        also get the open event */
+     if (s->opened) {
+diff --git a/qemu-char.h b/qemu-char.h
+index b6d34b2..ca2e9bc 100644
+--- a/qemu-char.h
++++ b/qemu-char.h
+@@ -61,9 +61,6 @@ struct CharDriverState {
+     IOEventHandler *chr_event;
+     IOCanRWHandler *chr_can_read;
+     IOReadHandler *chr_read;
+-    IOHandler *chr_write_unblocked;
+-    void (*chr_enable_write_fd_handler)(struct CharDriverState *chr);
+-    void (*chr_disable_write_fd_handler)(struct CharDriverState *chr);
+     void *handler_opaque;
+     void (*chr_send_event)(struct CharDriverState *chr, int event);
+     void (*chr_close)(struct CharDriverState *chr);
+@@ -75,8 +72,6 @@ struct CharDriverState {
+     QEMUBH *bh;
+     char *label;
+     char *filename;
+-    /* Are we in a blocked state? */
+-    bool write_blocked;
+     int avail_connections;
+     int opened;
+     QTAILQ_ENTRY(CharDriverState) next;
+-- 
+1.7.11.7
+

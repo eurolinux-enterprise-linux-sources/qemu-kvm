@@ -1,0 +1,71 @@
+From 764fda6e446aaf43ebd727fa677c4df68e895eef Mon Sep 17 00:00:00 2001
+Message-Id: <764fda6e446aaf43ebd727fa677c4df68e895eef.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:32 -0500
+Subject: [CHANGE 12/29] blkdebug: Drop blkdebug_aiocb_info.cancel
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-13-git-send-email-famz@redhat.com>
+Patchwork-id: 64913
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 12/28] blkdebug: Drop blkdebug_aiocb_info.cancel
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 4c781717c53d606bfa666d606c2875f9952a3155)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	block/blkdebug.c
+Context conflict, but we just need to remove blkdebug_aiocb_info.cancel
+field and the unused function. So it's trivial.
+---
+ block/blkdebug.c | 11 +----------
+ 1 file changed, 1 insertion(+), 10 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/blkdebug.c | 11 +----------
+ 1 file changed, 1 insertion(+), 10 deletions(-)
+
+diff --git a/block/blkdebug.c b/block/blkdebug.c
+index affbcde..a5dde2e 100644
+--- a/block/blkdebug.c
++++ b/block/blkdebug.c
+@@ -52,11 +52,8 @@ typedef struct BlkdebugAIOCB {
+     int ret;
+ } BlkdebugAIOCB;
+ 
+-static void blkdebug_aio_cancel(BlockDriverAIOCB *blockacb);
+-
+ static const AIOCBInfo blkdebug_aiocb_info = {
+-    .aiocb_size = sizeof(BlkdebugAIOCB),
+-    .cancel     = blkdebug_aio_cancel,
++    .aiocb_size    = sizeof(BlkdebugAIOCB),
+ };
+ 
+ enum {
+@@ -317,12 +314,6 @@ static void error_callback_bh(void *opaque)
+     qemu_aio_release(acb);
+ }
+ 
+-static void blkdebug_aio_cancel(BlockDriverAIOCB *blockacb)
+-{
+-    BlkdebugAIOCB *acb = container_of(blockacb, BlkdebugAIOCB, common);
+-    qemu_aio_release(acb);
+-}
+-
+ static BlockDriverAIOCB *inject_error(BlockDriverState *bs,
+     BlockDriverCompletionFunc *cb, void *opaque)
+ {
+-- 
+2.1.0
+

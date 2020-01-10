@@ -1,0 +1,274 @@
+From 01f86099756b66132ea697f50afd1aa88a1632a1 Mon Sep 17 00:00:00 2001
+From: Amit Shah <amit.shah@redhat.com>
+Date: Fri, 11 Jul 2014 10:47:12 -0500
+Subject: [CHANGE 01/18] migration: dump vmstate info as a json file for static
+ analysis
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <ce3ffaa556efc2422222ba6eaa925768cab0e3ff.1405075344.git.amit.shah@redhat.com>
+Patchwork-id: 59801
+O-Subject: [RHEL6.6 qemu-kvm PATCH 01/18] migration: dump vmstate info as a json file for static analysis
+Bugzilla: 1118718
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+This commit adds a new command, '-dump-vmstate', that takes a filename
+as an argument.  When executed, QEMU will dump the vmstate information
+for the machine type it's invoked with to the file, and quit.
+
+The JSON-format output can then be used to compare the vmstate info for
+different QEMU versions, specifically to test whether live migration
+would break due to changes in the vmstate data.
+
+A Python script that compares the output of such JSON dumps is included
+in the following commit.
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Reviewed-by: Juan Quintela <quintela@redhat.com>
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+(cherry picked from commit abfd9ce341ec66eb2e63756b9da43f77c054788e)
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	hw/hw.h
+	qemu-options.hx
+	vl.c
+
+Changes for RHEL6:
+* VMS_MUST_EXIST doesn't exist in RHEL6, so dropped flags check in
+  savevm.c.
+* current_machine not accessible in savevm.c due to hw/boards.h being
+  platform-dependent.  Have to pass it in via vl.c instead.
+* Walking device tree is slightly different in savevm.c.
+* qemu-options.hx: command definitions take one argument less
+  (QEMU_ARCH_ALL dropped).
+---
+ hw/hw.h         |   2 +
+ qemu-options.hx |  13 ++++++
+ savevm.c        | 126 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ vl.c            |  14 +++++++
+ 4 files changed, 155 insertions(+)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/hw.h         |   2 +
+ qemu-options.hx |  13 ++++++
+ savevm.c        | 126 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ vl.c            |  14 +++++++
+ 4 files changed, 155 insertions(+)
+
+diff --git a/hw/hw.h b/hw/hw.h
+index 8e0f9b1..d866141 100644
+--- a/hw/hw.h
++++ b/hw/hw.h
+@@ -839,4 +839,6 @@ extern int vmstate_register(DeviceState *dev, int instance_id,
+                             const VMStateDescription *vmsd, void *base);
+ void vmstate_unregister(DeviceState *dev, const VMStateDescription *vmsd,
+                         void *opaque);
++void dump_vmstate_json_to_file(FILE *out_fp, const char *name);
++
+ #endif
+diff --git a/qemu-options.hx b/qemu-options.hx
+index 6cf4316..a23da0b 100644
+--- a/qemu-options.hx
++++ b/qemu-options.hx
+@@ -2292,3 +2292,16 @@ DEF("object", HAS_ARG, QEMU_OPTION_object,
+     "                in the order they are specified.  Note that the 'id'\n"
+     "                property must be set.  These objects are placed in the\n"
+     "                '/objects' path.\n")
++
++DEF("dump-vmstate", HAS_ARG, QEMU_OPTION_dump_vmstate,
++    "-dump-vmstate <file>\n"
++    "                Output vmstate information in JSON format to file.\n"
++    "                Use the scripts/vmstate-static-checker.py file to\n"
++    "                check for possible regressions in migration code\n"
++    "                by comparing two such vmstate dumps.")
++STEXI
++@item -dump-vmstate @var{file}
++@findex -dump-vmstate
++Dump json-encoded vmstate information for current machine type to file
++in @var{file}
++ETEXI
+diff --git a/savevm.c b/savevm.c
+index 138761d..1702928 100644
+--- a/savevm.c
++++ b/savevm.c
+@@ -1109,6 +1109,132 @@ static QTAILQ_HEAD(savevm_handlers, SaveStateEntry) savevm_handlers =
+     QTAILQ_HEAD_INITIALIZER(savevm_handlers);
+ static int global_section_id;
+ 
++static void dump_vmstate_vmsd(FILE *out_file,
++                              const VMStateDescription *vmsd, int indent,
++                              bool is_subsection);
++
++static void dump_vmstate_vmsf(FILE *out_file, const VMStateField *field,
++                              int indent)
++{
++    fprintf(out_file, "%*s{\n", indent, "");
++    indent += 2;
++    fprintf(out_file, "%*s\"field\": \"%s\",\n", indent, "", field->name);
++    fprintf(out_file, "%*s\"version_id\": %d,\n", indent, "",
++            field->version_id);
++    fprintf(out_file, "%*s\"field_exists\": %s,\n", indent, "",
++            field->field_exists ? "true" : "false");
++    fprintf(out_file, "%*s\"size\": %zu", indent, "", field->size);
++    if (field->vmsd != NULL) {
++        fprintf(out_file, ",\n");
++        dump_vmstate_vmsd(out_file, field->vmsd, indent, false);
++    }
++    fprintf(out_file, "\n%*s}", indent - 2, "");
++}
++
++static void dump_vmstate_vmss(FILE *out_file,
++                              const VMStateSubsection *subsection,
++                              int indent)
++{
++    if (subsection->vmsd != NULL) {
++        dump_vmstate_vmsd(out_file, subsection->vmsd, indent, true);
++    }
++}
++
++static void dump_vmstate_vmsd(FILE *out_file,
++                              const VMStateDescription *vmsd, int indent,
++                              bool is_subsection)
++{
++    if (is_subsection) {
++        fprintf(out_file, "%*s{\n", indent, "");
++    } else {
++        fprintf(out_file, "%*s\"%s\": {\n", indent, "", "Description");
++    }
++    indent += 2;
++    fprintf(out_file, "%*s\"name\": \"%s\",\n", indent, "", vmsd->name);
++    fprintf(out_file, "%*s\"version_id\": %d,\n", indent, "",
++            vmsd->version_id);
++    fprintf(out_file, "%*s\"minimum_version_id\": %d", indent, "",
++            vmsd->minimum_version_id);
++    if (vmsd->fields != NULL) {
++        const VMStateField *field = vmsd->fields;
++        bool first;
++
++        fprintf(out_file, ",\n%*s\"Fields\": [\n", indent, "");
++        first = true;
++        while (field->name != NULL) {
++            if (!first) {
++                fprintf(out_file, ",\n");
++            }
++            dump_vmstate_vmsf(out_file, field, indent + 2);
++            field++;
++            first = false;
++        }
++        fprintf(out_file, "\n%*s]", indent, "");
++    }
++    if (vmsd->subsections != NULL) {
++        const VMStateSubsection *subsection = vmsd->subsections;
++        bool first;
++
++        fprintf(out_file, ",\n%*s\"Subsections\": [\n", indent, "");
++        first = true;
++        while (subsection->vmsd != NULL) {
++            if (!first) {
++                fprintf(out_file, ",\n");
++            }
++            dump_vmstate_vmss(out_file, subsection, indent + 2);
++            subsection++;
++            first = false;
++        }
++        fprintf(out_file, "\n%*s]", indent, "");
++    }
++    fprintf(out_file, "\n%*s}", indent - 2, "");
++}
++
++static void dump_machine_type(FILE *out_file, const char *name)
++{
++    fprintf(out_file, "  \"vmschkmachine\": {\n");
++    fprintf(out_file, "    \"Name\": \"%s\"\n", name);
++    fprintf(out_file, "  },\n");
++}
++
++void dump_vmstate_json_to_file(FILE *out_file, const char *name)
++{
++    DeviceInfo *dc;
++    bool first;
++
++    fprintf(out_file, "{\n");
++    dump_machine_type(out_file, name);
++
++    first = true;
++    for (dc = device_info_list; dc != NULL; dc = dc->next) {
++        const char *name;
++        int indent = 2;
++
++        if (!dc->vmsd) {
++            continue;
++        }
++
++        if (!first) {
++            fprintf(out_file, ",\n");
++        }
++        name = dc->name;
++        fprintf(out_file, "%*s\"%s\": {\n", indent, "", name);
++        indent += 2;
++        fprintf(out_file, "%*s\"Name\": \"%s\",\n", indent, "", name);
++        fprintf(out_file, "%*s\"version_id\": %d,\n", indent, "",
++                dc->vmsd->version_id);
++        fprintf(out_file, "%*s\"minimum_version_id\": %d,\n", indent, "",
++                dc->vmsd->minimum_version_id);
++
++        dump_vmstate_vmsd(out_file, dc->vmsd, indent, false);
++
++        fprintf(out_file, "\n%*s}", indent - 2, "");
++        first = false;
++    }
++    fprintf(out_file, "\n}\n");
++    fclose(out_file);
++}
++
+ static int calculate_new_instance_id(const char *idstr)
+ {
+     SaveStateEntry *se;
+diff --git a/vl.c b/vl.c
+index f9b8d8b..c7d97aa 100644
+--- a/vl.c
++++ b/vl.c
+@@ -5268,6 +5268,7 @@ int main(int argc, char **argv, char **envp)
+     int show_vnc_port = 0;
+     int defconfig = 1;
+     int defconfig_verbose = 0;
++    FILE *vmstate_dump_file = NULL;
+ 
+     atexit(qemu_run_exit_notifiers);
+     error_set_progname(argv[0]);
+@@ -6174,6 +6175,13 @@ int main(int argc, char **argv, char **envp)
+                     exit(1);
+                 }
+                 break;
++            case QEMU_OPTION_dump_vmstate:
++                vmstate_dump_file = fopen(optarg, "w");
++                if (vmstate_dump_file == NULL) {
++                    fprintf(stderr, "open %s: %s\n", optarg, strerror(errno));
++                    exit(1);
++                }
++                break;
+             }
+         }
+     }
+@@ -6619,6 +6627,12 @@ int main(int argc, char **argv, char **envp)
+         }
+     }
+ 
++    if (vmstate_dump_file) {
++        /* dump and exit */
++        dump_vmstate_json_to_file(vmstate_dump_file, current_machine->name);
++        return 0;
++    }
++
+     if (incoming) {
+         runstate_set(RUN_STATE_INMIGRATE);
+         Error *errp = NULL;
+-- 
+1.9.3
+

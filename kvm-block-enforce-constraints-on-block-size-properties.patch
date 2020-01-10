@@ -1,0 +1,71 @@
+From c6b21a8911de91cb36364ed986f45fe350f13514 Mon Sep 17 00:00:00 2001
+Message-Id: <c6b21a8911de91cb36364ed986f45fe350f13514.1361183855.git.minovotn@redhat.com>
+In-Reply-To: <8a5181c3fa0b1efb69153485808afcb612d0aa60.1361183855.git.minovotn@redhat.com>
+References: <8a5181c3fa0b1efb69153485808afcb612d0aa60.1361183855.git.minovotn@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Tue, 22 Jan 2013 13:46:32 +0100
+Subject: [PATCH 3/5] block: enforce constraints on block size properties
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1358862392-28927-3-git-send-email-stefanha@redhat.com>
+Patchwork-id: 47624
+O-Subject: [PATCH RHEL6.5 qemu-kvm 2/2] block: enforce constraints on block size properties
+Bugzilla: 889135
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+
+Nicolae Mogoreanu <mogo@google.com> noticed that I/O requests can lead
+to QEMU crashes when the logical_block_size property is smaller than 512
+bytes.
+
+Using the new "blocksize" property we can properly enforce constraints
+on the block size such that QEMU's block layer is able to operate
+correctly.
+
+Reported-by: Nicolae Mogoreanu <mogo@google.com>
+Reported-by: Michael Halcrow <mhalcrow@google.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 1fc86bf963a0617bc9eabfa6c14dbca76cd57976)
+
+Conflicts:
+
+   DEFINE_BLOCK_PROPERTIES() was is block.h upstream but block_int.h
+   downstream.  It has since moved to block-common.h upstream.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+---
+ block_int.h | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block_int.h | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/block_int.h b/block_int.h
+index 17d6f8c..3489a54 100644
+--- a/block_int.h
++++ b/block_int.h
+@@ -359,10 +359,10 @@ static inline unsigned int get_physical_block_exp(BlockConf *conf)
+ 
+ #define DEFINE_BLOCK_PROPERTIES(_state, _conf)                          \
+     DEFINE_PROP_DRIVE("drive", _state, _conf.bs),                       \
+-    DEFINE_PROP_UINT16("logical_block_size", _state,                    \
+-                       _conf.logical_block_size, 512),                  \
+-    DEFINE_PROP_UINT16("physical_block_size", _state,                   \
+-                       _conf.physical_block_size, 512),                 \
++    DEFINE_PROP_BLOCKSIZE("logical_block_size", _state,                 \
++                          _conf.logical_block_size, 512),               \
++    DEFINE_PROP_BLOCKSIZE("physical_block_size", _state,                \
++                          _conf.physical_block_size, 512),              \
+     DEFINE_PROP_UINT16("min_io_size", _state, _conf.min_io_size, 0),  \
+     DEFINE_PROP_UINT32("opt_io_size", _state, _conf.opt_io_size, 0),    \
+     DEFINE_PROP_INT32("bootindex", _state, _conf.bootindex, -1),        \
+-- 
+1.7.11.7
+

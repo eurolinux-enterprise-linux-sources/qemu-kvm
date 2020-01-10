@@ -1,0 +1,72 @@
+From 242011062d2b6e783072f7489670ac8086af43b6 Mon Sep 17 00:00:00 2001
+Message-Id: <242011062d2b6e783072f7489670ac8086af43b6.1430147050.git.jen@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Thu, 23 Apr 2015 09:18:03 -0500
+Subject: [CHANGE] vnc: sanitize bits_per_pixel from the client
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1429780683-23711-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 64893
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 1/1] vnc: sanitize bits_per_pixel from the client
+Bugzilla: 1157644
+RH-Acked-by: Thomas Huth <thuth@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+
+From: Petr Matousek <pmatouse@redhat.com>
+
+bits_per_pixel that are less than 8 could result in accessing
+non-initialized buffers later in the code due to the expectation
+that bytes_per_pixel value that is used to initialize these buffers is
+never zero.
+
+To fix this check that bits_per_pixel from the client is one of the
+values that the rfb protocol specification allows.
+
+This is CVE-2014-7815.
+
+Signed-off-by: Petr Matousek <pmatouse@redhat.com>
+
+[ kraxel: apply codestyle fix ]
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit e6908bfe8e07f2b452e78e677da1b45b1c0f6829)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	vnc.c
+---
+ vnc.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ vnc.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/vnc.c b/vnc.c
+index fe03f55..30a4092 100644
+--- a/vnc.c
++++ b/vnc.c
+@@ -1955,6 +1955,16 @@ static void set_pixel_format(VncState *vs,
+         return;
+     }
+ 
++    switch (bits_per_pixel) {
++    case 8:
++    case 16:
++    case 32:
++        break;
++    default:
++        vnc_client_error(vs);
++        return;
++    }
++
+     vs->clientds = *(vs->vd->guest.ds);
+     vs->clientds.pf.rmax = red_max;
+     count_bits(vs->clientds.pf.rbits, red_max);
+-- 
+2.1.0
+

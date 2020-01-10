@@ -1,0 +1,55 @@
+From 14463f4ee032e8b6d83166be343eda593b5a2a28 Mon Sep 17 00:00:00 2001
+From: Fam Zheng <famz@redhat.com>
+Date: Thu, 24 Jul 2014 05:09:17 -0500
+Subject: [CHANGE 17/17] scsi: Report error when lun number is in use
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1406178557-27205-1-git-send-email-famz@redhat.com>
+Patchwork-id: 60241
+O-Subject: [RHEL-6.6 qemu-kvm PATCH] scsi: Report error when lun number is in use
+Bugzilla: 1095609
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1095609
+Brew:     http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7730513 (RHEL)
+          http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7730531 (RHEV)
+
+In the case that the lun number is taken by another scsi device, don't
+release the existing device siliently, but report an error to user.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(manual backport from commit 2039511b8f573165420c86380762ae829dc398d9)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ hw/scsi-bus.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/scsi-bus.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/hw/scsi-bus.c b/hw/scsi-bus.c
+index 6a93d11..63a3e91 100644
+--- a/hw/scsi-bus.c
++++ b/hw/scsi-bus.c
+@@ -133,7 +133,9 @@ static int scsi_qdev_init(DeviceState *qdev, DeviceInfo *base)
+         d = scsi_device_find(bus, dev->channel, dev->id, dev->lun);
+         assert(d);
+         if (d->lun == dev->lun && dev != d) {
+-            qdev_free(&d->qdev);
++            error_report("lun already used by '%s'", d->qdev.id);
++            goto err;
++
+         }
+     }
+ 
+-- 
+1.9.3
+

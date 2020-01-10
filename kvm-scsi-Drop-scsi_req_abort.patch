@@ -1,0 +1,86 @@
+From afe68a25d63dfc97c8bec187331b64fe7235e56a Mon Sep 17 00:00:00 2001
+Message-Id: <afe68a25d63dfc97c8bec187331b64fe7235e56a.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:40 -0500
+Subject: [CHANGE 20/29] scsi: Drop scsi_req_abort
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-21-git-send-email-famz@redhat.com>
+Patchwork-id: 64921
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 20/28] scsi: Drop scsi_req_abort
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+The only user of this function is spapr_vscsi.c. We can convert to
+scsi_req_cancel plus adding a check in vscsi_request_cancelled.
+
+Suggested-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Fam Zheng <famz@redhat.com>
+[Drop prototype. - Paolo]
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit eda470e41a753070e057380a9a71e2ad7347f667)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	hw/scsi/spapr_vscsi.c
+We don't have this, scsi_req_abort is already unused and safe to drop.
+---
+ hw/scsi-bus.c | 15 ---------------
+ hw/scsi.h     |  1 -
+ 2 files changed, 16 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/scsi-bus.c | 15 ---------------
+ hw/scsi.h     |  1 -
+ 2 files changed, 16 deletions(-)
+
+diff --git a/hw/scsi-bus.c b/hw/scsi-bus.c
+index b60281a..c4488b3 100644
+--- a/hw/scsi-bus.c
++++ b/hw/scsi-bus.c
+@@ -1493,21 +1493,6 @@ void scsi_req_cancel(SCSIRequest *req)
+     scsi_req_unref(req);
+ }
+ 
+-void scsi_req_abort(SCSIRequest *req, int status)
+-{
+-    if (!req->enqueued) {
+-        return;
+-    }
+-    scsi_req_ref(req);
+-    scsi_req_dequeue(req);
+-    req->io_canceled = true;
+-    if (req->ops->cancel_io) {
+-        req->ops->cancel_io(req);
+-    }
+-    scsi_req_complete(req, status);
+-    scsi_req_unref(req);
+-}
+-
+ static int scsi_ua_precedence(SCSISense sense)
+ {
+     if (sense.key != UNIT_ATTENTION) {
+diff --git a/hw/scsi.h b/hw/scsi.h
+index 167ad03..9da76ce 100644
+--- a/hw/scsi.h
++++ b/hw/scsi.h
+@@ -236,7 +236,6 @@ void scsi_req_data(SCSIRequest *req, int len);
+ void scsi_req_complete(SCSIRequest *req, int status);
+ uint8_t *scsi_req_get_buf(SCSIRequest *req);
+ int scsi_req_get_sense(SCSIRequest *req, uint8_t *buf, int len);
+-void scsi_req_abort(SCSIRequest *req, int status);
+ void scsi_req_cancel(SCSIRequest *req);
+ void scsi_req_retry(SCSIRequest *req);
+ void scsi_device_purge_requests(SCSIDevice *sdev, SCSISense sense);
+-- 
+2.1.0
+

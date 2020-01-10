@@ -1,0 +1,53 @@
+From b348e21188a8bbb0ca20897c76191a1bab090feb Mon Sep 17 00:00:00 2001
+Message-Id: <b348e21188a8bbb0ca20897c76191a1bab090feb.1380025695.git.minovotn@redhat.com>
+In-Reply-To: <302054727f76123c6d4ce996a7410f188ba37c4b.1380025695.git.minovotn@redhat.com>
+References: <302054727f76123c6d4ce996a7410f188ba37c4b.1380025695.git.minovotn@redhat.com>
+From: "Michael S. Tsirkin" <mst@redhat.com>
+Date: Tue, 17 Sep 2013 09:38:07 +0200
+Subject: [PATCH 2/4] virtio-net: revert mac on reset
+
+RH-Author: Michael S. Tsirkin <mst@redhat.com>
+Message-id: <1379410600-18436-1-git-send-email-mst@redhat.com>
+Patchwork-id: 54408
+O-Subject: [PATCH RHEL6.5 1/2] virtio-net: revert mac on reset
+Bugzilla: 890265
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Yan Vugenfirer <yvugenfi@redhat.com>
+RH-Acked-by: Dmitry Fleytman <dfleytma@redhat.com>
+RH-Acked-by: Vadim Rozenfeld <vrozenfe@redhat.com>
+
+Once guest overrides virtio net primary mac,
+it retains the value set until qemu exit.
+This is inconsistent with standard nic behaviour.
+To fix, revert the mac to the original value on reset.
+
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+(cherry-picked from 41dc8a67c7dcecdf7ae1cd25db3c46f2b42a221f)
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=890265
+Brew build: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=6292176
+Tested: using WHQL
+---
+ hw/virtio-net.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/virtio-net.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/hw/virtio-net.c b/hw/virtio-net.c
+index e9ac86f..587a218 100644
+--- a/hw/virtio-net.c
++++ b/hw/virtio-net.c
+@@ -200,6 +200,7 @@ static void virtio_net_reset(VirtIODevice *vdev)
+     n->mac_table.multi_overflow = 0;
+     n->mac_table.uni_overflow = 0;
+     memset(n->mac_table.macs, 0, MAC_TABLE_ENTRIES * ETH_ALEN);
++    memcpy(&n->mac[0], &n->nic->conf->macaddr, sizeof(n->mac));
+     memset(n->vlans, 0, MAX_VLAN >> 3);
+ }
+ 
+-- 
+1.7.11.7
+

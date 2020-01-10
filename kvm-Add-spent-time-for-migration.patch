@@ -1,0 +1,195 @@
+From 5877c7fdc54ad8b9608982a08ce5015eb646708a Mon Sep 17 00:00:00 2001
+Message-Id: <5877c7fdc54ad8b9608982a08ce5015eb646708a.1376317668.git.minovotn@redhat.com>
+From: Orit Wasserman <owasserm@redhat.com>
+Date: Thu, 8 Aug 2013 17:12:29 +0200
+Subject: [PATCH 1/4] Add spent time for migration
+
+RH-Author: Orit Wasserman <owasserm@redhat.com>
+Message-id: <1375981950-18632-2-git-send-email-owasserm@redhat.com>
+Patchwork-id: 53111
+O-Subject: [RHEL6.5 qemu-kvm PATCH v3 1/2] Add spent time for migration
+Bugzilla: 981235
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+We add time spent for migration to the output of "info migrate"
+command.  'total_time' means time since the start fo migration if
+migration is 'active', and total time of migration if migration is
+completed. As we are also interested in transferred ram when
+migration completes, adding all ram statistics.
+
+The output is changed from { "return": {"status": "completed"} }
+to
+{ "return": {"status": "completed", "total-time": 5869,
+             "ram": {"total": 1090846720, "remaining": 0,
+             "transferred": 212514471}}}
+
+upstream: manual backport of commit d5f8a5701d3690b5ec0c34b6a5c0b5a24d274540
+
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+Signed-off-by: Orit Wasserman <owasserm@redhat.com>
+---
+ migration.c     | 28 +++++++++++++++++++++++++++-
+ migration.h     |  2 ++
+ qemu-monitor.hx | 20 +++++++++++++++++---
+ 3 files changed, 46 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ migration.c     | 28 +++++++++++++++++++++++++++-
+ migration.h     |  2 ++
+ qemu-monitor.hx | 20 +++++++++++++++++---
+ 3 files changed, 46 insertions(+), 4 deletions(-)
+
+diff --git a/migration.c b/migration.c
+index 054b418..bbb877b 100644
+--- a/migration.c
++++ b/migration.c
+@@ -98,6 +98,7 @@ int do_migrate(Monitor *mon, const QDict *qdict, QObject **ret_data)
+     int blk = qdict_get_try_bool_or_int(qdict, "blk", 0);
+     int inc = qdict_get_try_bool_or_int(qdict, "inc", 0);
+     const char *uri = qdict_get_str(qdict, "uri");
++    int64_t start_time ;
+ 
+     if (current_migration &&
+         current_migration->get_status(current_migration) == MIG_STATE_ACTIVE) {
+@@ -110,6 +111,8 @@ int do_migrate(Monitor *mon, const QDict *qdict, QObject **ret_data)
+     }
+ 
+     START_MIGRATION_CLOCK();
++    start_time = qemu_get_clock(rt_clock);
++
+     if (strstart(uri, "tcp:", &p)) {
+         s = tcp_start_outgoing_migration(mon, p, max_throttle, detach,
+                                          blk, inc, &errp);
+@@ -144,6 +147,7 @@ int do_migrate(Monitor *mon, const QDict *qdict, QObject **ret_data)
+         current_migration->release(current_migration);
+     }
+ 
++    s->total_time = start_time;
+     current_migration = s;
+     notifier_list_notify(&migration_state_notifiers, NULL);
+     return 0;
+@@ -226,6 +230,11 @@ void do_info_migrate_print(Monitor *mon, const QObject *data)
+     monitor_printf(mon, "Migration status: %s\n",
+                    qdict_get_str(qdict, "status"));
+ 
++    if (qdict_haskey(qdict, "total-time")) {
++        monitor_printf(mon, "total time: %" PRIu64 " milliseconds\n",
++                       qdict_get_int(qdict, "total-time"));
++    }
++
+     if (qdict_haskey(qdict, "ram")) {
+         migrate_print_status(mon, "ram", qdict);
+     }
+@@ -257,6 +266,10 @@ void do_info_migrate(Monitor *mon, QObject **ret_data)
+             qdict = qdict_new();
+             qdict_put(qdict, "status", qstring_from_str("active"));
+ 
++            qdict_put(qdict, "total-time",
++                      qint_from_int(qemu_get_clock(rt_clock) -
++                                    s->total_time));
++
+             migrate_put_status(qdict, "ram", ram_bytes_transferred(),
+                                ram_bytes_remaining(), ram_bytes_total());
+ 
+@@ -269,7 +282,17 @@ void do_info_migrate(Monitor *mon, QObject **ret_data)
+             *ret_data = QOBJECT(qdict);
+             break;
+         case MIG_STATE_COMPLETED:
+-            *ret_data = qobject_from_jsonf("{ 'status': 'completed' }");
++            qdict = qdict_new();
++            qdict_put(qdict, "status", qstring_from_str("completed"));
++
++            qdict_put(qdict, "total-time",
++                      qint_from_int(s->total_time));
++
++            migrate_put_status(qdict, "ram", ram_bytes_transferred(),
++                               ram_bytes_remaining(),
++                               ram_bytes_total());
++
++            *ret_data = QOBJECT(qdict);
+             break;
+         case MIG_STATE_ERROR:
+             *ret_data = qobject_from_jsonf("{ 'status': 'failed' }");
+@@ -427,8 +450,11 @@ void migrate_fd_put_ready(void *opaque)
+             s->state = MIG_STATE_ERROR;
+         }
+         if (s->state == MIG_STATE_ACTIVE) {
++            int64_t end_time = qemu_get_clock(rt_clock);
++
+             s->state = MIG_STATE_COMPLETED;
+             runstate_set(RUN_STATE_POSTMIGRATE);
++            s->mig_state.total_time = end_time - s->mig_state.total_time;
+         }
+         notifier_list_notify(&migration_state_notifiers, NULL);
+     }
+diff --git a/migration.h b/migration.h
+index bf94924..582717b 100644
+--- a/migration.h
++++ b/migration.h
+@@ -34,6 +34,8 @@ struct MigrationState
+     void (*release)(MigrationState *s);
+     int blk;
+     int shared;
++
++    int64_t total_time;
+ };
+ 
+ typedef struct FdMigrationState FdMigrationState;
+diff --git a/qemu-monitor.hx b/qemu-monitor.hx
+index ecbfce6..029f057 100644
+--- a/qemu-monitor.hx
++++ b/qemu-monitor.hx
+@@ -3206,8 +3206,11 @@ The main json-object contains the following:
+ 
+ - "status": migration status (json-string)
+      - Possible values: "active", "completed", "failed", "cancelled"
+-- "ram": only present if "status" is "active", it is a json-object with the
+-  following RAM information (in bytes):
++- "total-time": total amount of ms since migration started.  If
++                migration has ended, it returns the total migration
++                time (json-int)
++- "ram": only present if "status" is "active" or "complete", it is a
++         json-object with the following RAM information (in bytes):
+          - "transferred": amount transferred (json-int)
+          - "remaining": amount remaining (json-int)
+          - "total": total (json-int)
+@@ -3227,7 +3230,16 @@ Examples:
+ 2. Migration is done and has succeeded
+ 
+ -> { "execute": "query-migrate" }
+-<- { "return": { "status": "completed" } }
++<- {
++      "return":{
++         "status": "completed",
++         "total-time": 1215,
++         "ram":{
++            "transferred":123,
++            "remaining":123,
++            "total":246
++      }
++   }
+ 
+ 3. Migration is done and has failed
+ 
+@@ -3240,6 +3252,7 @@ Examples:
+ <- {
+       "return":{
+          "status":"active",
++         "total-time": 1215,
+          "ram":{
+             "transferred":123,
+             "remaining":123,
+@@ -3254,6 +3267,7 @@ Examples:
+ <- {
+       "return":{
+          "status":"active",
++         "total-time": 1215,
+          "ram":{
+             "total":1057024,
+             "remaining":1053304,
+-- 
+1.7.11.7
+

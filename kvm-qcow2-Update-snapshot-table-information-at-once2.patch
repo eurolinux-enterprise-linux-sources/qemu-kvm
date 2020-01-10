@@ -1,0 +1,87 @@
+From 0c7fcc789fd4c5a4c860ff6d0ceda5a9457f306b Mon Sep 17 00:00:00 2001
+Message-Id: <0c7fcc789fd4c5a4c860ff6d0ceda5a9457f306b.1368098699.git.minovotn@redhat.com>
+In-Reply-To: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+References: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Fri, 5 Apr 2013 19:44:43 +0200
+Subject: [PATCH 04/24] qcow2: Update snapshot table information at once
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1365191091-25631-5-git-send-email-kwolf@redhat.com>
+Patchwork-id: 50164
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 04/12] qcow2: Update snapshot table information at once
+Bugzilla: 796011
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+Bugzilla: 796011
+
+Failing in the middle wouldn't help with the integrity of the image, so
+doing everything in a single request seems better.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+(cherry picked from commit d69969c4046a81af106e723ff1bc2740365e67c1)
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/qcow2-snapshot.c | 22 ++++++++++------------
+ 1 file changed, 10 insertions(+), 12 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/qcow2-snapshot.c | 22 ++++++++++------------
+ 1 file changed, 10 insertions(+), 12 deletions(-)
+
+diff --git a/block/qcow2-snapshot.c b/block/qcow2-snapshot.c
+index 9f262ba..b2ab0c0 100644
+--- a/block/qcow2-snapshot.c
++++ b/block/qcow2-snapshot.c
+@@ -137,8 +137,10 @@ static int qcow2_write_snapshots(BlockDriverState *bs)
+     QCowSnapshot *sn;
+     QCowSnapshotHeader h;
+     int i, name_size, id_str_size, snapshots_size;
+-    uint64_t data64;
+-    uint32_t data32;
++    struct {
++        uint32_t nb_snapshots;
++        uint64_t snapshots_offset;
++    } QEMU_PACKED header_data;
+     int64_t offset, snapshots_offset;
+     int ret;
+ 
+@@ -200,24 +202,20 @@ static int qcow2_write_snapshots(BlockDriverState *bs)
+     /*
+      * Update the header to point to the new snapshot table. This requires the
+      * new table and its refcounts to be stable on disk.
+-     *
+-     * FIXME This should be done with a single write
+      */
+     ret = bdrv_flush(bs);
+     if (ret < 0) {
+         goto fail;
+     }
+ 
+-    data64 = cpu_to_be64(snapshots_offset);
+-    ret = bdrv_pwrite(bs->file, offsetof(QCowHeader, snapshots_offset),
+-                      &data64, sizeof(data64));
+-    if (ret < 0) {
+-        goto fail;
+-    }
++    QEMU_BUILD_BUG_ON(offsetof(QCowHeader, snapshots_offset) !=
++        offsetof(QCowHeader, nb_snapshots) + sizeof(header_data.nb_snapshots));
++
++    header_data.nb_snapshots        = cpu_to_be32(s->nb_snapshots);
++    header_data.snapshots_offset    = cpu_to_be64(snapshots_offset);
+ 
+-    data32 = cpu_to_be32(s->nb_snapshots);
+     ret = bdrv_pwrite_sync(bs->file, offsetof(QCowHeader, nb_snapshots),
+-                           &data32, sizeof(data32));
++                           &header_data, sizeof(header_data));
+     if (ret < 0) {
+         goto fail;
+     }
+-- 
+1.7.11.7
+

@@ -1,0 +1,64 @@
+From c50c819af0093a62b6b0108a9d416387bf93e804 Mon Sep 17 00:00:00 2001
+From: Max Reitz <mreitz@redhat.com>
+Date: Fri, 2 May 2014 16:58:37 -0500
+Subject: [PATCH 05/26] qcow2: handle_alloc(): Get rid of keep_clusters parameter
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1399049936-13496-6-git-send-email-mreitz@redhat.com>
+Patchwork-id: 58651
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 05/24] qcow2: handle_alloc(): Get rid of keep_clusters parameter
+Bugzilla: 1004420
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+BZ: 1004420
+
+handle_alloc() is now called with the offset at which the actual new
+allocation starts instead of the offset at which the whole write request
+starts, part of which may already be processed.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 3b8e2e260c8cee63c9253718983a6682dc2771d7)
+
+This backport does not include the actual functionality of this patch
+(since it is part of and depends on a rather large series), but only the
+single function start_of_cluster() in qcow2.h.
+
+Conflicts:
+	block/qcow2-cluster.c
+
+Remove all changes which are not part of qcow2.h
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2.h | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2.h |    5 +++++
+ 1 files changed, 5 insertions(+), 0 deletions(-)
+
+diff --git a/block/qcow2.h b/block/qcow2.h
+index fc352da..fc17122 100644
+--- a/block/qcow2.h
++++ b/block/qcow2.h
+@@ -206,6 +206,11 @@ enum {
+ 
+ #define REFT_OFFSET_MASK 0xffffffffffffff00ULL
+ 
++static inline int64_t start_of_cluster(BDRVQcowState *s, int64_t offset)
++{
++    return offset & ~(s->cluster_size - 1);
++}
++
+ static inline int size_to_clusters(BDRVQcowState *s, int64_t size)
+ {
+     return (size + (s->cluster_size - 1)) >> s->cluster_bits;
+-- 
+1.7.1
+

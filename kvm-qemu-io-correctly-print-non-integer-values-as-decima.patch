@@ -1,0 +1,113 @@
+From f6e3a7984084d99fe005565829b0fadb62e0fadc Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:37 -0500
+Subject: [CHANGE 15/31] qemu-io: correctly print non-integer values as
+ decimals
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-16-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60369
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 15/29] qemu-io: correctly print non-integer values as decimals
+Bugzilla: 1122410
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+qemu-io's cvtstr function sometimes will incorrectly omit the
+decimal part of the number, and sometimes will incorrectly include
+it.  This patch fixes both.  The former is more serious, and can
+be seen in the patches to 027.out and 033.out.
+
+The changes to all other files were scripted with sed, so there were
+no "surprises" beyond 027.out and 033.out.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 8655d2de0a101782b8066779b8b04e59a80c7d85)
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	tests/qemu-iotests/002.out
+	tests/qemu-iotests/017.out
+	tests/qemu-iotests/018.out
+	tests/qemu-iotests/019.out
+	tests/qemu-iotests/020.out
+	tests/qemu-iotests/023.out
+	tests/qemu-iotests/028.out
+	tests/qemu-iotests/035.out
+
+The test case output copied from upstream already requires the new
+format.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ cmd.c | 40 +++++++++++++++++++++++-----------------
+ 1 file changed, 23 insertions(+), 17 deletions(-)
+
+diff --git a/cmd.c b/cmd.c
+index cc70311..d7ed043 100644
+--- a/cmd.c
++++ b/cmd.c
+@@ -394,31 +394,37 @@ cvtstr(
+ 	char		*str,
+ 	size_t		size)
+ {
+-	const char	*fmt;
+-	int		precise;
+-
+-	precise = ((double)value * 1000 == (double)(int)value * 1000);
++	char		*trim;
++	const char	*suffix;
+ 
+ 	if (value >= EXABYTES(1)) {
+-		fmt = precise ? "%.f EiB" : "%.3f EiB";
+-		snprintf(str, size, fmt, TO_EXABYTES(value));
++		suffix = " EiB";
++		snprintf(str, size - 4, "%.3f", TO_EXABYTES(value));
+ 	} else if (value >= PETABYTES(1)) {
+-		fmt = precise ? "%.f PiB" : "%.3f PiB";
+-		snprintf(str, size, fmt, TO_PETABYTES(value));
++		suffix = " PiB";
++		snprintf(str, size - 4, "%.3f", TO_PETABYTES(value));
+ 	} else if (value >= TERABYTES(1)) {
+-		fmt = precise ? "%.f TiB" : "%.3f TiB";
+-		snprintf(str, size, fmt, TO_TERABYTES(value));
++		suffix = " TiB";
++		snprintf(str, size - 4, "%.3f", TO_TERABYTES(value));
+ 	} else if (value >= GIGABYTES(1)) {
+-		fmt = precise ? "%.f GiB" : "%.3f GiB";
+-		snprintf(str, size, fmt, TO_GIGABYTES(value));
++		suffix = " GiB";
++		snprintf(str, size - 4, "%.3f", TO_GIGABYTES(value));
+ 	} else if (value >= MEGABYTES(1)) {
+-		fmt = precise ? "%.f MiB" : "%.3f MiB";
+-		snprintf(str, size, fmt, TO_MEGABYTES(value));
++		suffix = " MiB";
++		snprintf(str, size - 4, "%.3f", TO_MEGABYTES(value));
+ 	} else if (value >= KILOBYTES(1)) {
+-		fmt = precise ? "%.f KiB" : "%.3f KiB";
+-		snprintf(str, size, fmt, TO_KILOBYTES(value));
++		suffix = " KiB";
++		snprintf(str, size - 4, "%.3f", TO_KILOBYTES(value));
+ 	} else {
+-		snprintf(str, size, "%f bytes", value);
++		suffix = " bytes";
++		snprintf(str, size - 6, "%f", value);
++	}
++
++	trim = strstr(str, ".000");
++	if (trim) {
++		strcpy(trim, suffix);
++	} else {
++		strcat(str, suffix);
+ 	}
+ }
+ 
+-- 
+1.9.3
+

@@ -1,0 +1,134 @@
+From 09f578ec5d3d34814f18b5ad950c6a3ec97a0efc Mon Sep 17 00:00:00 2001
+Message-Id: <09f578ec5d3d34814f18b5ad950c6a3ec97a0efc.1375955382.git.minovotn@redhat.com>
+In-Reply-To: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+References: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+From: Alon Levy <alevy@redhat.com>
+Date: Thu, 1 Aug 2013 11:53:38 +0200
+Subject: [PATCH 19/35] ccid-card-passthru, dev-smartcard-reader: add debug
+ environment variables
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Alon Levy <alevy@redhat.com>
+Message-id: <1375358029-12968-20-git-send-email-alevy@redhat.com>
+Patchwork-id: 52909
+O-Subject: [RHEL-6.5 RHEL-6.4.z qemu-kvm v6 19/30] ccid-card-passthru, dev-smartcard-reader: add debug environment variables
+Bugzilla: 917860
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+Introduces a new utility function: parse_debug_env to avoid code
+duplication.
+
+This overrides whatever debug value is set on the corresponding devices
+from the command line, and is meant to ease the usage with any
+management stack. For libvirt you can set environment variables by
+extending the dom namespace, i.e:
+
+<domain type='kvm' id='3' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
+  <qemu:commandline>
+    <qemu:env name='QEMU_CCID_PASSTHRU_DEBUG' value='4'/>
+    <qemu:env name='QEMU_CCID_DEBUG' value='4'/>
+  </qemu:commandline>
+</domain>
+
+Signed-off-by: Alon Levy <alevy@redhat.com>
+Reviewed-by: Marc-André Lureau <mlureau@redhat.com>
+(cherry picked from commit b16352acf3105000e14f194b556e159d5d06cff9)
+
+Conflicts:
+	include/qemu-common.h
+	util/cutils.c
+    upstream moved both from root:
+        qemu-common.h -> include/qemu-common.h
+        cutils.c      -> util/cutils.c
+---
+ cutils.c                | 23 +++++++++++++++++++++++
+ hw/ccid-card-passthru.c |  2 ++
+ hw/usb-ccid.c           |  1 +
+ qemu-common.h           |  5 +++++
+ 4 files changed, 31 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ cutils.c                | 23 +++++++++++++++++++++++
+ hw/ccid-card-passthru.c |  2 ++
+ hw/usb-ccid.c           |  1 +
+ qemu-common.h           |  5 +++++
+ 4 files changed, 31 insertions(+)
+
+diff --git a/cutils.c b/cutils.c
+index 9fb79fd..7389127 100644
+--- a/cutils.c
++++ b/cutils.c
+@@ -473,3 +473,26 @@ int64_t strtosz(const char *nptr, char **end)
+ {
+     return strtosz_suffix(nptr, end, STRTOSZ_DEFSUFFIX_MB);
+ }
++
++/*
++ * helper to parse debug environment variables
++ */
++int parse_debug_env(const char *name, int max, int initial)
++{
++    char *debug_env = getenv(name);
++    char *inv = NULL;
++    int debug;
++
++    if (!debug_env) {
++        return initial;
++    }
++    debug = strtol(debug_env, &inv, 10);
++    if (inv == debug_env) {
++        return initial;
++    }
++    if (debug < 0 || debug > max) {
++        fprintf(stderr, "warning: %s not in [0, %d]", name, max);
++        return initial;
++    }
++    return debug;
++}
+diff --git a/hw/ccid-card-passthru.c b/hw/ccid-card-passthru.c
+index ea2e319..173afa1 100644
+--- a/hw/ccid-card-passthru.c
++++ b/hw/ccid-card-passthru.c
+@@ -349,6 +349,8 @@ static int passthru_initfn(CCIDCardState *base)
+         error_report("missing chardev");
+         return -1;
+     }
++    card->debug = parse_debug_env("QEMU_CCID_PASSTHRU_DEBUG", D_VERBOSE,
++                                  card->debug);
+     assert(sizeof(DEFAULT_ATR) <= MAX_ATR_SIZE);
+     memcpy(card->atr, DEFAULT_ATR, sizeof(DEFAULT_ATR));
+     card->atr_length = sizeof(DEFAULT_ATR);
+diff --git a/hw/usb-ccid.c b/hw/usb-ccid.c
+index 4e95cc9..340eceb 100644
+--- a/hw/usb-ccid.c
++++ b/hw/usb-ccid.c
+@@ -1356,6 +1356,7 @@ static int ccid_initfn(USBDevice *dev)
+     s->bulk_out_pos = 0;
+     ccid_reset_parameters(s);
+     ccid_reset(s);
++    s->debug = parse_debug_env("QEMU_CCID_DEBUG", D_VERBOSE, s->debug);
+     return 0;
+ }
+ 
+diff --git a/qemu-common.h b/qemu-common.h
+index c959017..d808a84 100644
+--- a/qemu-common.h
++++ b/qemu-common.h
+@@ -317,4 +317,9 @@ static inline uint8_t from_bcd(uint8_t val)
+ 
+ #endif /* dyngen-exec.h hack */
+ 
++/*
++ * helper to parse debug environment variables
++ */
++int parse_debug_env(const char *name, int max, int initial);
++
+ #endif
+-- 
+1.7.11.7
+

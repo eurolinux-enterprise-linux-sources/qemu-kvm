@@ -1,0 +1,156 @@
+From 20851e2f5852308d417ddcf8a1790f4bb0cdcb93 Mon Sep 17 00:00:00 2001
+Message-Id: <20851e2f5852308d417ddcf8a1790f4bb0cdcb93.1411497349.git.jen@redhat.com>
+In-Reply-To: <c1a65d1a3f9888636f1026da1d5f77d985a8815b.1411497349.git.jen@redhat.com>
+References: <c1a65d1a3f9888636f1026da1d5f77d985a8815b.1411497349.git.jen@redhat.com>
+From: Juan Quintela <quintela@redhat.com>
+Date: Tue, 16 Sep 2014 15:50:23 -0400
+Subject: [CHANGE 7/7] migration: Don't calculate bandwidth when last cycle was
+ too short
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Juan Quintela <quintela@redhat.com>
+Message-id: <1410882623-10906-8-git-send-email-quintela@redhat.com>
+Patchwork-id: 61189
+O-Subject: [PATCH qemu-kvm RHEL6.6 7/7] migration: Don't calculate bandwidth when last cycle was too short
+Bugzilla: 1142756 970103
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+If cycle is too short (10ms) we don't want to try to calculate
+Bandwidth, because sometimes it just gives a very bad meassurement.
+
+But, if networking is really flaky, and we don't get 10ms cycles, we
+also calculate bandwidth if remaining memory is smaller than 10MB.
+
+Return 0 on this code means "continue", and not entering the if means
+calculate the bandwith.
+
+Long explanation:
+
+Safety check is for the other reason.
+
+Exit (as told by Dave) is different here.
+
+Migration is basically:
+
+while (too much RAM remaining())
+    send some pages
+
+send rest of RAM
+send device state
+
+Notice that the loop is conceptual, we are doing it with callbacks and
+it is "interesting" how it is implemented.
+
+we know how much is "rest" at any moment, what we want to decide is if
+that "is" small enough to be sent in our allocated "max downtime".
+
+Now, how we calculate bandwidth, easy:
+
+data sent last iteration/time last iteration
+
+The problem is that we are writing data to a buffer, and from that
+buffer to a socket.  If the buffer got blocked for "any" reason, we can
+have a very short iteration, and on that iteration, we only wrote
+information to the buffer.  It is inside possibility that we just fill
+the buffers (i.e. wrote relatively lot of data too fast) and we find the
+buffer full, so we went for the next iteration.  But our bandwidth
+calculation took that we wrote (relatively) lot of data in a very small
+time -> big bandwidth, so we end the loop.
+
+Remember, the reason why the iteration was slow was because the network
+was not running at all.  So we end having a very, very long downtime.
+
+What would be perfect?  Just measure the bandwidth when we write "full"
+iterations, i.e. 50ms ones.  But the problem is that once we have got
+lot of data written, Network Cards, TCP and friends decided to
+enter congestion and do other nasty things.  So, testing showed that 10ms
+was good enough (1ms was too short).
+
+So, we "exit" that iterative stage, the return 0 means _not_ exit the
+iterative stage.  I know, I know, but it was already that way.
+
+Now the 10MB thingy.  My problem here (never happened during testing) is
+what happens if network is very congested and we never got 10ms cycles?
+Even if the guest is completely idle?  That is what the 10MB came
+along.  If the amount of remaining ram is 10MB, we always calculate the
+bandwidth.  You could ask to just move to the end stage if amount of
+remaining RAM is so small, but I didn't want to change the code so
+much.
+
+So we end with the loop being conceptually like:
+
+while (true) {
+   t0 = ....
+   previous_sent_counter = ...
+   send several pages until 50ms pass or pipe get congested
+   t1 = ....
+   current_sent_counter =
+   calculate bandwidth
+   if remaining RAM / bandwidth < downtime
+      break
+}
+sent rest of RAM
+sent devices
+
+**** to:
+
+while (true) {
+   t0 = ....
+   previous_sent_counter = ...
+   send several pages until 50ms pass or pipe get congested
+   t1 = ....
+   current_sent_counter =
+
+// New code
+   if (t1 - t0 < 10ms)
+      continue
+// End new code
+   calculate bandwidth
+   if remaining RAM / bandwidth < downtime
+      break
+}
+sent rest of RAM
+sent devices
+
+And now, just for safety, we don't do the "continue thing" if remaining
+RAM is < 10MB.  In my testing, we never enter here with less than 10MB,
+but I haven't tested several migrations at the same time on one
+congested network.
+
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ vl.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/vl.c b/vl.c
+index a078440..3b37ccd 100644
+--- a/vl.c
++++ b/vl.c
+@@ -2948,6 +2948,20 @@ static int ram_save_live(Monitor *mon, QEMUFile *f, int stage, void *opaque)
+         uint64_t expected_time;
+         double bwidth = 0;
+ 
++        /*
++         * If it is smaller than 10ms, we don't trust the measurement.
++         *
++         * Sometimes as the amount of time is very small and that
++         * makes the bandwidth really, really high.  But if
++         * networking is very flaky, we also want to finish migration
++         * when the amount of memory pending is small enough. (10MB
++         * on this case).
++         */
++
++        if ((ram_bytes_remaining() > 10 * 1024 * 1024) && (t0 < 10000000)) {
++            return 0;
++        }
++
+         bwidth = ((double)bytes_transferred - bytes_transferred_last) / t0;
+ 
+         /*
+-- 
+1.9.3
+

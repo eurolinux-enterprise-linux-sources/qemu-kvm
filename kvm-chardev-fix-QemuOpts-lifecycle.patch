@@ -1,0 +1,120 @@
+From b2647f3e69844d2666dbb39dcb4574c803f8aac7 Mon Sep 17 00:00:00 2001
+Message-Id: <b2647f3e69844d2666dbb39dcb4574c803f8aac7.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:42 +0200
+Subject: [PATCH 31/65] chardev: fix QemuOpts lifecycle
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-32-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52150
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 31/65] chardev: fix QemuOpts lifecycle
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+qemu_chr_new_from_opts handles QemuOpts release now, so callers don't
+have to worry.  It will either be saved in CharDriverState, then
+released in qemu_chr_delete, or in the error case released instantly.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 2274ae9d1a841c9d214b7c877d28e2f037a9b26e)
+
+Conflicts:
+
+	include/char/char.h
+	qemu-char.c
+---
+ qemu-char.c |   19 ++++++++++++++-----
+ qemu-char.h |    1 +
+ 2 files changed, 15 insertions(+), 5 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 19 ++++++++++++++-----
+ qemu-char.h |  1 +
+ 2 files changed, 15 insertions(+), 5 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 8862aec..0d9e707 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -2804,13 +2804,13 @@ CharDriverState *qemu_chr_new_from_opts(QemuOpts *opts,
+ 
+     if (qemu_opts_id(opts) == NULL) {
+         error_setg(errp, "chardev: no id specified");
+-        return NULL;
++        goto err;
+     }
+ 
+     if (qemu_opt_get(opts, "backend") == NULL) {
+         error_setg(errp, "chardev: \"%s\" missing backend",
+                    qemu_opts_id(opts));
+-        return NULL;
++        goto err;
+     }
+     for (i = 0; i < ARRAY_SIZE(backend_table); i++) {
+         if (strcmp(backend_table[i].name, qemu_opt_get(opts, "backend")) == 0)
+@@ -2819,14 +2819,14 @@ CharDriverState *qemu_chr_new_from_opts(QemuOpts *opts,
+     if (i == ARRAY_SIZE(backend_table)) {
+         error_setg(errp, "chardev: backend \"%s\" not found",
+                    qemu_opt_get(opts, "backend"));
+-        return NULL;
++        goto err;
+     }
+ 
+     chr = backend_table[i].open(opts);
+     if (!chr) {
+         error_setg(errp, "chardev: opening backend \"%s\" failed",
+                    qemu_opt_get(opts, "backend"));
+-        return NULL;
++        goto err;
+     }
+ 
+     if (!chr->filename)
+@@ -2847,7 +2847,12 @@ CharDriverState *qemu_chr_new_from_opts(QemuOpts *opts,
+         chr->avail_connections = 1;
+     }
+     chr->label = qemu_strdup(qemu_opts_id(opts));
++    chr->opts = opts;
+     return chr;
++
++err:
++    qemu_opts_del(opts);
++    return NULL;
+ }
+ 
+ CharDriverState *qemu_chr_new(const char *label, const char *filename, void (*init)(struct CharDriverState *s))
+@@ -2918,10 +2923,14 @@ int qemu_chr_fe_add_watch(CharDriverState *s, GIOCondition cond,
+ void qemu_chr_delete(CharDriverState *chr)
+ {
+     QTAILQ_REMOVE(&chardevs, chr, next);
+-    if (chr->chr_close)
++    if (chr->chr_close) {
+         chr->chr_close(chr);
++    }
+     qemu_free(chr->filename);
+     qemu_free(chr->label);
++    if (chr->opts) {
++        qemu_opts_del(chr->opts);
++    }
+     qemu_free(chr);
+ }
+ 
+diff --git a/qemu-char.h b/qemu-char.h
+index 25348dd..b8c6859 100644
+--- a/qemu-char.h
++++ b/qemu-char.h
+@@ -74,6 +74,7 @@ struct CharDriverState {
+     char *filename;
+     int avail_connections;
+     int opened;
++    QemuOpts *opts;
+     QTAILQ_ENTRY(CharDriverState) next;
+ };
+ 
+-- 
+1.7.11.7
+

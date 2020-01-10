@@ -1,0 +1,119 @@
+From d8c4b3f39790bb338b173c4b2e78c89625b5e0fc Mon Sep 17 00:00:00 2001
+Message-Id: <d8c4b3f39790bb338b173c4b2e78c89625b5e0fc.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:37 +0200
+Subject: [PATCH 22/47] VMDK: creating streamOptimized subformat
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-23-git-send-email-famz@redhat.com>
+Patchwork-id: 51458
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 22/47] VMDK: creating streamOptimized subformat
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Fam Zheng <famcool@gmail.com>
+
+Creating streamOptimized subformat. Added subformat option
+'streamOptimized', to create a image with compression enabled and each
+cluster with a GrainMarker.
+
+Signed-off-by: Fam Zheng <famcool@gmail.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 6c031aac4d697d7acbfd5eaa73f47d494cee9937)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 18 ++++++++++++------
+ 1 file changed, 12 insertions(+), 6 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 18 ++++++++++++------
+ 1 file changed, 12 insertions(+), 6 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 1262c59..343868f 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -1117,7 +1117,8 @@ static coroutine_fn int vmdk_co_write(BlockDriverState *bs, int64_t sector_num,
+ }
+ 
+ 
+-static int vmdk_create_extent(const char *filename, int64_t filesize, bool flat)
++static int vmdk_create_extent(const char *filename, int64_t filesize,
++                              bool flat, bool compress)
+ {
+     int ret, i;
+     int fd = 0;
+@@ -1141,7 +1142,9 @@ static int vmdk_create_extent(const char *filename, int64_t filesize, bool flat)
+     magic = cpu_to_be32(VMDK4_MAGIC);
+     memset(&header, 0, sizeof(header));
+     header.version = 1;
+-    header.flags = 3; /* ?? */
++    header.flags =
++        3 | (compress ? VMDK4_FLAG_COMPRESS | VMDK4_FLAG_MARKER : 0);
++    header.compressAlgorithm = compress ? VMDK4_COMPRESSION_DEFLATE : 0;
+     header.capacity = filesize / 512;
+     header.granularity = 128;
+     header.num_gtes_per_gte = 512;
+@@ -1171,6 +1174,7 @@ static int vmdk_create_extent(const char *filename, int64_t filesize, bool flat)
+     header.rgd_offset = cpu_to_le64(header.rgd_offset);
+     header.gd_offset = cpu_to_le64(header.gd_offset);
+     header.grain_offset = cpu_to_le64(header.grain_offset);
++    header.compressAlgorithm = cpu_to_le16(header.compressAlgorithm);
+ 
+     header.check_bytes[0] = 0xa;
+     header.check_bytes[1] = 0x20;
+@@ -1312,7 +1316,7 @@ static int vmdk_create(const char *filename, QEMUOptionParameter *options)
+     const char *fmt = NULL;
+     int flags = 0;
+     int ret = 0;
+-    bool flat, split;
++    bool flat, split, compress;
+     char ext_desc_lines[BUF_SIZE] = "";
+     char path[PATH_MAX], prefix[PATH_MAX], postfix[PATH_MAX];
+     const int64_t split_size = 0x80000000;  /* VMDK has constant split size */
+@@ -1361,7 +1365,8 @@ static int vmdk_create(const char *filename, QEMUOptionParameter *options)
+     } else if (strcmp(fmt, "monolithicFlat") &&
+                strcmp(fmt, "monolithicSparse") &&
+                strcmp(fmt, "twoGbMaxExtentSparse") &&
+-               strcmp(fmt, "twoGbMaxExtentFlat")) {
++               strcmp(fmt, "twoGbMaxExtentFlat") &&
++               strcmp(fmt, "streamOptimized")) {
+         fprintf(stderr, "VMDK: Unknown subformat: %s\n", fmt);
+         return -EINVAL;
+     }
+@@ -1369,6 +1374,7 @@ static int vmdk_create(const char *filename, QEMUOptionParameter *options)
+               strcmp(fmt, "twoGbMaxExtentSparse"));
+     flat = !(strcmp(fmt, "monolithicFlat") &&
+              strcmp(fmt, "twoGbMaxExtentFlat"));
++    compress = !strcmp(fmt, "streamOptimized");
+     if (flat) {
+         desc_extent_line = "RW %lld FLAT \"%s\" 0\n";
+     } else {
+@@ -1423,7 +1429,7 @@ static int vmdk_create(const char *filename, QEMUOptionParameter *options)
+         snprintf(ext_filename, sizeof(ext_filename), "%s%s",
+                 path, desc_filename);
+ 
+-        if (vmdk_create_extent(ext_filename, size, flat)) {
++        if (vmdk_create_extent(ext_filename, size, flat, compress)) {
+             return -EINVAL;
+         }
+         filesize -= size;
+@@ -1537,7 +1543,7 @@ static QEMUOptionParameter vmdk_create_options[] = {
+         .type = OPT_STRING,
+         .help =
+             "VMDK flat extent format, can be one of "
+-            "{monolithicSparse (default) | monolithicFlat | twoGbMaxExtentSparse | twoGbMaxExtentFlat} "
++            "{monolithicSparse (default) | monolithicFlat | twoGbMaxExtentSparse | twoGbMaxExtentFlat | streamOptimized} "
+     },
+     { NULL }
+ };
+-- 
+1.7.11.7
+

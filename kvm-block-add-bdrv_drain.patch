@@ -1,0 +1,89 @@
+From 543f419c5a38e951f9ff887d094fa0997ee6c0f2 Mon Sep 17 00:00:00 2001
+Message-Id: <543f419c5a38e951f9ff887d094fa0997ee6c0f2.1482436097.git.ymankad@redhat.com>
+In-Reply-To: <c82b7dad71c6917c1ffa387b87de50a7d786e403.1482436097.git.ymankad@redhat.com>
+References: <c82b7dad71c6917c1ffa387b87de50a7d786e403.1482436097.git.ymankad@redhat.com>
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Fri, 16 Dec 2016 11:56:26 -0500
+Subject: [CHANGE 3/4] block: add bdrv_drain()
+To: ymankad@redhat.com
+
+RH-Author: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: <20161216115627.27874-4-pbonzini@redhat.com>
+Patchwork-id: 73075
+O-Subject: [RHEL6.9 qemu-kvm PATCH 3/4] block: add bdrv_drain()
+Bugzilla: 876993
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: John Snow <jsnow@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@redhat.com>
+
+Bugzilla: 876993
+
+Upstream commit: 5b98db0ad3ad2919c71572085d104765bad6c658
+
+We don't have op blockers, but on the other hand we also do not have full
+support for block jobs on dataplane and a lot of other things that made
+life harder upstream.  So just add bdrv_drain here.
+
+RHEL6 did not have bdrv_requests_pending either.  The commit that
+introduced it is scary enough (commit 88266f5, "block: stop relying on
+io_flush() in bdrv_drain_all()", 2013-08-19) to justify a partial
+backport.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ block.c | 23 +++++++++++++++++++++++
+ block.h |  1 +
+ 2 files changed, 24 insertions(+)
+
+diff --git a/block.c b/block.c
+index 02a09c1..d7c7f5f 100644
+--- a/block.c
++++ b/block.c
+@@ -1176,6 +1176,29 @@ static bool bdrv_requests_pending_all(void)
+     return false;
+ }
+ 
++static bool bdrv_drain_one(BlockDriverState *bs)
++{
++    bool bs_busy;
++
++    bdrv_start_throttled_reqs(bs);
++    bs_busy = bdrv_requests_pending(bs);
++    bs_busy |= aio_poll(qemu_get_aio_context(), bs_busy);
++    return bs_busy;
++}
++
++/*
++ * Wait for pending requests to complete on a single BlockDriverState subtree
++ *
++ * See the warning in bdrv_drain_all().  This function can only be called if
++ * you are sure nothing can generate I/O.
++ */
++void bdrv_drain(BlockDriverState *bs)
++{
++    while (bdrv_drain_one(bs)) {
++        /* Keep iterating */
++    }
++}
++
+ /*
+  * Wait for pending requests to complete across all BlockDriverStates
+  *
+diff --git a/block.h b/block.h
+index f1db2ff..8b75084 100644
+--- a/block.h
++++ b/block.h
+@@ -305,6 +305,7 @@ BlockDriverAIOCB *bdrv_aio_ioctl(BlockDriverState *bs,
+ /* Ensure contents are flushed to disk.  */
+ int bdrv_flush(BlockDriverState *bs);
+ int coroutine_fn bdrv_co_flush(BlockDriverState *bs);
++void bdrv_drain(BlockDriverState *bs);
+ void bdrv_flush_all(void);
+ void bdrv_close_all(void);
+ void bdrv_drain_all(void);
+-- 
+2.7.4
+

@@ -1,0 +1,84 @@
+From cdbd77d557342cf76a5502be09266ac1d007d2b4 Mon Sep 17 00:00:00 2001
+Message-Id: <cdbd77d557342cf76a5502be09266ac1d007d2b4.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:06:02 +0200
+Subject: [PATCH 51/65] chardev: add braille support to qapi
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-52-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52169
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 51/65] chardev: add braille support to qapi
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+This patch adds 'braille' support to qapi and also switches over
+the braille chardev initialization to the new qapi code path.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 2d57286da6e57aacf3b2d0d3354d543ed100a485)
+
+Conflicts:
+
+	backends/baum.c
+---
+ qapi-schema.json |    3 ++-
+ qemu-char.c      |    5 +++++
+ qemu-char.h      |    3 +++
+ 3 files changed, 10 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema.json | 3 ++-
+ qemu-char.c      | 5 +++++
+ qemu-char.h      | 3 +++
+ 3 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/qapi-schema.json b/qapi-schema.json
+index 4891e63..7af0958 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -482,7 +482,8 @@
+                                        'pty'    : 'ChardevDummy',
+                                        'null'   : 'ChardevDummy',
+                                        'mux'    : 'ChardevMux',
+-                                       'msmouse': 'ChardevDummy' } }
++                                       'msmouse': 'ChardevDummy',
++                                       'braille': 'ChardevDummy' } }
+ 
+ ##
+ # @ChardevReturn:
+diff --git a/qemu-char.c b/qemu-char.c
+index ac5b23b..b4df193 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -3262,6 +3262,11 @@ ChardevReturn *qmp_chardev_add(const char *id, ChardevBackend *backend,
+     case CHARDEV_BACKEND_KIND_MSMOUSE:
+         chr = qemu_chr_open_msmouse();
+         break;
++#ifdef CONFIG_BRLAPI
++    case CHARDEV_BACKEND_KIND_BRAILLE:
++        chr = chr_baum_init();
++        break;
++#endif
+     default:
+         error_setg(errp, "unknown chardev backend (%d)", backend->kind);
+         break;
+diff --git a/qemu-char.h b/qemu-char.h
+index 488a38a..69839e6 100644
+--- a/qemu-char.h
++++ b/qemu-char.h
+@@ -280,4 +280,7 @@ int qemu_set_fd_handler(int fd,
+ /* msmouse */
+ CharDriverState *qemu_chr_open_msmouse(void);
+ 
++/* baum.c */
++CharDriverState *chr_baum_init(void);
++
+ #endif
+-- 
+1.7.11.7
+

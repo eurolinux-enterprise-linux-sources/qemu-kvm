@@ -1,0 +1,70 @@
+From b937027e788e2398f4e03d4698545d294961adfe Mon Sep 17 00:00:00 2001
+Message-Id: <b937027e788e2398f4e03d4698545d294961adfe.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:46 +0200
+Subject: [PATCH 31/47] vmdk: Fix possible segfaults
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-32-git-send-email-famz@redhat.com>
+Patchwork-id: 51467
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 31/47] vmdk: Fix possible segfaults
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+Data we read from the disk isn't necessarily null terminated and may not
+contain the string we're looking for. The code needs to be a bit more careful
+here.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 93897b9fd43548e9c15cf8bece2d9e5174b01fc7)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index e9820e4..ded8ccc 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -227,6 +227,7 @@ static uint32_t vmdk_read_cid(BlockDriverState *bs, int parent)
+         cid_str_size = sizeof("CID");
+     }
+ 
++    desc[DESC_SIZE - 1] = '\0';
+     p_name = strstr(desc, cid_str);
+     if (p_name != NULL) {
+         p_name += cid_str_size;
+@@ -243,13 +244,17 @@ static int vmdk_write_cid(BlockDriverState *bs, uint32_t cid)
+     BDRVVmdkState *s = bs->opaque;
+     int ret;
+ 
+-    memset(desc, 0, sizeof(desc));
+     ret = bdrv_pread(bs->file, s->desc_offset, desc, DESC_SIZE);
+     if (ret < 0) {
+         return ret;
+     }
+ 
++    desc[DESC_SIZE - 1] = '\0';
+     tmp_str = strstr(desc, "parentCID");
++    if (tmp_str == NULL) {
++        return -EINVAL;
++    }
++
+     pstrcpy(tmp_desc, sizeof(tmp_desc), tmp_str);
+     p_name = strstr(desc, "CID");
+     if (p_name != NULL) {
+-- 
+1.7.11.7
+

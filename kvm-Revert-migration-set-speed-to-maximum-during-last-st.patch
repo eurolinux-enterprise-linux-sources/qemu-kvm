@@ -1,0 +1,45 @@
+From 16270cc7c6391fa3a02f5ddb2701dc23be1b7144 Mon Sep 17 00:00:00 2001
+Message-Id: <16270cc7c6391fa3a02f5ddb2701dc23be1b7144.1411757522.git.jen@redhat.com>
+In-Reply-To: <c52ca58a7a8b9f87bde7ca1ab5b11a39d82854e5.1411757522.git.jen@redhat.com>
+References: <c52ca58a7a8b9f87bde7ca1ab5b11a39d82854e5.1411757522.git.jen@redhat.com>
+From: Jeff Nelson <jenelson@redhat.com>
+Date: Fri, 26 Sep 2014 16:39:48 -0400
+Subject: [CHANGE 6/7] Revert "migration: set speed to maximum during last
+ stage"
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Jeff Nelson <jenelson@redhat.com>
+Message-id: <9fe7f81a1f492038a05683c00db3728906ac844d.1411747689.git.jen@redhat.com>
+Patchwork-id: 61463
+O-Subject: [RHEL-6.6.z qemu-kvm PATCH 6/7] Revert "migration: set speed to maximum during last stage"
+Bugzilla: 970103
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+This reverts commit 40ec2100ad2bc73e6912e936b33fdd5f17f9ef96.
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ migration.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ migration.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/migration.c b/migration.c
+index e29262d..0400edb 100644
+--- a/migration.c
++++ b/migration.c
+@@ -464,7 +464,6 @@ void migrate_fd_put_ready(void *opaque)
+ 
+         bdrv_drain_all();
+         bdrv_flush_all();
+-        qemu_file_set_rate_limit(s->file, SIZE_MAX);
+         if ((qemu_savevm_state_complete(s->mon, s->file)) < 0) {
+             if (old_vm_running) {
+                 vm_start();
+-- 
+1.9.3
+

@@ -1,0 +1,136 @@
+From 428fd674c077890faf49465498bcbacc5ae70bf1 Mon Sep 17 00:00:00 2001
+Message-Id: <428fd674c077890faf49465498bcbacc5ae70bf1.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:45 -0500
+Subject: [CHANGE 25/29] scsi: Introduce scsi_req_cancel_async
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-26-git-send-email-famz@redhat.com>
+Patchwork-id: 64926
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 25/28] scsi: Introduce scsi_req_cancel_async
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Devices will call this function to start an asynchronous cancellation. The
+bus->info->cancel will be called after the request is canceled.
+
+Devices will probably need to track a separate TMF request that triggers this
+cancellation, and wait until the cancellation is done before completing it. So
+we store a notifier list in SCSIRequest and in scsi_req_cancel_complete we
+notify them.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 8e0a9320e94930fd6e5c2906c478203b80392f5c)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+
+	hw/scsi.h
+Include file "notify.h" is different from upstream "qemu/notify.h".
+Fields of SCSIRequest have some differences.
+
+	hw/scsi-bus.c
+Trace point trace_scsi_req_cancel doesn't exist in downstream.
+---
+ hw/scsi-bus.c | 25 +++++++++++++++++++++++++
+ hw/scsi.h     |  3 +++
+ 2 files changed, 28 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/scsi-bus.c | 25 +++++++++++++++++++++++++
+ hw/scsi.h     |  3 +++
+ 2 files changed, 28 insertions(+)
+
+diff --git a/hw/scsi-bus.c b/hw/scsi-bus.c
+index c5ae470..762d71f 100644
+--- a/hw/scsi-bus.c
++++ b/hw/scsi-bus.c
+@@ -523,6 +523,7 @@ SCSIRequest *scsi_req_alloc(const SCSIReqOps *reqops, SCSIDevice *d,
+     req->status = -1;
+     req->sense_len = 0;
+     req->ops = reqops;
++    notifier_list_init(&req->cancel_notifiers);
+     trace_scsi_req_alloc(req->dev->id, req->lun, req->tag);
+     return req;
+ }
+@@ -1473,6 +1474,9 @@ void scsi_req_complete(SCSIRequest *req, int status)
+     scsi_req_ref(req);
+     scsi_req_dequeue(req);
+     req->bus->info->complete(req, req->status, req->resid);
++
++    /* Cancelled requests might end up being completed instead of cancelled */
++    notifier_list_notify(&req->cancel_notifiers, req);
+     scsi_req_unref(req);
+ }
+ 
+@@ -1483,9 +1487,30 @@ void scsi_req_cancel_complete(SCSIRequest *req)
+     if (req->bus->info->cancel) {
+         req->bus->info->cancel(req);
+     }
++    notifier_list_notify(&req->cancel_notifiers, req);
+     scsi_req_unref(req);
+ }
+ 
++/* Cancel @req asynchronously. @notifier is added to @req's cancellation
++ * notifier list, the bus will be notified the requests cancellation is
++ * completed.
++ * */
++void scsi_req_cancel_async(SCSIRequest *req, Notifier *notifier)
++{
++    if (notifier) {
++        notifier_list_add(&req->cancel_notifiers, notifier);
++    }
++    if (req->io_canceled) {
++        return;
++    }
++    scsi_req_ref(req);
++    scsi_req_dequeue(req);
++    req->io_canceled = true;
++    if (req->aiocb) {
++        bdrv_aio_cancel_async(req->aiocb);
++    }
++}
++
+ void scsi_req_cancel(SCSIRequest *req)
+ {
+     if (!req->enqueued) {
+diff --git a/hw/scsi.h b/hw/scsi.h
+index 1bfc98b..00da0d2 100644
+--- a/hw/scsi.h
++++ b/hw/scsi.h
+@@ -5,6 +5,7 @@
+ #include "block.h"
+ #include "block_int.h"
+ #include "sysemu.h"
++#include "notify.h"
+ 
+ #define MAX_SCSI_DEVS	255
+ 
+@@ -52,6 +53,7 @@ struct SCSIRequest {
+     uint32_t          status;
+     size_t            resid;
+     SCSICommand       cmd;
++    NotifierList      cancel_notifiers;
+     BlockDriverAIOCB  *aiocb;
+     QEMUSGList        *sg;
+     bool              dma_started;
+@@ -237,6 +239,7 @@ uint8_t *scsi_req_get_buf(SCSIRequest *req);
+ int scsi_req_get_sense(SCSIRequest *req, uint8_t *buf, int len);
+ void scsi_req_cancel_complete(SCSIRequest *req);
+ void scsi_req_cancel(SCSIRequest *req);
++void scsi_req_cancel_async(SCSIRequest *req, Notifier *notifier);
+ void scsi_req_retry(SCSIRequest *req);
+ void scsi_device_purge_requests(SCSIDevice *sdev, SCSISense sense);
+ void scsi_device_set_ua(SCSIDevice *sdev, SCSISense sense);
+-- 
+2.1.0
+

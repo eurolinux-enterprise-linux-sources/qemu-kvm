@@ -1,0 +1,61 @@
+From a43289228a7e7848fa1ce2d237ad51d283e7aa70 Mon Sep 17 00:00:00 2001
+Message-Id: <a43289228a7e7848fa1ce2d237ad51d283e7aa70.1427300678.git.jen@redhat.com>
+In-Reply-To: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+References: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+From: Amos Kong <akong@redhat.com>
+Date: Tue, 24 Mar 2015 23:00:03 -0500
+Subject: [CHANGE 32/33] qom: fix leak for objects created with -object
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1427238004-11205-3-git-send-email-akong@redhat.com>
+Patchwork-id: 64580
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 2/3] qom: fix leak for objects created with -object
+Bugzilla: 1119575
+RH-Acked-by: Marcel Apfelbaum <marcel@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+The object must be unref-ed when its variable goes out of scope.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Reviewed-by: Igor Mammedov <imammedo@redhat.com>
+Tested-by: Igor Mammedov <imammedo@redhat.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 28ec2598ff7d74bd9556a1786f45fc5df2aacfe1)
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+---
+ vl.c |    3 ++-
+ 1 files changed, 2 insertions(+), 1 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ vl.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/vl.c b/vl.c
+index 95079ff..8b70e23 100644
+--- a/vl.c
++++ b/vl.c
+@@ -5230,12 +5230,13 @@ static int object_create(QemuOpts *opts, void *opaque)
+ 
+     obj = object_new(type);
+     if (qemu_opt_foreach(opts, object_set_property, obj, 1) < 0) {
++        object_unref(obj);
+         return -1;
+     }
+ 
+     object_property_add_child(container_get(object_get_root(), "/objects"),
+                               id, obj, NULL);
+-
++    object_unref(obj);
+     return 0;
+ }
+ 
+-- 
+2.1.0
+

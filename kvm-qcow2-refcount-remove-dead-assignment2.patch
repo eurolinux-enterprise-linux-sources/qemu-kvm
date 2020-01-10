@@ -1,0 +1,52 @@
+From 40e1848c9f28da84e086bc87ff82259b69c63f53 Mon Sep 17 00:00:00 2001
+Message-Id: <40e1848c9f28da84e086bc87ff82259b69c63f53.1368098699.git.minovotn@redhat.com>
+In-Reply-To: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+References: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Fri, 5 Apr 2013 19:44:47 +0200
+Subject: [PATCH 08/24] qcow2-refcount: remove dead assignment
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1365191091-25631-9-git-send-email-kwolf@redhat.com>
+Patchwork-id: 50167
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 08/12] qcow2-refcount: remove dead assignment
+Bugzilla: 796011
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Amit Shah <amit.shah@redhat.com>
+
+Bugzilla: 796011
+
+clang-analyzer points out a redundant assignment.
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit f7dcfac024246e2ad84ac35c617b95700377e00b)
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/qcow2-refcount.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/qcow2-refcount.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/block/qcow2-refcount.c b/block/qcow2-refcount.c
+index 69b63dd..69edb81 100644
+--- a/block/qcow2-refcount.c
++++ b/block/qcow2-refcount.c
+@@ -718,7 +718,6 @@ int qcow2_update_snapshot_refcount(BlockDriverState *bs,
+     l2_table = NULL;
+     l1_table = NULL;
+     l1_size2 = l1_size * sizeof(uint64_t);
+-    l1_allocated = 0;
+     if (l1_table_offset != s->l1_table_offset) {
+         if (l1_size2 != 0) {
+             l1_table = g_malloc0(align_offset(l1_size2, 512));
+-- 
+1.7.11.7
+

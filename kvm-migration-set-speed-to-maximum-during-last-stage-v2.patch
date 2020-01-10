@@ -1,0 +1,46 @@
+From 2aa82867a890f2c92cd251f1e69d456d0917c3e2 Mon Sep 17 00:00:00 2001
+Message-Id: <2aa82867a890f2c92cd251f1e69d456d0917c3e2.1421272770.git.jen@redhat.com>
+In-Reply-To: <acd6d327ae856e72f084949fd71314237a4b9b8b.1421272770.git.jen@redhat.com>
+References: <acd6d327ae856e72f084949fd71314237a4b9b8b.1421272770.git.jen@redhat.com>
+From: Juan Quintela <quintela@redhat.com>
+Date: Wed, 7 Jan 2015 16:45:07 -0600
+Subject: [CHANGE 03/10] migration: set speed to maximum during last stage
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Juan Quintela <quintela@redhat.com>
+Message-id: <1420649114-17435-4-git-send-email-quintela@redhat.com>
+Patchwork-id: 63160
+O-Subject: [PATCH qemu-kvm RHEL6.7 03/10] migration: set speed to maximum during last stage
+Bugzilla: 970103
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+v2: Maximum is SIZE_MAX
+
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+---
+ migration.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ migration.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/migration.c b/migration.c
+index 0400edb..e29262d 100644
+--- a/migration.c
++++ b/migration.c
+@@ -464,6 +464,7 @@ void migrate_fd_put_ready(void *opaque)
+ 
+         bdrv_drain_all();
+         bdrv_flush_all();
++        qemu_file_set_rate_limit(s->file, SIZE_MAX);
+         if ((qemu_savevm_state_complete(s->mon, s->file)) < 0) {
+             if (old_vm_running) {
+                 vm_start();
+-- 
+2.1.0
+

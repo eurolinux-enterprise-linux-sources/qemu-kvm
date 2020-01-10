@@ -1,0 +1,90 @@
+From f4b48859c1df5283d56c98655b6ed818a260b132 Mon Sep 17 00:00:00 2001
+Message-Id: <f4b48859c1df5283d56c98655b6ed818a260b132.1376387172.git.minovotn@redhat.com>
+In-Reply-To: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+References: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Thu, 8 Aug 2013 06:09:39 +0200
+Subject: [PATCH 09/13] vmdk: use heap allocation for whole_grain
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1375942181-5262-10-git-send-email-famz@redhat.com>
+Patchwork-id: 53074
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 09/11] vmdk: use heap allocation for whole_grain
+Bugzilla: 994804
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+We should never grow the stack beyond 1 MB, otherwise we'll fall off the
+end.  Thread stacks and coroutine stacks (1 MB) do not grow.
+get_cluster_offset() allocates a big stack offset, it will fail for big
+cluster images, change to heap allocated buffer.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit bf81507de38fdfa4cb6e9b46fb38691a25cb1499)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 21 +++++++++++++--------
+ 1 file changed, 13 insertions(+), 8 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 21 +++++++++++++--------
+ 1 file changed, 13 insertions(+), 8 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 6aa6ad9..38f4ef2 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -820,16 +820,17 @@ static int get_whole_cluster(BlockDriverState *bs,
+                 uint64_t offset,
+                 bool allocate)
+ {
+-    /* 128 sectors * 512 bytes each = grain size 64KB */
+-    uint8_t  whole_grain[extent->cluster_sectors * 512];
++    int ret = VMDK_OK;
++    uint8_t *whole_grain = NULL;
+ 
+     /* we will be here if it's first write on non-exist grain(cluster).
+      * try to read from parent image, if exist */
+     if (bs->backing_hd) {
+-        int ret;
+-
++        whole_grain =
++            qemu_blockalign(bs, extent->cluster_sectors << BDRV_SECTOR_BITS);
+         if (!vmdk_is_cid_valid(bs)) {
+-            return VMDK_ERROR;
++            ret = VMDK_ERROR;
++            goto exit;
+         }
+ 
+         /* floor offset to cluster */
+@@ -837,17 +838,21 @@ static int get_whole_cluster(BlockDriverState *bs,
+         ret = bdrv_read(bs->backing_hd, offset >> 9, whole_grain,
+                 extent->cluster_sectors);
+         if (ret < 0) {
+-            return VMDK_ERROR;
++            ret = VMDK_ERROR;
++            goto exit;
+         }
+ 
+         /* Write grain only into the active image */
+         ret = bdrv_write(extent->file, cluster_offset, whole_grain,
+                 extent->cluster_sectors);
+         if (ret < 0) {
+-            return VMDK_ERROR;
++            ret = VMDK_ERROR;
++            goto exit;
+         }
+     }
+-    return VMDK_OK;
++exit:
++    qemu_vfree(whole_grain);
++    return ret;
+ }
+ 
+ static int vmdk_L2update(VmdkExtent *extent, VmdkMetaData *m_data)
+-- 
+1.7.11.7
+

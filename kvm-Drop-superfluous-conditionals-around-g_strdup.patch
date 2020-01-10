@@ -1,0 +1,142 @@
+From 1106187aeb80a34d1fbb5dda4790a5d8bdac9f65 Mon Sep 17 00:00:00 2001
+Message-Id: <1106187aeb80a34d1fbb5dda4790a5d8bdac9f65.1430931597.git.jen@redhat.com>
+In-Reply-To: <167537380706cbdedae56a1c6445daa9e414396d.1430931597.git.jen@redhat.com>
+References: <167537380706cbdedae56a1c6445daa9e414396d.1430931597.git.jen@redhat.com>
+From: Markus Armbruster <armbru@redhat.com>
+Date: Wed, 6 May 2015 07:51:05 -0500
+Subject: [CHANGE 3/9] Drop superfluous conditionals around g_strdup()
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1430898671-22595-3-git-send-email-armbru@redhat.com>
+Patchwork-id: 65009
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 2/8] Drop superfluous conditionals around g_strdup()
+Bugzilla: 1205288
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Fam Zheng <famz@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Michael Tokarev <mjt@tls.msk.ru>
+(cherry picked from commit 24588100ab39afead7b9a0e9c61182a02320a1b9)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	hw/tpm/tpm_passthrough.c
+	util/uri.c
+
+Conflicts are trivial:
+* we don't have hw/tpm/tpm_passthrough
+* uri.c has been moved to util/ upstream
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ backends/rng-random.c |  6 +-----
+ uri.c                 | 43 +++++++++++++++++--------------------------
+ 2 files changed, 18 insertions(+), 31 deletions(-)
+
+diff --git a/backends/rng-random.c b/backends/rng-random.c
+index 6f617df..fa67f84 100644
+--- a/backends/rng-random.c
++++ b/backends/rng-random.c
+@@ -90,11 +90,7 @@ static char *rng_random_get_filename(Object *obj, Error **errp)
+ {
+     RndRandom *s = RNG_RANDOM(obj);
+ 
+-    if (s->filename) {
+-        return g_strdup(s->filename);
+-    }
+-
+-    return NULL;
++    return g_strdup(s->filename);
+ }
+ 
+ static void rng_random_set_filename(Object *obj, const char *filename,
+diff --git a/uri.c b/uri.c
+index f014647..9a609cf 100644
+--- a/uri.c
++++ b/uri.c
+@@ -1736,24 +1736,21 @@ uri_resolve(const char *uri, const char *base) {
+ 	goto done;
+     if ((ref->scheme == NULL) && (ref->path == NULL) &&
+ 	((ref->authority == NULL) && (ref->server == NULL))) {
+-	if (bas->scheme != NULL)
+-	    res->scheme = g_strdup(bas->scheme);
++        res->scheme = g_strdup(bas->scheme);
+ 	if (bas->authority != NULL)
+ 	    res->authority = g_strdup(bas->authority);
+ 	else if (bas->server != NULL) {
+-	    res->server = g_strdup(bas->server);
+-	    if (bas->user != NULL)
+-		res->user = g_strdup(bas->user);
+-	    res->port = bas->port;
++            res->server = g_strdup(bas->server);
++            res->user = g_strdup(bas->user);
++            res->port = bas->port;
+ 	}
+-	if (bas->path != NULL)
+-	    res->path = g_strdup(bas->path);
+-	if (ref->query != NULL)
++        res->path = g_strdup(bas->path);
++        if (ref->query != NULL) {
+ 	    res->query = g_strdup (ref->query);
+-	else if (bas->query != NULL)
+-	    res->query = g_strdup(bas->query);
+-	if (ref->fragment != NULL)
+-	    res->fragment = g_strdup(ref->fragment);
++        } else {
++            res->query = g_strdup(bas->query);
++        }
++        res->fragment = g_strdup(ref->fragment);
+ 	goto step_7;
+     }
+ 
+@@ -1767,13 +1764,10 @@ uri_resolve(const char *uri, const char *base) {
+ 	val = uri_to_string(ref);
+ 	goto done;
+     }
+-    if (bas->scheme != NULL)
+-	res->scheme = g_strdup(bas->scheme);
++    res->scheme = g_strdup(bas->scheme);
+ 
+-    if (ref->query != NULL)
+-	res->query = g_strdup(ref->query);
+-    if (ref->fragment != NULL)
+-	res->fragment = g_strdup(ref->fragment);
++    res->query = g_strdup(ref->query);
++    res->fragment = g_strdup(ref->fragment);
+ 
+     /*
+      * 4) If the authority component is defined, then the reference is a
+@@ -1787,20 +1781,17 @@ uri_resolve(const char *uri, const char *base) {
+ 	    res->authority = g_strdup(ref->authority);
+ 	else {
+ 	    res->server = g_strdup(ref->server);
+-	    if (ref->user != NULL)
+-		res->user = g_strdup(ref->user);
++            res->user = g_strdup(ref->user);
+             res->port = ref->port;
+ 	}
+-	if (ref->path != NULL)
+-	    res->path = g_strdup(ref->path);
++        res->path = g_strdup(ref->path);
+ 	goto step_7;
+     }
+     if (bas->authority != NULL)
+ 	res->authority = g_strdup(bas->authority);
+     else if (bas->server != NULL) {
+-	res->server = g_strdup(bas->server);
+-	if (bas->user != NULL)
+-	    res->user = g_strdup(bas->user);
++        res->server = g_strdup(bas->server);
++        res->user = g_strdup(bas->user);
+ 	res->port = bas->port;
+     }
+ 
+-- 
+2.1.0
+

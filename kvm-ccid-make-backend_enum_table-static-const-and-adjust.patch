@@ -1,0 +1,74 @@
+From 404fe356459740a0e0565eba5e9a1b5a84cac98a Mon Sep 17 00:00:00 2001
+Message-Id: <404fe356459740a0e0565eba5e9a1b5a84cac98a.1375955382.git.minovotn@redhat.com>
+In-Reply-To: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+References: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+From: Alon Levy <alevy@redhat.com>
+Date: Thu, 1 Aug 2013 11:53:21 +0200
+Subject: [PATCH 02/35] ccid: make backend_enum_table "static const" and
+ adjust users
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Alon Levy <alevy@redhat.com>
+Message-id: <1375358029-12968-3-git-send-email-alevy@redhat.com>
+Patchwork-id: 52892
+O-Subject: [RHEL-6.5 RHEL-6.4.z qemu-kvm v6 02/30] ccid: make backend_enum_table "static const" and adjust users
+Bugzilla: 917860
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+From: Jim Meyering <meyering@redhat.com>
+
+Signed-off-by: Jim Meyering <meyering@redhat.com>
+Reviewed-by: Alon Levy <alevy@redhat.com>
+Reviewed-by: Marc-André Lureau <mlureau@redhat.com>
+(cherry picked from commit d18c7117467aa5fae95a7c6eaffcf50618197e79)
+
+Conflicts:
+    hw/usb/ccid-card-emulated.c
+
+upstream: hw/ccid-card-emulated.c moved to hw/usb/ccid-card-emulated.c
+---
+ hw/ccid-card-emulated.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/ccid-card-emulated.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/hw/ccid-card-emulated.c b/hw/ccid-card-emulated.c
+index 4b0edfe..09ca18e 100644
+--- a/hw/ccid-card-emulated.c
++++ b/hw/ccid-card-emulated.c
+@@ -466,14 +466,14 @@ typedef struct EnumTable {
+     uint32_t value;
+ } EnumTable;
+ 
+-EnumTable backend_enum_table[] = {
++static const EnumTable backend_enum_table[] = {
+     {BACKEND_NSS_EMULATED_NAME, BACKEND_NSS_EMULATED},
+     {BACKEND_CERTIFICATES_NAME, BACKEND_CERTIFICATES},
+     {NULL, 0},
+ };
+ 
+ static uint32_t parse_enumeration(char *str,
+-    EnumTable *table, uint32_t not_found_value)
++    const EnumTable *table, uint32_t not_found_value)
+ {
+     uint32_t ret = not_found_value;
+ 
+@@ -495,7 +495,7 @@ static int emulated_initfn(CCIDCardState *base)
+     EmulatedState *card = DO_UPCAST(EmulatedState, base, base);
+     QemuThread thread_id;
+     VCardEmulError ret;
+-    EnumTable *ptable;
++    const EnumTable *ptable;
+ 
+     QSIMPLEQ_INIT(&card->event_list);
+     QSIMPLEQ_INIT(&card->guest_apdu_list);
+-- 
+1.7.11.7
+

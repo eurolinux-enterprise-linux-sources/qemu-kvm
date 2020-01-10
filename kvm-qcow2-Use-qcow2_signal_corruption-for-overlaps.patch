@@ -1,0 +1,127 @@
+From 52543f50ab9ca96d5b8b4197b1a6f5406432cb4b Mon Sep 17 00:00:00 2001
+Message-Id: <52543f50ab9ca96d5b8b4197b1a6f5406432cb4b.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:21:58 -0500
+Subject: [CHANGE 15/42] qcow2: Use qcow2_signal_corruption() for overlaps
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-16-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64484
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 15/39] qcow2: Use qcow2_signal_corruption() for overlaps
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1129892
+
+Use the new function in case of a failed overlap check.
+
+This changes output in case of corruption, so adapt iotest 060's
+reference output accordingly.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Benoît Canet <benoit.canet@nodalink.com>
+Message-id: 1409926039-29044-4-git-send-email-mreitz@redhat.com
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit adb435522b86b3fca2324cb8c94e17b55ae071f1)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	block/qcow2-refcount.c
+	tests/qemu-iotests/060.out
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-refcount.c     | 21 +++------------------
+ tests/qemu-iotests/060.out |  6 +++---
+ 2 files changed, 6 insertions(+), 21 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-refcount.c     | 21 +++------------------
+ tests/qemu-iotests/060.out |  6 +++---
+ 2 files changed, 6 insertions(+), 21 deletions(-)
+
+diff --git a/block/qcow2-refcount.c b/block/qcow2-refcount.c
+index fff0ddb..164e728 100644
+--- a/block/qcow2-refcount.c
++++ b/block/qcow2-refcount.c
+@@ -26,8 +26,6 @@
+ #include "block_int.h"
+ #include "block/qcow2.h"
+ #include "range.h"
+-#include "qemu-objects.h"
+-#include "monitor.h"
+ 
+ static int64_t alloc_clusters_noref(BlockDriverState *bs, uint64_t size);
+ static int QEMU_WARN_UNUSED_RESULT update_refcount(BlockDriverState *bs,
+@@ -1637,24 +1635,11 @@ int qcow2_pre_write_overlap_check(BlockDriverState *bs, int ign, int64_t offset,
+         return ret;
+     } else if (ret > 0) {
+         int metadata_ol_bitnr = ffs(ret) - 1;
+-        char *message;
+-        QObject *data;
+-
+         assert(metadata_ol_bitnr < QCOW2_OL_MAX_BITNR);
+ 
+-        fprintf(stderr, "qcow2: Preventing invalid write on metadata (overlaps "
+-                "with %s); please use qemu-img check -r.\n",
+-                metadata_ol_names[metadata_ol_bitnr]);
+-        message = g_strdup_printf("Prevented %s overwrite",
+-                metadata_ol_names[metadata_ol_bitnr]);
+-        data = qobject_from_jsonf("{ 'device': %s, 'msg': %s, 'offset': %"
+-                PRId64 ", 'size': %" PRId64 ", 'fatal': true }",
+-                bs->device_name, message, offset, size);
+-        monitor_protocol_event(QEVENT_BLOCK_IMAGE_CORRUPTED, data);
+-        g_free(message);
+-        qobject_decref(data);
+-
+-        bs->drv = NULL; /* make BDS unusable */
++        qcow2_signal_corruption(bs, true, offset, size, "Preventing invalid "
++                                "write on metadata (overlaps with %s)",
++                                metadata_ol_names[metadata_ol_bitnr]);
+         return -EIO;
+     }
+ 
+diff --git a/tests/qemu-iotests/060.out b/tests/qemu-iotests/060.out
+index 427e0d7..734034f 100644
+--- a/tests/qemu-iotests/060.out
++++ b/tests/qemu-iotests/060.out
+@@ -8,7 +8,7 @@ ERROR cluster 3 refcount=1 reference=3
+ 1 errors were found on the image.
+ Data may be corrupted, or further writes to the image may corrupt it.
+ incompatible_features     0x0
+-qcow2: Preventing invalid write on metadata (overlaps with active L1 table); please use qemu-img check -r.
++qcow2: Image is corrupt (further access will be prevented): Preventing invalid write on metadata (overlaps with active L1 table); please use qemu-img check -r. Further corruption events will be suppressed
+ write failed: Input/output error
+ incompatible_features     0x0
+ read 512/512 bytes at offset 0
+@@ -25,7 +25,7 @@ ERROR cluster 2 refcount=1 reference=2
+ 2 errors were found on the image.
+ Data may be corrupted, or further writes to the image may corrupt it.
+ incompatible_features     0x0
+-qcow2: Preventing invalid write on metadata (overlaps with refcount block); please use qemu-img check -r.
++qcow2: Image is corrupt (further access will be prevented): Preventing invalid write on metadata (overlaps with refcount block); please use qemu-img check -r. Further corruption events will be suppressed
+ write failed: Input/output error
+ incompatible_features     0x0
+ Repairing refcount block 0 refcount=2
+@@ -46,6 +46,6 @@ incompatible_features     0x0
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
+ wrote 65536/65536 bytes at offset 0
+ 64 KiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-qcow2: Preventing invalid write on metadata (overlaps with qcow2_header); please use qemu-img check -r.
++qcow2: Image is corrupt (further access will be prevented): Preventing invalid write on metadata (overlaps with qcow2_header); please use qemu-img check -r. Further corruption events will be suppressed
+ write failed: Input/output error
+ *** done
+-- 
+2.1.0
+

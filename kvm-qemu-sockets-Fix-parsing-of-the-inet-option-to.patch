@@ -1,0 +1,54 @@
+From 632fcebd1a5ed2f03f7353b0bac10f644b40c174 Mon Sep 17 00:00:00 2001
+Message-Id: <632fcebd1a5ed2f03f7353b0bac10f644b40c174.1374754301.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:35 +0200
+Subject: [PATCH 24/65] qemu-sockets: Fix parsing of the inet option 'to'.
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-25-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52166
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 24/65] qemu-sockets: Fix parsing of the inet option 'to'.
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Anthony PERARD <anthony.perard@citrix.com>
+
+Having a qemu command line argument like "-vnc 127.0.0.1:0,to=99" is broken.
+This have been break with commit 879e45c72da1569e07fbbc6a1aa2a708ea796044.
+
+Signed-off-by: Anthony PERARD <anthony.perard@citrix.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: malc <av1474@comtv.ru>
+(cherry picked from commit 1ccbc2851282564308f790753d7158487b6af8e2)
+---
+ qemu-sockets.c |    5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-sockets.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/qemu-sockets.c b/qemu-sockets.c
+index 6078aff..afd7e1c 100644
+--- a/qemu-sockets.c
++++ b/qemu-sockets.c
+@@ -532,8 +532,9 @@ static InetSocketAddress *inet_parse(const char *str, Error **errp)
+     optstr = str + pos;
+     h = strstr(optstr, ",to=");
+     if (h) {
+-        if (1 != sscanf(str, "%d%n", &to, &pos) ||
+-            (str[pos] != '\0' && str[pos] != ',')) {
++        h += 4;
++        if (sscanf(h, "%d%n", &to, &pos) != 1 ||
++            (h[pos] != '\0' && h[pos] != ',')) {
+             error_setg(errp, "error parsing to= argument");
+             goto fail;
+         }
+-- 
+1.7.11.7
+

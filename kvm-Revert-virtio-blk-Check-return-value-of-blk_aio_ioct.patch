@@ -1,0 +1,46 @@
+From 67fe78a504035b7baf527bbd4726c75b0a1f8ba4 Mon Sep 17 00:00:00 2001
+Message-Id: <67fe78a504035b7baf527bbd4726c75b0a1f8ba4.1429847625.git.jen@redhat.com>
+From: "Jeff E. Nelson" <jen@redhat.com>
+Date: Thu, 23 Apr 2015 17:35:42 -0500
+Subject: [CHANGE 1/7] Revert: virtio-blk: Check return value of blk_aio_ioctl
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+Patch was incorrectly applied from a superseded series.
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/virtio-blk.c | 10 ++--------
+ 1 file changed, 2 insertions(+), 8 deletions(-)
+
+diff --git a/hw/virtio-blk.c b/hw/virtio-blk.c
+index 999deef..2e01ceb 100644
+--- a/hw/virtio-blk.c
++++ b/hw/virtio-blk.c
+@@ -199,7 +199,6 @@ static void virtio_blk_handle_scsi(VirtIOBlockReq *req)
+     int size = 0;
+     int i;
+     VirtIOBlockIoctlReq *ioctl_req;
+-    BlockDriverAIOCB *acb;
+     VirtQueueElement *elem = &req->elem;
+ 
+     if ((req->dev->vdev.guest_features & (1 << VIRTIO_BLK_F_SCSI)) == 0) {
+@@ -279,13 +278,8 @@ static void virtio_blk_handle_scsi(VirtIOBlockReq *req)
+     ioctl_req->hdr.sbp = req->elem.in_sg[req->elem.in_num - 3].iov_base;
+     ioctl_req->hdr.mx_sb_len = req->elem.in_sg[req->elem.in_num - 3].iov_len;
+ 
+-    acb = bdrv_aio_ioctl(req->dev->bs, SG_IO, &ioctl_req->hdr,
+-                         virtio_blk_ioctl_complete, ioctl_req);
+-    if (!acb) {
+-        g_free(ioctl_req);
+-        virtio_blk_req_complete(req, VIRTIO_BLK_S_UNSUPP);
+-        qemu_free(req);
+-    }
++    bdrv_aio_ioctl(req->dev->bs, SG_IO, &ioctl_req->hdr,
++                   virtio_blk_ioctl_complete, ioctl_req);
+ }
+ #else
+ static void virtio_blk_handle_scsi(VirtIOBlockReq *req)
+-- 
+2.1.0
+

@@ -1,0 +1,51 @@
+From f2685e642076995f39dc4459b9e8190c09a65ed7 Mon Sep 17 00:00:00 2001
+Message-Id: <f2685e642076995f39dc4459b9e8190c09a65ed7.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:44 +0200
+Subject: [PATCH 29/47] vmdk: vmdk_read_cid returns garbage if p_name is NULL
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-30-git-send-email-famz@redhat.com>
+Patchwork-id: 51465
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 29/47] vmdk: vmdk_read_cid returns garbage if p_name is NULL
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Pavel Borzenkov <pavel.borzenkov@gmail.com>
+
+Spotted by Clang Analyzer
+
+Signed-off-by: Pavel Borzenkov <pavel.borzenkov@gmail.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+(cherry picked from commit 8379e46d1fd681b8aa4714382e2cdab05e5d0575)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 757363b..78230bd 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -208,7 +208,7 @@ static void vmdk_free_last_extent(BlockDriverState *bs)
+ static uint32_t vmdk_read_cid(BlockDriverState *bs, int parent)
+ {
+     char desc[DESC_SIZE];
+-    uint32_t cid;
++    uint32_t cid = 0xffffffff;
+     const char *p_name, *cid_str;
+     size_t cid_str_size;
+     BDRVVmdkState *s = bs->opaque;
+-- 
+1.7.11.7
+

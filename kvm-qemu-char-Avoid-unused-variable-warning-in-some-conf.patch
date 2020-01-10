@@ -1,0 +1,81 @@
+From 7888f5ede28ee1a8386b74d19a8e1b745769a6bb Mon Sep 17 00:00:00 2001
+Message-Id: <7888f5ede28ee1a8386b74d19a8e1b745769a6bb.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:50 +0200
+Subject: [PATCH 39/65] qemu-char: Avoid unused variable warning in some
+ configs
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-40-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52124
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 39/65] qemu-char: Avoid unused variable warning in some configs
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Peter Maydell <peter.maydell@linaro.org>
+
+Avoid unused variable warnings:
+qemu-char.c: In function 'qmp_chardev_open_port':
+qemu-char.c:3132: warning: unused variable 'fd'
+qemu-char.c:3132: warning: unused variable 'flags'
+
+in configurations with neither HAVE_CHARDEV_TTY nor
+HAVE_CHARDEV_PARPORT set.
+
+Signed-off-by: Peter Maydell <peter.maydell@linaro.org>
+Signed-off-by: Blue Swirl <blauwirbel@gmail.com>
+(cherry picked from commit 390999910bf1b1be59e04a0314867f4dea7a28f3)
+---
+ qemu-char.c |    8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index f8a11a5..3bcf367 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -3095,11 +3095,11 @@ static CharDriverState *qmp_chardev_open_file(ChardevFile *file, Error **errp)
+ 
+ static CharDriverState *qmp_chardev_open_port(ChardevPort *port, Error **errp)
+ {
+-    int flags, fd;
+-
+     switch (port->type) {
+ #ifdef HAVE_CHARDEV_TTY
+     case CHARDEV_PORT_KIND_SERIAL:
++    {
++        int flags, fd;
+         flags = O_RDWR;
+         fd = qmp_chardev_open_file_source(port->device, flags, errp);
+         if (error_is_set(errp)) {
+@@ -3107,15 +3107,19 @@ static CharDriverState *qmp_chardev_open_port(ChardevPort *port, Error **errp)
+         }
+         socket_set_nonblock(fd);
+         return qemu_chr_open_tty_fd(fd);
++    }
+ #endif
+ #ifdef HAVE_CHARDEV_PARPORT
+     case CHARDEV_PORT_KIND_PARALLEL:
++    {
++        int flags, fd;
+         flags = O_RDWR;
+         fd = qmp_chardev_open_file_source(port->device, flags, errp);
+         if (error_is_set(errp)) {
+             return NULL;
+         }
+         return qemu_chr_open_pp_fd(fd);
++    }
+ #endif
+     default:
+         error_setg(errp, "unknown chardev port (%d)", port->type);
+-- 
+1.7.11.7
+

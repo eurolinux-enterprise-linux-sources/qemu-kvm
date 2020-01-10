@@ -1,0 +1,47 @@
+From 75cd8ba19e2de6ffa3943918302f41466e2d7c4d Mon Sep 17 00:00:00 2001
+From: Amos Kong <akong@redhat.com>
+Date: Tue, 10 Sep 2013 06:07:59 +0200
+Subject: [PATCH 17/39] virtio: use unsigned int for counting bytes in vq
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1378793288-3371-18-git-send-email-akong@redhat.com>
+Patchwork-id: 54252
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v3 17/26] virtio: use unsigned int for counting bytes in vq
+Bugzilla: 786407
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Amit Shah <amit.shah@redhat.com>
+
+The virtqueue_avail_bytes() function counts bytes in an int.  Use an
+unsigned int instead.
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+(cherry picked from commit 385ce95d9d060f20870402c8b2b503d0b6ab8af0)
+---
+ hw/virtio.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ hw/virtio.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/hw/virtio.c b/hw/virtio.c
+index 84c717d..4060226 100644
+--- a/hw/virtio.c
++++ b/hw/virtio.c
+@@ -342,7 +342,7 @@ static unsigned virtqueue_next_desc(target_phys_addr_t desc_pa,
+ int virtqueue_avail_bytes(VirtQueue *vq, int in_bytes, int out_bytes)
+ {
+     unsigned int idx;
+-    int total_bufs, in_total, out_total;
++    unsigned int total_bufs, in_total, out_total;
+ 
+     idx = vq->last_avail_idx;
+ 
+-- 
+1.7.1
+

@@ -1,0 +1,100 @@
+From e6e827eec858c3abc98ed8d69d6e63af65a3e90b Mon Sep 17 00:00:00 2001
+Message-Id: <e6e827eec858c3abc98ed8d69d6e63af65a3e90b.1379425497.git.minovotn@redhat.com>
+In-Reply-To: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+References: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Fri, 6 Sep 2013 18:12:33 +0200
+Subject: [PATCH 13/25] block: remove
+ bdrv_is_allocated_above/bdrv_co_is_allocated_above
+ distinction
+
+Now that bdrv_is_allocated detects coroutine context, the two can
+use the same code.
+
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 4f5786376e41980e78af45a123c56ebdc5295099)
+
+[RHEL: didn't have a prototype for bdrv_is_allocated_above, add it]
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.c        | 8 ++++----
+ block.h        | 8 ++++----
+ block/commit.c | 6 +++---
+ block/stream.c | 4 ++--
+ 4 files changed, 13 insertions(+), 13 deletions(-)
+
+diff --git a/block.c b/block.c
+index 0795071..ba20499 100644
+--- a/block.c
++++ b/block.c
+@@ -2819,10 +2819,10 @@ int bdrv_is_allocated(BlockDriverState *bs, int64_t sector_num, int nb_sectors,
+  *  allocated/unallocated state.
+  *
+  */
+-int coroutine_fn bdrv_co_is_allocated_above(BlockDriverState *top,
+-                                            BlockDriverState *base,
+-                                            int64_t sector_num,
+-                                            int nb_sectors, int *pnum)
++int bdrv_is_allocated_above(BlockDriverState *top,
++                            BlockDriverState *base,
++                            int64_t sector_num,
++                            int nb_sectors, int *pnum)
+ {
+     BlockDriverState *intermediate;
+     int ret, n = nb_sectors;
+diff --git a/block.h b/block.h
+index ac7a0df..741a54a 100644
+--- a/block.h
++++ b/block.h
+@@ -192,10 +192,10 @@ int coroutine_fn bdrv_co_writev(BlockDriverState *bs, int64_t sector_num,
+  */
+ int coroutine_fn bdrv_co_write_zeroes(BlockDriverState *bs, int64_t sector_num,
+     int nb_sectors);
+-int coroutine_fn bdrv_co_is_allocated_above(BlockDriverState *top,
+-                                            BlockDriverState *base,
+-                                            int64_t sector_num,
+-                                            int nb_sectors, int *pnum);
++int coroutine_fn bdrv_is_allocated_above(BlockDriverState *top,
++                                         BlockDriverState *base,
++                                         int64_t sector_num,
++                                         int nb_sectors, int *pnum);
+ BlockDriverState *bdrv_find_backing_image(BlockDriverState *bs,
+     const char *backing_file);
+ int bdrv_truncate(BlockDriverState *bs, int64_t offset);
+diff --git a/block/commit.c b/block/commit.c
+index 26eafcc..6b3c6d9 100644
+--- a/block/commit.c
++++ b/block/commit.c
+@@ -135,9 +135,9 @@ wait:
+             break;
+         }
+         /* Copy if allocated above the base */
+-        ret = bdrv_co_is_allocated_above(top, base, sector_num,
+-                                         COMMIT_BUFFER_SIZE / BDRV_SECTOR_SIZE,
+-                                         &n);
++        ret = bdrv_is_allocated_above(top, base, sector_num,
++                                      COMMIT_BUFFER_SIZE / BDRV_SECTOR_SIZE,
++                                      &n);
+         copy = (ret == 1);
+         trace_commit_one_iteration(s, sector_num, n, ret);
+         if (copy) {
+diff --git a/block/stream.c b/block/stream.c
+index ae27f11..21542e3 100644
+--- a/block/stream.c
++++ b/block/stream.c
+@@ -147,8 +147,8 @@ wait:
+         } else {
+             /* Copy if allocated in the intermediate images.  Limit to the
+              * known-unallocated area [sector_num, sector_num+n).  */
+-            ret = bdrv_co_is_allocated_above(bs->backing_hd, base,
+-                                             sector_num, n, &n);
++            ret = bdrv_is_allocated_above(bs->backing_hd, base,
++                                          sector_num, n, &n);
+ 
+             /* Finish early if end of backing file has been reached */
+             if (ret == 0 && n == 0) {
+-- 
+1.7.11.7
+

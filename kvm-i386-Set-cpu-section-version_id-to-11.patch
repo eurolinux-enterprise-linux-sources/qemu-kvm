@@ -1,0 +1,85 @@
+From d5845fe1bae9aa46aeacf4fd062a7d1ffc5db939 Mon Sep 17 00:00:00 2001
+From: Eduardo Habkost <ehabkost@redhat.com>
+Date: Mon, 14 Oct 2013 19:42:54 +0200
+Subject: [PATCH 3/4] i386: Set "cpu" section version_id to 11
+
+RH-Author: Eduardo Habkost <ehabkost@redhat.com>
+Message-id: <1381779774-3554-4-git-send-email-ehabkost@redhat.com>
+Patchwork-id: 54903
+O-Subject: [qemu-kvm RHEL-6 PATCH v2 3/3] i386: Set "cpu" section version_id to 11
+Bugzilla: 1016736
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Orit Wasserman <owasserm@redhat.com>
+
+Bugzilla: 1016736
+Scratch build: https://brewweb.devel.redhat.com/taskinfo?taskID=6415966
+Upstream status; not applicable
+
+commit ceee3a15c80c034b03e834e89c9244a0323081ae removed the xsave fields
+from the "cpu" section but kept CPU_SAVE_VERSION as 12.
+
+As a consequence, v12 format of the "cpu" section is incompatible with
+upstream v12 format. The good news is that the data is still in the v11
+format, so this patch sets vmstate_cpu.version_id to 11 and
+max_version_id to 12 so we keep accepting the old upstream-incompatible
+v12 format.
+
+Signed-off-by: Eduardo Habkost <ehabkost@redhat.com>
+---
+ exec.c                | 4 ++--
+ target-i386/cpu.h     | 3 ++-
+ target-i386/machine.c | 1 +
+ 3 files changed, 5 insertions(+), 3 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ exec.c                |    4 ++--
+ target-i386/cpu.h     |    3 ++-
+ target-i386/machine.c |    1 +
+ 3 files changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/exec.c b/exec.c
+index f970450..141e24a 100644
+--- a/exec.c
++++ b/exec.c
+@@ -601,8 +601,8 @@ void cpu_exec_init(CPUState *env)
+ #endif
+ #if defined(CPU_SAVE_VERSION) && !defined(CONFIG_USER_ONLY)
+     vmstate_register(NULL, cpu_index, &vmstate_cpu_common, env);
+-    register_savevm(NULL, "cpu", cpu_index, CPU_SAVE_VERSION,
+-                    cpu_save, cpu_load, env);
++    register_savevm_max_version(NULL, "cpu", cpu_index, CPU_SAVE_VERSION,
++                                CPU_SAVE_MAX_VERSION, cpu_save, cpu_load, env);
+ #endif
+ }
+ 
+diff --git a/target-i386/cpu.h b/target-i386/cpu.h
+index d5110ee..25464e8 100644
+--- a/target-i386/cpu.h
++++ b/target-i386/cpu.h
+@@ -971,7 +971,8 @@ uint64_t cpu_get_tsc(CPUX86State *env);
+ #define cpu_list_id x86_cpu_list
+ #define cpudef_setup	x86_cpudef_setup
+ 
+-#define CPU_SAVE_VERSION 12
++#define CPU_SAVE_VERSION     11
++#define CPU_SAVE_MAX_VERSION 12
+ 
+ /* MMU modes definitions */
+ #define MMU_MODE0_SUFFIX _kernel
+diff --git a/target-i386/machine.c b/target-i386/machine.c
+index 3e8d357..0dc95a4 100644
+--- a/target-i386/machine.c
++++ b/target-i386/machine.c
+@@ -530,6 +530,7 @@ static const VMStateDescription vmstate_steal_time_msr = {
+ static const VMStateDescription vmstate_cpu = {
+     .name = "cpu",
+     .version_id = CPU_SAVE_VERSION,
++    .max_version_id = CPU_SAVE_MAX_VERSION,
+     .minimum_version_id = 3,
+     .minimum_version_id_old = 3,
+     .pre_save = cpu_pre_save,
+-- 
+1.7.1
+

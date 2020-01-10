@@ -1,0 +1,56 @@
+From c12cdb2e6d4c10564266623416f041853ba8fd00 Mon Sep 17 00:00:00 2001
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Tue, 8 Oct 2013 15:15:26 +0200
+Subject: [PATCH 2/2] scsi: Fix data length == SCSI_SENSE_BUF_SIZE
+
+RH-Author: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: <1381245326-404-1-git-send-email-pbonzini@redhat.com>
+Patchwork-id: 54780
+O-Subject: [RHEL 6.5 qemu-kvm PATCH] scsi: Fix data length == SCSI_SENSE_BUF_SIZE
+Bugzilla: 956929
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+From: Christian Hoff <christian.hoff@de.ibm.com>
+
+Bugzilla: 956929
+
+Brew build: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=6385062
+
+Fix the edge case where the sense data length is exactly the same
+as SCSI_SENSE_BUF_SIZE.
+This makes SCSI requests work that use all of the available 95 byte
+sense data.
+
+[Really should be "all of the available 96 byte sense data". - Paolo]
+
+Signed-off-by: Christian Hoff <christian.hoff@de.ibm.com>
+Signed-off-by: Christian Borntraeger <borntraeger@de.ibm.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 335f560f9c7b63ede973d7b9712438f39ee2df61)
+---
+ hw/scsi-bus.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ hw/scsi-bus.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/hw/scsi-bus.c b/hw/scsi-bus.c
+index d6ffc05..6a93d11 100644
+--- a/hw/scsi-bus.c
++++ b/hw/scsi-bus.c
+@@ -1408,7 +1408,7 @@ void scsi_req_complete(SCSIRequest *req, int status)
+     assert(req->status == -1);
+     req->status = status;
+ 
+-    assert(req->sense_len < sizeof(req->sense));
++    assert(req->sense_len <= sizeof(req->sense));
+     if (status == GOOD) {
+         req->sense_len = 0;
+     }
+-- 
+1.7.1
+

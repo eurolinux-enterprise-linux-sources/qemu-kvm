@@ -1,0 +1,157 @@
+From ed0fc19c4bbb18f9ad49594a3841e26397f1bbf7 Mon Sep 17 00:00:00 2001
+Message-Id: <ed0fc19c4bbb18f9ad49594a3841e26397f1bbf7.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:41 +0200
+Subject: [PATCH 30/65] chardev: add error reporting for
+ qemu_chr_new_from_opts
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-31-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52153
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 30/65] chardev: add error reporting for qemu_chr_new_from_opts
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit bd2d80b2b75b36955d536564ceb593f5bdae2f12)
+
+Conflicts:
+
+	include/char/char.h
+
+[ rhel6: zap trailing newline from error_setg calls,
+         see also upstream commit 312fd5f2 ]
+---
+ qemu-char.c |   24 +++++++++++++++---------
+ qemu-char.h |    4 +++-
+ vl.c        |    9 ++++++---
+ 3 files changed, 24 insertions(+), 13 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 24 +++++++++++++++---------
+ qemu-char.h |  4 +++-
+ vl.c        |  9 ++++++---
+ 3 files changed, 24 insertions(+), 13 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index ece595b..8862aec 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -2796,19 +2796,20 @@ static const struct {
+ };
+ 
+ CharDriverState *qemu_chr_new_from_opts(QemuOpts *opts,
+-                                    void (*init)(struct CharDriverState *s))
++                                    void (*init)(struct CharDriverState *s),
++                                    Error **errp)
+ {
+     CharDriverState *chr;
+     int i;
+ 
+     if (qemu_opts_id(opts) == NULL) {
+-        fprintf(stderr, "chardev: no id specified\n");
++        error_setg(errp, "chardev: no id specified");
+         return NULL;
+     }
+ 
+     if (qemu_opt_get(opts, "backend") == NULL) {
+-        fprintf(stderr, "chardev: \"%s\" missing backend\n",
+-                qemu_opts_id(opts));
++        error_setg(errp, "chardev: \"%s\" missing backend",
++                   qemu_opts_id(opts));
+         return NULL;
+     }
+     for (i = 0; i < ARRAY_SIZE(backend_table); i++) {
+@@ -2816,15 +2817,15 @@ CharDriverState *qemu_chr_new_from_opts(QemuOpts *opts,
+             break;
+     }
+     if (i == ARRAY_SIZE(backend_table)) {
+-        fprintf(stderr, "chardev: backend \"%s\" not found\n",
+-                qemu_opt_get(opts, "backend"));
++        error_setg(errp, "chardev: backend \"%s\" not found",
++                   qemu_opt_get(opts, "backend"));
+         return NULL;
+     }
+ 
+     chr = backend_table[i].open(opts);
+     if (!chr) {
+-        fprintf(stderr, "chardev: opening backend \"%s\" failed\n",
+-                qemu_opt_get(opts, "backend"));
++        error_setg(errp, "chardev: opening backend \"%s\" failed",
++                   qemu_opt_get(opts, "backend"));
+         return NULL;
+     }
+ 
+@@ -2854,6 +2855,7 @@ CharDriverState *qemu_chr_new(const char *label, const char *filename, void (*in
+     const char *p;
+     CharDriverState *chr;
+     QemuOpts *opts;
++    Error *err = NULL;
+ 
+     if (strstart(filename, "chardev:", &p)) {
+         return qemu_chr_find(p);
+@@ -2863,7 +2865,11 @@ CharDriverState *qemu_chr_new(const char *label, const char *filename, void (*in
+     if (!opts)
+         return NULL;
+ 
+-    chr = qemu_chr_new_from_opts(opts, init);
++    chr = qemu_chr_new_from_opts(opts, init, &err);
++    if (error_is_set(&err)) {
++        fprintf(stderr, "%s\n", error_get_pretty(err));
++        error_free(err);
++    }
+     if (chr && qemu_opt_get_bool(opts, "mux", 0)) {
+         monitor_init(chr, MONITOR_USE_READLINE);
+     }
+diff --git a/qemu-char.h b/qemu-char.h
+index d0b5691..25348dd 100644
+--- a/qemu-char.h
++++ b/qemu-char.h
+@@ -7,6 +7,7 @@
+ #include "qemu-config.h"
+ #include "qobject.h"
+ #include "qstring.h"
++#include "qerror.h"
+ 
+ /* character device */
+ 
+@@ -89,7 +90,8 @@ QemuOpts *qemu_chr_parse_compat(const char *label, const char *filename);
+  * Returns: a new character backend
+  */
+ CharDriverState *qemu_chr_new_from_opts(QemuOpts *opts,
+-                                    void (*init)(struct CharDriverState *s));
++                                    void (*init)(struct CharDriverState *s),
++                                    Error **errp);
+ 
+ /**
+  * @qemu_chr_new:
+diff --git a/vl.c b/vl.c
+index 657d483..bc3bf93 100644
+--- a/vl.c
++++ b/vl.c
+@@ -4783,11 +4783,14 @@ static int device_init_func(QemuOpts *opts, void *opaque)
+ 
+ static int chardev_init_func(QemuOpts *opts, void *opaque)
+ {
+-    CharDriverState *chr;
++    Error *local_err = NULL;
+ 
+-    chr = qemu_chr_new_from_opts(opts, NULL);
+-    if (!chr)
++    qemu_chr_new_from_opts(opts, NULL, &local_err);
++    if (error_is_set(&local_err)) {
++        fprintf(stderr, "%s\n", error_get_pretty(local_err));
++        error_free(local_err);
+         return -1;
++    }
+     return 0;
+ }
+ 
+-- 
+1.7.11.7
+

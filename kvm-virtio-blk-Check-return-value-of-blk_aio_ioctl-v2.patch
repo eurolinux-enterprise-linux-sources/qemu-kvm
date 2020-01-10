@@ -1,0 +1,77 @@
+From c167dfdfbd4a21d7747c8bdcc8c774a1aca44416 Mon Sep 17 00:00:00 2001
+Message-Id: <c167dfdfbd4a21d7747c8bdcc8c774a1aca44416.1429847625.git.jen@redhat.com>
+In-Reply-To: <67fe78a504035b7baf527bbd4726c75b0a1f8ba4.1429847625.git.jen@redhat.com>
+References: <67fe78a504035b7baf527bbd4726c75b0a1f8ba4.1429847625.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Wed, 22 Apr 2015 03:17:56 -0500
+Subject: [CHANGE 7/7] virtio-blk: Check return value of blk_aio_ioctl
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429672676-18444-6-git-send-email-famz@redhat.com>
+Patchwork-id: 64865
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v4 5/5] virtio-blk: Check return value of blk_aio_ioctl
+Bugzilla: 1006871
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+
+Since commit 1dc936aa84 (virtio-blk: Use blk_aio_ioctl) we silently lose
+the request if blk_aio_ioctl returns NULL (not implemented).
+
+Fix it by directly returning VIRTIO_BLK_S_UNSUPP as we used to do.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+[ kwolf: Fixed build error on win32 ]
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit a209f4615c6853a226e847810b6c607c71b6a046)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	hw/block/virtio-blk.c
+Downstream file is hw/virtio-blk.c, applied manually.
+---
+ hw/virtio-blk.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/virtio-blk.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/hw/virtio-blk.c b/hw/virtio-blk.c
+index fd2705a..773dbc6 100644
+--- a/hw/virtio-blk.c
++++ b/hw/virtio-blk.c
+@@ -202,6 +202,7 @@ static void virtio_blk_handle_scsi(VirtIOBlockReq *req)
+     int status = VIRTIO_BLK_S_OK;
+     int i;
+     VirtIOBlockIoctlReq *ioctl_req;
++    BlockDriverAIOCB *acb;
+     VirtQueueElement *elem = &req->elem;
+ 
+ 
+@@ -280,8 +281,13 @@ static void virtio_blk_handle_scsi(VirtIOBlockReq *req)
+     ioctl_req->hdr.sbp = elem->in_sg[elem->in_num - 3].iov_base;
+     ioctl_req->hdr.mx_sb_len = elem->in_sg[elem->in_num - 3].iov_len;
+ 
+-    bdrv_aio_ioctl(req->dev->bs, SG_IO, &ioctl_req->hdr,
+-                   virtio_blk_ioctl_complete, ioctl_req);
++    acb = bdrv_aio_ioctl(req->dev->bs, SG_IO, &ioctl_req->hdr,
++                         virtio_blk_ioctl_complete, ioctl_req);
++    if (!acb) {
++        g_free(ioctl_req);
++        status = VIRTIO_BLK_S_UNSUPP;
++        goto fail;
++    }
+     return;
+ fail:
+     /* Just put anything nonzero so that the ioctl fails in the guest.  */
+-- 
+2.1.0
+

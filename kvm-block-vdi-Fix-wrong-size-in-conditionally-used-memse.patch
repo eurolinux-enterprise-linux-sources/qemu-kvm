@@ -1,0 +1,66 @@
+From 809fa84661ad6dd753d7b1ad25505291a11c9999 Mon Sep 17 00:00:00 2001
+Message-Id: <809fa84661ad6dd753d7b1ad25505291a11c9999.1376492227.git.minovotn@redhat.com>
+In-Reply-To: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+References: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+From: Asias He <asias@redhat.com>
+Date: Wed, 14 Aug 2013 10:24:17 +0200
+Subject: [PATCH 16/22] block/vdi: Fix wrong size in conditionally used
+ memset, memcmp
+
+RH-Author: Asias He <asias@redhat.com>
+Message-id: <1376475863-27929-12-git-send-email-asias@redhat.com>
+Patchwork-id: 53398
+O-Subject: [RHEL6.5 qemu-kvm PATCH v4 11/17] block/vdi: Fix wrong size in conditionally used memset, memcmp
+Bugzilla: 848070
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: Stefan Weil <weil@mail.berlios.de>
+
+Error report from cppcheck:
+block/vdi.c:122: error: Using sizeof for array given as function argument returns the size of pointer.
+block/vdi.c:128: error: Using sizeof for array given as function argument returns the size of pointer.
+
+Fix both by setting the correct size.
+
+The buggy code is only used when QEMU is build without uuid support.
+The bug is not critical, so there is no urgent need to apply it to
+old versions of QEMU.
+
+Cc: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Stefan Weil <weil@mail.berlios.de>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 4f3669ea5bd73ade0dce5f1155cb9ad9788fd54c)
+---
+ block/vdi.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vdi.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/block/vdi.c b/block/vdi.c
+index d4abfd3..d3170b8 100644
+--- a/block/vdi.c
++++ b/block/vdi.c
+@@ -120,13 +120,13 @@ void uuid_unparse(const uuid_t uu, char *out);
+ #if !defined(CONFIG_UUID)
+ void uuid_generate(uuid_t out)
+ {
+-    memset(out, 0, sizeof(out));
++    memset(out, 0, sizeof(uuid_t));
+ }
+ 
+ int uuid_is_null(const uuid_t uu)
+ {
+     uuid_t null_uuid = { 0 };
+-    return memcmp(uu, null_uuid, sizeof(uu)) == 0;
++    return memcmp(uu, null_uuid, sizeof(uuid_t)) == 0;
+ }
+ 
+ void uuid_unparse(const uuid_t uu, char *out)
+-- 
+1.7.11.7
+

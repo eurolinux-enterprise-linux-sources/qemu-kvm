@@ -1,0 +1,176 @@
+From 47f2592aec52bb32d878eee578ff81c4c46cc2ec Mon Sep 17 00:00:00 2001
+Message-Id: <47f2592aec52bb32d878eee578ff81c4c46cc2ec.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:27:35 +0200
+Subject: [PATCH 070/114] reimplement error_setg() and error_setg_errno() for
+ RHEL-6
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-13-git-send-email-lersek@redhat.com>
+Patchwork-id: 51111
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 12/56] reimplement error_setg() and error_setg_errno() for RHEL-6
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Recent upstream code uses error_setg[_errno]() widely, thus having them in
+RHEL-6 should ease backporting of code that reports errors. Unfortunately,
+in order to backport the ErrorClass-based generic error reporting from
+upstream, the following commits (and their fallout) would be necessary:
+
+  d3608b7 Error: Fix build when qemu-common.h is not included
+  dcafd32 qapi-schema: add ErrorClass enum
+  13f59ae error, qerror: add ErrorClass argument to error functions
+  0f32cf6 qerror: add proper ErrorClass value for QERR_ macros
+  75d789f error: add error_setg()
+  680d16d error: add error_set_errno and error_setg_errno
+
+Introduce a flat QERR format instead, and wrap error_setg() and
+error_setg_errno() around that.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ v2: move this patch before "qemu-sockets: add Error ** to all
+ functions", and add source code comment about being RHEL-6 compat code.
+
+ error.h  |   15 ++++++++++++---
+ qerror.h |    3 +++
+ error.c  |   43 +++++++++++++++++++++++++++++++++++++++++++
+ qerror.c |    4 ++++
+ 4 files changed, 62 insertions(+), 3 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ error.c  | 43 +++++++++++++++++++++++++++++++++++++++++++
+ error.h  | 15 ++++++++++++---
+ qerror.c |  4 ++++
+ qerror.h |  3 +++
+ 4 files changed, 62 insertions(+), 3 deletions(-)
+
+diff --git a/error.c b/error.c
+index acf54f3..50b1290 100644
+--- a/error.c
++++ b/error.c
+@@ -14,6 +14,7 @@
+ #include "qemu-objects.h"
+ #include "qerror.h"
+ #include <assert.h>
++#include <string.h>
+ 
+ struct Error
+ {
+@@ -41,6 +42,48 @@ void error_set(Error **errp, const char *fmt, ...)
+     *errp = err;
+ }
+ 
++/* RHEL-6 note:
++ *
++ * The following function, error_vsetg_errno(), and the implementation of
++ * error_setg_errno() and error_setg() below, are RHEL-6 only compatibility
++ * code. The RHEL-6 Error object is incompatible with that of upstream, but the
++ * structure is not externally visible.
++ */
++static void error_vsetg_errno(Error **errp, int os_errno, const char *fmt,
++                              va_list ap)
++{
++    char *msg;
++
++    msg = g_strdup_vprintf(fmt, ap);
++    if (os_errno != 0) {
++        char *msg2;
++
++        msg2 = g_strdup_printf("%s: %s", msg, strerror(os_errno));
++        free(msg);
++        msg = msg2;
++    }
++    error_set(errp, QERR_GENERIC_ERROR, msg);
++    free(msg);
++}
++
++void error_setg_errno(Error **errp, int os_errno, const char *fmt, ...)
++{
++    va_list ap;
++
++    va_start(ap, fmt);
++    error_vsetg_errno(errp, os_errno, fmt, ap);
++    va_end(ap);
++}
++
++void error_setg(Error **errp, const char *fmt, ...)
++{
++    va_list ap;
++
++    va_start(ap, fmt);
++    error_vsetg_errno(errp, 0, fmt, ap);
++    va_end(ap);
++}
++
+ bool error_is_set(Error **errp)
+ {
+     return (errp && *errp);
+diff --git a/error.h b/error.h
+index 003c855..1f736c9 100644
+--- a/error.h
++++ b/error.h
+@@ -21,14 +21,23 @@
+ typedef struct Error Error;
+ 
+ /**
+- * Set an indirect pointer to an error given a printf-style format parameter.
+- * Currently, qerror.h defines these error formats.  This function is not
+- * meant to be used outside of QEMU.
++ * Set an indirect pointer to an error given a printf-style JSON format
++ * parameter. Currently, qerror.h defines these error formats.  This function
++ * is not meant to be used outside of QEMU.
+  */
+ void error_set(Error **err, const char *fmt, ...)
+     __attribute__((format(printf, 2, 3)));
+ 
+ /**
++ * Wrapper functions for error_set(): the format string is raw printf-style,
++ * and the output is always flattened into a QERR_GENERIC_ERROR.
++ */
++void error_setg_errno(Error **errp, int os_errno, const char *fmt, ...)
++    __attribute__((format(printf, 3, 4)));
++void error_setg(Error **errp, const char *fmt, ...)
++    __attribute__((format(printf, 2, 3)));
++
++/**
+  * Returns true if an indirect pointer to an error is pointing to a valid
+  * error object.
+  */
+diff --git a/qerror.c b/qerror.c
+index 407263c..cc26e61 100644
+--- a/qerror.c
++++ b/qerror.c
+@@ -258,6 +258,10 @@ static const QErrorStringTable qerror_table[] = {
+         .desc      = "An undefined error has ocurred",
+     },
+     {
++        .error_fmt = QERR_GENERIC_ERROR,
++        .desc      = "%(message)",
++    },
++    {
+         .error_fmt = QERR_UNSUPPORTED,
+         .desc      = "this feature or command is not currently supported",
+     },
+diff --git a/qerror.h b/qerror.h
+index ae7b5a5..d3acc94 100644
+--- a/qerror.h
++++ b/qerror.h
+@@ -217,6 +217,9 @@ QError *qobject_to_qerror(const QObject *obj);
+ #define QERR_UNDEFINED_ERROR \
+     "{ 'class': 'UndefinedError', 'data': {} }"
+ 
++#define QERR_GENERIC_ERROR \
++    "{ 'class': 'GenericError', 'data': { 'message': %s } }"
++
+ #define QERR_UNSUPPORTED \
+     "{ 'class': 'Unsupported', 'data': {} }"
+ 
+-- 
+1.7.11.7
+

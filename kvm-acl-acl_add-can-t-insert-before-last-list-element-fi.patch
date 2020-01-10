@@ -1,0 +1,84 @@
+From 8869b9c4f3c3255d12fad51a680fc0da0122d3ee Mon Sep 17 00:00:00 2001
+Message-Id: <8869b9c4f3c3255d12fad51a680fc0da0122d3ee.1376484223.git.minovotn@redhat.com>
+In-Reply-To: <ac0ba67dff2049ff8601fe686b870bba1879b99f.1376484223.git.minovotn@redhat.com>
+References: <ac0ba67dff2049ff8601fe686b870bba1879b99f.1376484223.git.minovotn@redhat.com>
+From: Markus Armbruster <armbru@redhat.com>
+Date: Wed, 31 Jul 2013 14:48:23 +0200
+Subject: [PATCH 3/6] acl: acl_add can't insert before last list element, fix
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1375282103-13110-3-git-send-email-armbru@redhat.com>
+Patchwork-id: 52871
+O-Subject: [RHEL-6 PATCH qemu-kvm 2/2] acl: acl_add can't insert before last list element, fix
+Bugzilla: 970516
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Watch this:
+
+    $ upstream-qemu -nodefaults -S -vnc :0,acl,sasl -monitor stdio
+    QEMU 1.5.50 monitor - type 'help' for more information
+    (qemu) acl_add vnc.username drei allow
+    acl: added rule at position 1
+    (qemu) acl_show vnc.username
+    policy: deny
+    1: allow drei
+    (qemu) acl_add vnc.username zwei allow 1
+    acl: added rule at position 2
+    (qemu) acl_show vnc.username
+    policy: deny
+    1: allow drei
+    2: allow zwei
+    (qemu) acl_add vnc.username eins allow 1
+    acl: added rule at position 1
+    (qemu) acl_show vnc.username
+    policy: deny
+    1: allow eins
+    2: allow drei
+    3: allow zwei
+
+The second acl_add inserts at position 2 instead of 1.
+
+Root cause is an off-by-one in qemu_acl_insert(): when index ==
+acl->nentries, it appends instead of inserting before the last list
+element.
+
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Signed-off-by: Michael Tokarev <mjt@tls.msk.ru>
+(cherry picked from commit 4999f3a8a6009de05ba82e58e723277917f16254)
+
+Conflicts:
+	util/acl.c
+
+Bugzilla: 970516
+---
+ acl.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ acl.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/acl.c b/acl.c
+index fdd0bbf..5b964d1 100644
+--- a/acl.c
++++ b/acl.c
+@@ -139,9 +139,9 @@ int qemu_acl_insert(qemu_acl *acl,
+ 
+     if (index <= 0)
+         return -1;
+-    if (index >= acl->nentries)
++    if (index > acl->nentries) {
+         return qemu_acl_append(acl, deny, match);
+-
++    }
+ 
+     entry = qemu_malloc(sizeof(*entry));
+     entry->match = qemu_strdup(match);
+-- 
+1.7.11.7
+

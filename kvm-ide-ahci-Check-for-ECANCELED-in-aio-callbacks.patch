@@ -1,0 +1,114 @@
+From 06e5c3049fec9611f2424975d3483cccaf31244d Mon Sep 17 00:00:00 2001
+Message-Id: <06e5c3049fec9611f2424975d3483cccaf31244d.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:24 -0500
+Subject: [CHANGE 04/29] ide/ahci: Check for -ECANCELED in aio callbacks
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-5-git-send-email-famz@redhat.com>
+Patchwork-id: 64905
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 04/28] ide/ahci: Check for -ECANCELED in aio callbacks
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Before, bdrv_aio_cancel will either complete the request (like normal)
+and call CB with an actual return code, or skip calling the request (for
+example when the IO req is not submitted by thread pool yet).
+
+We will change bdrv_aio_cancel to do it differently: always call CB
+before return, with either [1] a normal req completion ret code, or [2]
+ret == -ECANCELED. So the callers' callback must accept both cases. The
+existing logic works with case [1], but not [2].
+
+The simplest transition of callback code is do nothing in case [2], just
+as if the CB is not called by the bdrv_aio_cancel() call.
+
+Suggested-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 0d910cfeaf2076b116b4517166d5deb0fea76394)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	hw/ide/ahci.c
+
+We don't have ahci downstream, skip it.
+
+	hw/ide/core.c
+
+Trivial context conflict due to the old block accounting interface
+signature (block_acct_done vs bdrv_acct_done), plus downstream's
+ide_{read,write}_dma_cb versus upstream's unified ide_dma_cb difference.
+---
+ hw/ide/core.c | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/ide/core.c | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/hw/ide/core.c b/hw/ide/core.c
+index 8db5710..56cf7df 100644
+--- a/hw/ide/core.c
++++ b/hw/ide/core.c
+@@ -413,6 +413,9 @@ static void ide_sector_read_cb(void *opaque, int ret)
+     s->pio_aiocb = NULL;
+     s->status &= ~BUSY_STAT;
+ 
++    if (ret == -ECANCELED) {
++        return;
++    }
+     bdrv_acct_done(s->bs, &s->acct);
+     if (ret != 0) {
+         if (ide_handle_rw_error(s, -ret, BM_STATUS_PIO_RETRY |
+@@ -623,6 +626,9 @@ static void ide_read_dma_cb(void *opaque, int ret)
+     int n;
+     int64_t sector_num;
+ 
++    if (ret == -ECANCELED) {
++        return;
++    }
+     if (ret < 0) {
+         if (ide_handle_rw_error(s, -ret,
+             BM_STATUS_DMA_RETRY | BM_STATUS_RETRY_READ))
+@@ -694,6 +700,9 @@ static void ide_sector_write_cb(void *opaque, int ret)
+     IDEState *s = opaque;
+     int n;
+ 
++    if (ret == -ECANCELED) {
++        return;
++    }
+     bdrv_acct_done(s->bs, &s->acct);
+ 
+     s->pio_aiocb = NULL;
+@@ -825,6 +834,9 @@ static void ide_write_dma_cb(void *opaque, int ret)
+     int n;
+     int64_t sector_num;
+ 
++    if (ret == -ECANCELED) {
++        return;
++    }
+     if (ret < 0) {
+         if (ide_handle_rw_error(s, -ret,  BM_STATUS_DMA_RETRY))
+             return;
+@@ -884,6 +896,9 @@ static void ide_flush_cb(void *opaque, int ret)
+ {
+     IDEState *s = opaque;
+ 
++    if (ret == -ECANCELED) {
++        return;
++    }
+     if (ret < 0) {
+         /* XXX: What sector number to set here? */
+         if (ide_handle_rw_error(s, -ret, BM_STATUS_RETRY_FLUSH)) {
+-- 
+2.1.0
+

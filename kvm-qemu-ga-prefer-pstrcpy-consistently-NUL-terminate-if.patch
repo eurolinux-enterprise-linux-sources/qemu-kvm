@@ -1,0 +1,56 @@
+From e5dbeee0e161baa99d6aba4b52650744b215c5fa Mon Sep 17 00:00:00 2001
+Message-Id: <e5dbeee0e161baa99d6aba4b52650744b215c5fa.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:27:33 +0200
+Subject: [PATCH 068/114] qemu-ga: prefer pstrcpy: consistently NUL-terminate
+ ifreq.ifr_name
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-11-git-send-email-lersek@redhat.com>
+Patchwork-id: 51109
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 10/56] qemu-ga: prefer pstrcpy: consistently NUL-terminate ifreq.ifr_name
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Jim Meyering <meyering@redhat.com>
+
+NUL-termination of the .ifr_name field is not required, but is fine
+(and preferable to using strncpy and leaving the reader to wonder),
+since the first thing the linux kernel does is to clear the last byte.
+Besides, using pstrcpy here makes this setting of ifr_name consistent
+with the other code (e.g., net/tap-linux.c) that does the same thing.
+
+Reviewed-by: Luiz Capitulino <lcapitulino@redhat.com>
+Signed-off-by: Jim Meyering <meyering@redhat.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 1ab516ed9b6ba00bafc5ca37604f8af4680323ca)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qga/commands-posix.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/commands-posix.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index 7d05d1b..183a505 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -829,7 +829,7 @@ GuestNetworkInterfaceList *qmp_guest_network_get_interfaces(Error **errp)
+             }
+ 
+             memset(&ifr, 0, sizeof(ifr));
+-            strncpy(ifr.ifr_name,  info->value->name, IF_NAMESIZE);
++            pstrcpy(ifr.ifr_name, IF_NAMESIZE, info->value->name);
+             if (ioctl(sock, SIOCGIFHWADDR, &ifr) == -1) {
+                 snprintf(err_msg, sizeof(err_msg),
+                          "failed to get MAC addresss of %s: %s",
+-- 
+1.7.11.7
+

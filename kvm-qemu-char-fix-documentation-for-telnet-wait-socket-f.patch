@@ -1,0 +1,53 @@
+From f59a1a0b1b724590dd984d73b10f414a11e29282 Mon Sep 17 00:00:00 2001
+Message-Id: <f59a1a0b1b724590dd984d73b10f414a11e29282.1376408877.git.minovotn@redhat.com>
+In-Reply-To: <823d94e906b2aeecd2c60bc9f19ca8948a756f27.1376408877.git.minovotn@redhat.com>
+References: <823d94e906b2aeecd2c60bc9f19ca8948a756f27.1376408877.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 30 Jul 2013 11:35:24 +0200
+Subject: [PATCH 06/18] qemu-char: fix documentation for telnet+wait socket
+ flags
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1375184130-11076-7-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52790
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 06/12] qemu-char: fix documentation for telnet+wait socket flags
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Michael Tokarev <mjt@tls.msk.ru>
+(cherry picked from commit ef993ba7bc631b57f9ea70a7f6fc8c0fcbdfa19d)
+---
+ qapi-schema.json |    7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema.json | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/qapi-schema.json b/qapi-schema.json
+index c77f0d4..c4f3a7c 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -442,10 +442,11 @@
+ # @addr: socket address to listen on (server=true)
+ #        or connect to (server=false)
+ # @server: #optional create server socket (default: true)
+-# @wait: #optional wait for connect (not used for server
+-#        sockets, default: false)
++# @wait: #optional wait for incoming connection on server
++#        sockets (default: false).
+ # @nodelay: #optional set TCP_NODELAY socket option (default: false)
+-# @telnet: #optional enable telnet protocol (default: false)
++# @telnet: #optional enable telnet protocol on server
++#          sockets (default: false)
+ #
+ # Since: 1.4
+ ##
+-- 
+1.7.11.7
+

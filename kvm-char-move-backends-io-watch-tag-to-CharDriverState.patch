@@ -1,0 +1,252 @@
+From fdc2f959b4c2370865a73f9df8a0dc4e2c26d31a Mon Sep 17 00:00:00 2001
+Message-Id: <fdc2f959b4c2370865a73f9df8a0dc4e2c26d31a.1381329939.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Tue, 8 Oct 2013 05:04:42 +0200
+Subject: [PATCH 1/4] char: move backends' io watch tag to CharDriverState
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <5255f5cd88fd39b36125350f5008c34c7771ae8f.1381208438.git.amit.shah@redhat.com>
+Patchwork-id: 54723
+O-Subject: [RHEL6.5 PATCH 1/3] char: move backends' io watch tag to CharDriverState
+Bugzilla: 985205
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+
+All the backends implement an io watcher tag for callbacks.  Move it to
+CharDriverState from each backend's struct to make accessing the tag from
+backend-neutral functions easier.
+
+This will be used later to cancel a callback on chardev detach from a
+frontend.
+
+CC: <qemu-stable@nongnu.org>
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	qemu-char.c
+	qemu-char.h
+---
+ qemu-char.c | 77 +++++++++++++++++++++++++++++++------------------------------
+ qemu-char.h |  1 +
+ 2 files changed, 40 insertions(+), 38 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 77 +++++++++++++++++++++++++++++++------------------------------
+ qemu-char.h |  1 +
+ 2 files changed, 40 insertions(+), 38 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 640878d..7c0c7ca 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -743,7 +743,6 @@ static int io_channel_send(GIOChannel *fd, const void *buf, size_t len)
+ typedef struct FDCharDriver {
+     CharDriverState *chr;
+     GIOChannel *fd_in, *fd_out;
+-    guint fd_in_tag;
+     int max_size;
+     QTAILQ_ENTRY(FDCharDriver) node;
+ } FDCharDriver;
+@@ -775,9 +774,9 @@ static gboolean fd_chr_read(GIOChannel *chan, GIOCondition cond, void *opaque)
+     status = g_io_channel_read_chars(chan, (gchar *)buf,
+                                      len, &bytes_read, NULL);
+     if (status == G_IO_STATUS_EOF) {
+-        if (s->fd_in_tag) {
+-            io_remove_watch_poll(s->fd_in_tag);
+-            s->fd_in_tag = 0;
++        if (chr->fd_in_tag) {
++            io_remove_watch_poll(chr->fd_in_tag);
++            chr->fd_in_tag = 0;
+         }
+         qemu_chr_be_event(chr, CHR_EVENT_CLOSED);
+         return FALSE;
+@@ -808,13 +807,14 @@ static void fd_chr_update_read_handler(CharDriverState *chr)
+ {
+     FDCharDriver *s = chr->opaque;
+ 
+-    if (s->fd_in_tag) {
+-        io_remove_watch_poll(s->fd_in_tag);
+-        s->fd_in_tag = 0;
++    if (chr->fd_in_tag) {
++        io_remove_watch_poll(chr->fd_in_tag);
++        chr->fd_in_tag = 0;
+     }
+ 
+     if (s->fd_in) {
+-        s->fd_in_tag = io_add_watch_poll(s->fd_in, fd_chr_read_poll, fd_chr_read, chr);
++        chr->fd_in_tag = io_add_watch_poll(s->fd_in, fd_chr_read_poll,
++                                           fd_chr_read, chr);
+     }
+ }
+ 
+@@ -822,9 +822,9 @@ static void fd_chr_close(struct CharDriverState *chr)
+ {
+     FDCharDriver *s = chr->opaque;
+ 
+-    if (s->fd_in_tag) {
+-        io_remove_watch_poll(s->fd_in_tag);
+-        s->fd_in_tag = 0;
++    if (chr->fd_in_tag) {
++        io_remove_watch_poll(chr->fd_in_tag);
++        chr->fd_in_tag = 0;
+     }
+ 
+     if (s->fd_in) {
+@@ -1013,7 +1013,6 @@ static void cfmakeraw (struct termios *termios_p)
+ 
+ typedef struct {
+     GIOChannel *fd;
+-    guint fd_tag;
+     int connected;
+     int read_bytes;
+     guint timer_tag;
+@@ -1124,9 +1123,9 @@ static void pty_chr_state(CharDriverState *chr, int connected)
+     PtyCharDriver *s = chr->opaque;
+ 
+     if (!connected) {
+-        if (s->fd_tag) {
+-            io_remove_watch_poll(s->fd_tag);
+-            s->fd_tag = 0;
++        if (chr->fd_in_tag) {
++            io_remove_watch_poll(chr->fd_in_tag);
++            chr->fd_in_tag = 0;
+         }
+         s->connected = 0;
+         /* (re-)connect poll interval for idle guests: once per second.
+@@ -1141,7 +1140,8 @@ static void pty_chr_state(CharDriverState *chr, int connected)
+         if (!s->connected) {
+             qemu_chr_generic_open(chr);
+             s->connected = 1;
+-            s->fd_tag = io_add_watch_poll(s->fd, pty_chr_read_poll, pty_chr_read, chr);
++            chr->fd_in_tag = io_add_watch_poll(s->fd, pty_chr_read_poll,
++                                               pty_chr_read, chr);
+         }
+     }
+ }
+@@ -1152,9 +1152,9 @@ static void pty_chr_close(struct CharDriverState *chr)
+     PtyCharDriver *s = chr->opaque;
+     int fd;
+ 
+-    if (s->fd_tag) {
+-        io_remove_watch_poll(s->fd_tag);
+-        s->fd_tag = 0;
++    if (chr->fd_in_tag) {
++        io_remove_watch_poll(chr->fd_in_tag);
++        chr->fd_in_tag = 0;
+     }
+     fd = g_io_channel_unix_get_fd(s->fd);
+     g_io_channel_unref(s->fd);
+@@ -1968,7 +1968,6 @@ static CharDriverState *qemu_chr_open_win_con(void)
+ typedef struct {
+     int fd;
+     GIOChannel *chan;
+-    guint tag;
+     uint8_t buf[READ_BUF_LEN];
+     int bufcnt;
+     int bufptr;
+@@ -2024,9 +2023,9 @@ static gboolean udp_chr_read(GIOChannel *chan, GIOCondition cond, void *opaque)
+     s->bufcnt = bytes_read;
+     s->bufptr = s->bufcnt;
+     if (status != G_IO_STATUS_NORMAL) {
+-        if (s->tag) {
+-            io_remove_watch_poll(s->tag);
+-            s->tag = 0;
++        if (chr->fd_in_tag) {
++            io_remove_watch_poll(chr->fd_in_tag);
++            chr->fd_in_tag = 0;
+         }
+         return FALSE;
+     }
+@@ -2045,22 +2044,23 @@ static void udp_chr_update_read_handler(CharDriverState *chr)
+ {
+     NetCharDriver *s = chr->opaque;
+ 
+-    if (s->tag) {
+-        io_remove_watch_poll(s->tag);
+-        s->tag = 0;
++    if (chr->fd_in_tag) {
++        io_remove_watch_poll(chr->fd_in_tag);
++        chr->fd_in_tag = 0;
+     }
+ 
+     if (s->chan) {
+-        s->tag = io_add_watch_poll(s->chan, udp_chr_read_poll, udp_chr_read, chr);
++        chr->fd_in_tag = io_add_watch_poll(s->chan, udp_chr_read_poll,
++                                           udp_chr_read, chr);
+     }
+ }
+ 
+ static void udp_chr_close(CharDriverState *chr)
+ {
+     NetCharDriver *s = chr->opaque;
+-    if (s->tag) {
+-        io_remove_watch_poll(s->tag);
+-        s->tag = 0;
++    if (chr->fd_in_tag) {
++        io_remove_watch_poll(chr->fd_in_tag);
++        chr->fd_in_tag = 0;
+     }
+     if (s->chan) {
+         g_io_channel_unref(s->chan);
+@@ -2109,7 +2109,7 @@ static CharDriverState *qemu_chr_open_udp(QemuOpts *opts)
+ typedef struct {
+ 
+     GIOChannel *chan, *listen_chan;
+-    guint tag, listen_tag;
++    guint listen_tag;
+     int fd, listen_fd;
+     int connected;
+     int max_size;
+@@ -2283,9 +2283,9 @@ static gboolean tcp_chr_read(GIOChannel *chan, GIOCondition cond, void *opaque)
+         if (s->listen_chan) {
+             s->listen_tag = g_io_add_watch(s->listen_chan, G_IO_IN, tcp_chr_accept, chr);
+         }
+-        if (s->tag) {
+-            io_remove_watch_poll(s->tag);
+-            s->tag = 0;
++        if (chr->fd_in_tag) {
++            io_remove_watch_poll(chr->fd_in_tag);
++            chr->fd_in_tag = 0;
+         }
+         g_io_channel_unref(s->chan);
+         s->chan = NULL;
+@@ -2309,7 +2309,8 @@ static void tcp_chr_connect(void *opaque)
+ 
+     s->connected = 1;
+     if (s->chan) {
+-        s->tag = io_add_watch_poll(s->chan, tcp_chr_read_poll, tcp_chr_read, chr);
++        chr->fd_in_tag = io_add_watch_poll(s->chan, tcp_chr_read_poll,
++                                           tcp_chr_read, chr);
+     }
+     qemu_chr_generic_open(chr);
+ }
+@@ -2386,9 +2387,9 @@ static void tcp_chr_close(CharDriverState *chr)
+ {
+     TCPCharDriver *s = chr->opaque;
+     if (s->fd >= 0) {
+-        if (s->tag) {
+-            io_remove_watch_poll(s->tag);
+-            s->tag = 0;
++        if (chr->fd_in_tag) {
++            io_remove_watch_poll(chr->fd_in_tag);
++            chr->fd_in_tag = 0;
+         }
+         if (s->chan) {
+             g_io_channel_unref(s->chan);
+diff --git a/qemu-char.h b/qemu-char.h
+index 69839e6..906e916 100644
+--- a/qemu-char.h
++++ b/qemu-char.h
+@@ -74,6 +74,7 @@ struct CharDriverState {
+     char *filename;
+     int avail_connections;
+     int opened;
++    guint fd_in_tag;
+     QemuOpts *opts;
+     QTAILQ_ENTRY(CharDriverState) next;
+ };
+-- 
+1.7.11.7
+

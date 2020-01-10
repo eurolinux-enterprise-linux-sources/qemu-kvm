@@ -1,0 +1,120 @@
+From 67dd97f6dd13e4f55193c33b171df8cb569c0905 Mon Sep 17 00:00:00 2001
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Thu, 10 Apr 2014 10:13:13 +0200
+Subject: [PATCH 27/30] spice: add SASL support
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1397124793-9769-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 58414
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 1/1] spice: add SASL support
+Bugzilla: 1021575
+RH-Acked-by: Vlad Yasevich <vyasevic@redhat.com>
+RH-Acked-by: Bandan Das <bsd@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Marc-André Lureau <marcandre.lureau@gmail.com>
+
+Turn on SASL support by appending "sasl" to the spice arguments, which
+requires that the client use SASL to authenticate with the spice.  The
+exact choice of authentication method used is controlled from the
+system / user's SASL configuration file for the 'qemu' service. This
+is typically found in /etc/sasl2/qemu.conf. If running QEMU as an
+unprivileged user, an environment variable SASL_CONF_PATH can be used
+to make it search alternate locations for the service config.  While
+some SASL auth methods can also provide data encryption (eg GSSAPI),
+it is recommended that SASL always be combined with the 'tls' and
+'x509' settings to enable use of SSL and server certificates. This
+ensures a data encryption preventing compromise of authentication
+credentials.
+
+It requires support from spice 0.8.1.
+
+[ kraxel: moved spell fix to separate commit ]
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 48b3ed0a68b8c1b288b4e15743ea39b7b5b318c3)
+
+Conflicts:
+	qemu-config.c
+
+[ rhel6: use qemu-kvm as appname ]
+---
+ qemu-config.c   |  3 +++
+ qemu-options.hx | 13 +++++++++++++
+ ui/spice-core.c | 12 ++++++++++++
+ 3 files changed, 28 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ qemu-config.c   |    3 +++
+ qemu-options.hx |   13 +++++++++++++
+ ui/spice-core.c |   12 ++++++++++++
+ 3 files changed, 28 insertions(+), 0 deletions(-)
+
+diff --git a/qemu-config.c b/qemu-config.c
+index 7ba6502..411b22f 100644
+--- a/qemu-config.c
++++ b/qemu-config.c
+@@ -384,6 +384,9 @@ QemuOptsList qemu_spice_opts = {
+             .name = "disable-agent-file-xfer",
+             .type = QEMU_OPT_BOOL,
+         },{
++            .name = "sasl",
++            .type = QEMU_OPT_BOOL,
++        },{
+             .name = "x509-dir",
+             .type = QEMU_OPT_STRING,
+         },{
+diff --git a/qemu-options.hx b/qemu-options.hx
+index 7815f59..f6d83dd 100644
+--- a/qemu-options.hx
++++ b/qemu-options.hx
+@@ -616,6 +616,19 @@ Force using the specified IP version.
+ @item password=<secret>
+ Set the password you need to authenticate.
+ 
++@item sasl
++Require that the client use SASL to authenticate with the spice.
++The exact choice of authentication method used is controlled from the
++system / user's SASL configuration file for the 'qemu' service. This
++is typically found in /etc/sasl2/qemu.conf. If running QEMU as an
++unprivileged user, an environment variable SASL_CONF_PATH can be used
++to make it search alternate locations for the service config.
++While some SASL auth methods can also provide data encryption (eg GSSAPI),
++it is recommended that SASL always be combined with the 'tls' and
++'x509' settings to enable use of SSL and server certificates. This
++ensures a data encryption preventing compromise of authentication
++credentials.
++
+ @item disable-ticketing
+ Allow client connects without authentication.
+ 
+diff --git a/ui/spice-core.c b/ui/spice-core.c
+index a6d0a8d..1c76d7c 100644
+--- a/ui/spice-core.c
++++ b/ui/spice-core.c
+@@ -719,6 +719,18 @@ void qemu_spice_init(void)
+     if (password) {
+         spice_server_set_ticket(spice_server, password, 0, 0, 0);
+     }
++    if (qemu_opt_get_bool(opts, "sasl", 0)) {
++#if SPICE_SERVER_VERSION >= 0x000900 /* 0.9.0 */
++        if (spice_server_set_sasl_appname(spice_server, "qemu-kvm") == -1 ||
++            spice_server_set_sasl(spice_server, 1) == -1) {
++            fprintf(stderr, "spice: failed to enable sasl\n");
++            exit(1);
++        }
++#else
++        fprintf(stderr, "spice: sasl is not available (spice >= 0.9 required)\n");
++        exit(1);
++#endif
++    }
+     if (qemu_opt_get_bool(opts, "disable-ticketing", 0)) {
+         auth = "none";
+         spice_server_set_noauth(spice_server);
+-- 
+1.7.1
+

@@ -1,0 +1,38 @@
+From 71ae701952425b50cd2142a4dcc97a555300c510 Mon Sep 17 00:00:00 2001
+Message-Id: <71ae701952425b50cd2142a4dcc97a555300c510.1484342411.git.ymankad@redhat.com>
+In-Reply-To: <df26b13347392089e5699a6be872de7806a36a8c.1484342411.git.ymankad@redhat.com>
+References: <df26b13347392089e5699a6be872de7806a36a8c.1484342411.git.ymankad@redhat.com>
+From: Yash Mankad <ymankad@redhat.com>
+Date: Fri, 13 Jan 2017 15:54:30 -0500
+Subject: [CHANGE 2/8] Revert "block-commit: speed is an optional parameter"
+To: ymankad@redhat.com
+
+This reverts commit f457ce81964e8d208eb8069089a87041399e7860.
+
+This is to revert Max's patch series that fix BZ#1405882 as
+they did not have the 6.9 release flag set and could not be
+justified as exceptions / blockers. Will be moved to 6.10.
+
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ blockdev.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/blockdev.c b/blockdev.c
+index be68c8f..128b728 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -1493,10 +1493,6 @@ void qmp___com_redhat_block_commit(const char *device,
+      */
+     BlockErrorAction on_error = BLOCK_ERR_REPORT;
+ 
+-    if (!has_speed) {
+-        speed = 0;
+-    }
+-
+     /* drain all i/o before commits */
+     bdrv_drain_all();
+ 
+-- 
+2.7.4
+

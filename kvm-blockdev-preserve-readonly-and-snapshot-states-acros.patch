@@ -1,0 +1,64 @@
+From 8883ca53ab66302b3d253f801554842a8285e0fe Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?J=C3=A1n=20Tomko?= <jtomko@redhat.com>
+Date: Mon, 16 Jun 2014 14:00:44 +0200
+Subject: [PATCH 23/26] blockdev: preserve readonly and snapshot states across media changes
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Ján Tomko <jtomko@redhat.com>
+Message-id: <ed2ed39047b924ae0d34168f5cb9aa4594cea54c.1402926448.git.jtomko@redhat.com>
+Patchwork-id: 59233
+O-Subject: [RHEL-6.6 qemu-kvm PATCH] blockdev: preserve readonly and snapshot states across media changes
+Bugzilla: 1105428
+RH-Acked-by: Jiri Denemark <jdenemar@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+From: Kevin Shanahan <kmshanah@disenchant.net>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1105428
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=7583605
+Upstream: released in 1.3.0
+
+If readonly=on is given at device creation time, the ->readonly flag
+needs to be set in the block driver state for this device so that
+readonly-ness is preserved across media changes (qmp change command).
+Similarly, to preserve the snapshot property requires ->open_flags to
+be correct.
+
+Note: the upstream commit message suggests read-only and snapshot
+are not preserved across media change.  They are, except for one
+case: inserting media into drives created empty.  This commit fixes
+exactly that case.  It has no effect on drives created with media.
+
+Signed-off-by: Kevin Shanahan <kmshanah@disenchant.net>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 80dd1aae3657a902d262f5d20a7a3c655b23705e)
+Signed-off-by: Ján Tomko <jtomko@redhat.com>
+---
+ blockdev.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ blockdev.c |    2 ++
+ 1 files changed, 2 insertions(+), 0 deletions(-)
+
+diff --git a/blockdev.c b/blockdev.c
+index 1a93089..9689679 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -624,6 +624,8 @@ DriveInfo *drive_init(QemuOpts *opts, int default_to_scsi)
+                      devname, mediastr, unit_id);
+     }
+     dinfo->bdrv = bdrv_new(dinfo->id);
++    dinfo->bdrv->open_flags = snapshot ? BDRV_O_SNAPSHOT : 0;
++    dinfo->bdrv->read_only = ro;
+     dinfo->devaddr = devaddr;
+     dinfo->type = type;
+     dinfo->bus = bus_id;
+-- 
+1.7.1
+

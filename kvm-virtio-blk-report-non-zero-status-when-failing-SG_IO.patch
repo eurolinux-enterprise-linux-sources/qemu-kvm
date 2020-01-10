@@ -1,0 +1,158 @@
+From 3cbe987f8c4dd44e066ade2e7a5a09094cc6a0f6 Mon Sep 17 00:00:00 2001
+Message-Id: <3cbe987f8c4dd44e066ade2e7a5a09094cc6a0f6.1429847625.git.jen@redhat.com>
+In-Reply-To: <67fe78a504035b7baf527bbd4726c75b0a1f8ba4.1429847625.git.jen@redhat.com>
+References: <67fe78a504035b7baf527bbd4726c75b0a1f8ba4.1429847625.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Wed, 22 Apr 2015 03:17:53 -0500
+Subject: [CHANGE 4/7] virtio-blk: report non-zero status when failing SG_IO
+ requests
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429672676-18444-3-git-send-email-famz@redhat.com>
+Patchwork-id: 64862
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v4 2/5] virtio-blk: report non-zero status when failing SG_IO requests
+Bugzilla: 1006871
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Linux really looks only at scsi->errors for SG_IO requests; it does
+not look at the virtio request status at all.  Because of this, when
+a SG_IO request is failed early with virtio_blk_req_complete(req,
+VIRTIO_BLK_S_UNSUPP), without writing hdr.status, it will look like
+a success to the guest.
+
+This is their bug, but we can make it safe for older guests now by
+forcing scsi->errors to have a non-zero value whenever a request
+has to be failed.
+
+But if we fix the bug in the guest driver, we will have another problem
+because QEMU returns VIRTIO_BLK_S_IOERR if the status is non-zero, and
+Linux translates that to -EIO.  Rather, the guest should succeed the
+request and pass the non-zero status via the userspace-provided SG_IO
+structure.  So, remove the case where virtio_blk_handle_scsi can
+return VIRTIO_BLK_S_IOERR.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit f34e73cd69bdbdb9b1d56b288c5e14d6fff58165)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	hw/virtio-blk.c
+	g_free -> qemu_free.
+---
+ hw/virtio-blk.c | 53 ++++++++++++++++++++++++-----------------------------
+ 1 file changed, 24 insertions(+), 29 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/virtio-blk.c | 53 ++++++++++++++++++++++++-----------------------------
+ 1 file changed, 24 insertions(+), 29 deletions(-)
+
+diff --git a/hw/virtio-blk.c b/hw/virtio-blk.c
+index b575e1d..2cc4971 100644
+--- a/hw/virtio-blk.c
++++ b/hw/virtio-blk.c
+@@ -151,20 +151,12 @@ static VirtIOBlockReq *virtio_blk_get_request(VirtIOBlock *s)
+     return req;
+ }
+ 
+-#ifdef __linux__
+ static void virtio_blk_handle_scsi(VirtIOBlockReq *req)
+ {
+-    struct sg_io_hdr hdr;
+     int ret;
+-    int status;
++    int status = VIRTIO_BLK_S_OK;
+     int i;
+ 
+-    if ((req->dev->vdev.guest_features & (1 << VIRTIO_BLK_F_SCSI)) == 0) {
+-        virtio_blk_req_complete(req, VIRTIO_BLK_S_UNSUPP);
+-        qemu_free(req);
+-        return;
+-    }
+-
+     /*
+      * We require at least one output segment each for the virtio_blk_outhdr
+      * and the SCSI command block.
+@@ -179,20 +171,26 @@ static void virtio_blk_handle_scsi(VirtIOBlockReq *req)
+     }
+ 
+     /*
+-     * No support for bidirection commands yet.
+-     */
+-    if (req->elem.out_num > 2 && req->elem.in_num > 3) {
+-        virtio_blk_req_complete(req, VIRTIO_BLK_S_UNSUPP);
+-        qemu_free(req);
+-        return;
+-    }
+-
+-    /*
+      * The scsi inhdr is placed in the second-to-last input segment, just
+      * before the regular inhdr.
+      */
+     req->scsi = (void *)req->elem.in_sg[req->elem.in_num - 2].iov_base;
+ 
++    if ((req->dev->vdev.guest_features & (1 << VIRTIO_BLK_F_SCSI)) == 0) {
++        status = VIRTIO_BLK_S_UNSUPP;
++        goto fail;
++    }
++
++    /*
++     * No support for bidirection commands yet.
++     */
++    if (req->elem.out_num > 2 && req->elem.in_num > 3) {
++        status = VIRTIO_BLK_S_UNSUPP;
++        goto fail;
++    }
++
++#ifdef __linux__
++    struct sg_io_hdr hdr;
+     memset(&hdr, 0, sizeof(struct sg_io_hdr));
+     hdr.interface_id = 'S';
+     hdr.cmd_len = req->elem.out_sg[1].iov_len;
+@@ -236,12 +234,7 @@ static void virtio_blk_handle_scsi(VirtIOBlockReq *req)
+     ret = bdrv_ioctl(req->dev->bs, SG_IO, &hdr);
+     if (ret) {
+         status = VIRTIO_BLK_S_UNSUPP;
+-        hdr.status = ret;
+-        hdr.resid = hdr.dxfer_len;
+-    } else if (hdr.status) {
+-        status = VIRTIO_BLK_S_IOERR;
+-    } else {
+-        status = VIRTIO_BLK_S_OK;
++        goto fail;
+     }
+ 
+     /*
+@@ -263,14 +256,16 @@ static void virtio_blk_handle_scsi(VirtIOBlockReq *req)
+ 
+     virtio_blk_req_complete(req, status);
+     qemu_free(req);
+-}
+ #else
+-static void virtio_blk_handle_scsi(VirtIOBlockReq *req)
+-{
+-    virtio_blk_req_complete(req, VIRTIO_BLK_S_UNSUPP);
++    abort();
++#endif
++
++fail:
++    /* Just put anything nonzero so that the ioctl fails in the guest.  */
++    stl_p(&req->scsi->errors, 255);
++    virtio_blk_req_complete(req, status);
+     qemu_free(req);
+ }
+-#endif /* __linux__ */
+ 
+ static void do_multiwrite(BlockDriverState *bs, BlockRequest *blkreq,
+     int num_writes)
+-- 
+2.1.0
+

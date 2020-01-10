@@ -1,0 +1,48 @@
+From 68d9e00fc59ffdd5f392ac32fbec2f015de97e8c Mon Sep 17 00:00:00 2001
+Message-Id: <68d9e00fc59ffdd5f392ac32fbec2f015de97e8c.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 2 Apr 2015 09:28:11 -0500
+Subject: [CHANGE 42/42] qemu-iotests: Disable test 030 for QED
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1427966891-29967-4-git-send-email-kwolf@redhat.com>
+Patchwork-id: 64678
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 3/3] qemu-iotests: Disable test 030 for QED
+Bugzilla: 1130022
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: John Snow <jsnow@redhat.com>
+
+Upstream status: downstream-only
+
+The qemu-io map command splits an allocated area in two for QED, which
+makes this test case think that the images differ. This is a false
+positive, disable the test for QED.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ tests/qemu-iotests/030 | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ tests/qemu-iotests/030 | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/qemu-iotests/030 b/tests/qemu-iotests/030
+index f09de9f..9ca8b22 100755
+--- a/tests/qemu-iotests/030
++++ b/tests/qemu-iotests/030
+@@ -183,4 +183,4 @@ class TestSetSpeed(iotests.QMPTestCase):
+         self.cancel_and_wait()
+ 
+ if __name__ == '__main__':
+-    iotests.main(supported_fmts=['qcow2', 'qed'])
++    iotests.main(supported_fmts=['qcow2'])
+-- 
+2.1.0
+

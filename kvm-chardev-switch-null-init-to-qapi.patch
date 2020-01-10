@@ -1,0 +1,65 @@
+From 26013c611b226b4627cabc4cbc36905ccdc6c4b8 Mon Sep 17 00:00:00 2001
+Message-Id: <26013c611b226b4627cabc4cbc36905ccdc6c4b8.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:06:00 +0200
+Subject: [PATCH 49/65] chardev: switch null init to qapi
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-50-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52149
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 49/65] chardev: switch null init to qapi
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+This patch switches over the 'null' chardev initialization
+to the new qapi code path.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 80dca9e643d11b54f1b9bafbaefeadfb1099e023)
+---
+ qemu-char.c |    6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 4c24853..26be8ad 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -242,7 +242,7 @@ static int null_chr_write(CharDriverState *chr, const uint8_t *buf, int len)
+     return len;
+ }
+ 
+-static CharDriverState *qemu_chr_open_null(QemuOpts *opts)
++static CharDriverState *qemu_chr_open_null(void)
+ {
+     CharDriverState *chr;
+ 
+@@ -3248,7 +3248,7 @@ ChardevReturn *qmp_chardev_add(const char *id, ChardevBackend *backend,
+     }
+ #endif
+     case CHARDEV_BACKEND_KIND_NULL:
+-        chr = qemu_chr_open_null(NULL);
++        chr = qemu_chr_open_null();
+         break;
+     case CHARDEV_BACKEND_KIND_MUX:
+         base = qemu_chr_find(backend->mux->chardev);
+@@ -3298,7 +3298,7 @@ void qmp_chardev_remove(const char *id, Error **errp)
+ 
+ static void register_types(void)
+ {
+-    register_char_driver("null", qemu_chr_open_null);
++    register_char_driver_qapi("null", CHARDEV_BACKEND_KIND_NULL, NULL);
+     register_char_driver("socket", qemu_chr_open_socket);
+     register_char_driver("udp", qemu_chr_open_udp);
+ #ifdef _WIN32
+-- 
+1.7.11.7
+

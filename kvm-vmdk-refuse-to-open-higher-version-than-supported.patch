@@ -1,0 +1,60 @@
+From 94ea5068b2bdc827ea47db1495ad949b6e834d2d Mon Sep 17 00:00:00 2001
+Message-Id: <94ea5068b2bdc827ea47db1495ad949b6e834d2d.1376387172.git.minovotn@redhat.com>
+In-Reply-To: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+References: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Thu, 8 Aug 2013 06:09:36 +0200
+Subject: [PATCH 06/13] vmdk: refuse to open higher version than supported
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1375942181-5262-7-git-send-email-famz@redhat.com>
+Patchwork-id: 53071
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 06/11] vmdk: refuse to open higher version than supported
+Bugzilla: 994804
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+Refuse to open higher version for safety.
+
+Although we try to be compatible with published VMDK spec, VMware has
+newer version from ESXi 5.1 exported OVF/OVA, which we have no knowledge
+what's changed in it. And it is very likely to have more new versions in
+the future, so it's not safe to open them blindly.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 96c51eb5e46af2312b33f745ad72acb20e799aea)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 69c3718..8744780 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -574,6 +574,15 @@ static int vmdk_open_vmdk4(BlockDriverState *bs,
+         header = footer.header;
+     }
+ 
++    if (le32_to_cpu(header.version) >= 3) {
++        char buf[64];
++        snprintf(buf, sizeof(buf), "VMDK version %d",
++                 le32_to_cpu(header.version));
++        qerror_report(QERR_UNKNOWN_BLOCK_FORMAT_FEATURE,
++                bs->device_name, "vmdk", buf);
++        return -ENOTSUP;
++    }
++
+     l1_entry_sectors = le32_to_cpu(header.num_gtes_per_gte)
+                         * le64_to_cpu(header.granularity);
+     if (l1_entry_sectors == 0) {
+-- 
+1.7.11.7
+

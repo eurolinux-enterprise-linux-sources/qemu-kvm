@@ -1,0 +1,644 @@
+From 1ecb9c3580e9c6975a8f203555735499d7f8fc91 Mon Sep 17 00:00:00 2001
+From: Amos Kong <akong@redhat.com>
+Date: Tue, 10 Sep 2013 06:07:55 +0200
+Subject: [PATCH 13/39] virtio-rng: hardware random number generator device
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1378793288-3371-14-git-send-email-akong@redhat.com>
+Patchwork-id: 54248
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v3 13/26] virtio-rng: hardware random number generator device
+Bugzilla: 786407
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Amit Shah <amit.shah@redhat.com>
+
+The Linux kernel already has a virtio-rng driver, this is the device
+implementation.
+
+When the guest asks for entropy from the virtio hwrng, it puts a buffer
+in the vq.  We then put entropy into that buffer, and push it back to
+the guest.
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+---
+aliguori: converted to new RngBackend interface
+aliguori: remove entropy needed event
+aliguori: fix migration
+
+(backported from commit 16c915ba42b45df7a64a6908287f03bfa3764bed)
+
+We didn't organize pci devices by qobject, so add 'name' string in
+VirtIORNGConf to record the id of assigned object, then convert it
+to a qobject point.
+Droped some repeated definitions in hw/qdev-core.h
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+---
+ Makefile.objs   |    2 +-
+ hw/pci.h        |    2 +
+ hw/qdev-core.h  |  183 +++++++++++++++++++++++++++++++++++++++++++++++
+ hw/virtio-pci.c |   48 +++++++++++++
+ hw/virtio-rng.c |  211 +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ hw/virtio-rng.h |   25 +++++++
+ hw/virtio.h     |    3 +
+ 7 files changed, 473 insertions(+), 1 deletions(-)
+ create mode 100644 hw/qdev-core.h
+ create mode 100644 hw/virtio-rng.c
+ create mode 100644 hw/virtio-rng.h
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ Makefile.objs   |    2 +-
+ hw/pci.h        |    2 +
+ hw/qdev-core.h  |  183 +++++++++++++++++++++++++++++++++++++++++++++++
+ hw/virtio-pci.c |   48 +++++++++++++
+ hw/virtio-rng.c |  211 +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ hw/virtio-rng.h |   25 +++++++
+ hw/virtio.h     |    3 +
+ 7 files changed, 473 insertions(+), 1 deletions(-)
+ create mode 100644 hw/qdev-core.h
+ create mode 100644 hw/virtio-rng.c
+ create mode 100644 hw/virtio-rng.h
+
+diff --git a/Makefile.objs b/Makefile.objs
+index 83d1fb6..397be26 100644
+--- a/Makefile.objs
++++ b/Makefile.objs
+@@ -165,7 +165,7 @@ user-obj-y += cutils.o cache-utils.o
+ hw-obj-y =
+ hw-obj-y += loader.o
+ hw-obj-y += iov.o
+-hw-obj-y += virtio.o virtio-console.o
++hw-obj-y += virtio.o virtio-console.o virtio-rng.o
+ hw-obj-y += fw_cfg.o
+ hw-obj-y += watchdog.o
+ hw-obj-y += usb-ehci.o
+diff --git a/hw/pci.h b/hw/pci.h
+index 7d06f40..f4d7c59 100644
+--- a/hw/pci.h
++++ b/hw/pci.h
+@@ -2,6 +2,7 @@
+ #define QEMU_PCI_H
+ 
+ #include "qemu-common.h"
++#include "hw/qdev-core.h"
+ 
+ #include "qdev.h"
+ 
+@@ -77,6 +78,7 @@ extern target_phys_addr_t pci_mem_base;
+ #define PCI_DEVICE_ID_VIRTIO_BALLOON     0x1002
+ #define PCI_DEVICE_ID_VIRTIO_CONSOLE     0x1003
+ #define PCI_DEVICE_ID_VIRTIO_SCSI        0x1004
++#define PCI_DEVICE_ID_VIRTIO_RNG         0x1005
+ 
+ #define PCI_VENDOR_ID_REDHAT             0x1b36
+ #define PCI_DEVICE_ID_REDHAT_SERIAL      0x0002
+diff --git a/hw/qdev-core.h b/hw/qdev-core.h
+new file mode 100644
+index 0000000..c01607b
+--- /dev/null
++++ b/hw/qdev-core.h
+@@ -0,0 +1,183 @@
++#ifndef QDEV_CORE_H
++#define QDEV_CORE_H
++
++#include "qemu-queue.h"
++#include "qemu-option.h"
++#include "qom/object.h"
++#include "hw/irq.h"
++#include "error.h"
++#include "hw/qdev.h"
++#define TYPE_DEVICE "device"
++#define DEVICE(obj) OBJECT_CHECK(DeviceState, (obj), TYPE_DEVICE)
++#define DEVICE_CLASS(klass) OBJECT_CLASS_CHECK(DeviceClass, (klass), TYPE_DEVICE)
++#define DEVICE_GET_CLASS(obj) OBJECT_GET_CLASS(DeviceClass, (obj), TYPE_DEVICE)
++
++typedef void (*DeviceRealize)(DeviceState *dev, Error **errp);
++typedef void (*DeviceUnrealize)(DeviceState *dev, Error **errp);
++
++struct VMStateDescription;
++
++/**
++ * DeviceClass:
++ * @props: Properties accessing state fields.
++ * @realize: Callback function invoked when the #DeviceState:realized
++ * property is changed to %true. The default invokes @init if not %NULL.
++ * @unrealize: Callback function invoked when the #DeviceState:realized
++ * property is changed to %false.
++ * @init: Callback function invoked when the #DeviceState::realized property
++ * is changed to %true. Deprecated, new types inheriting directly from
++ * TYPE_DEVICE should use @realize instead, new leaf types should consult
++ * their respective parent type.
++ *
++ * # Realization #
++ * Devices are constructed in two stages,
++ * 1) object instantiation via object_initialize() and
++ * 2) device realization via #DeviceState:realized property.
++ * The former may not fail (it might assert or exit), the latter may return
++ * error information to the caller and must be re-entrant.
++ * Trivial field initializations should go into #TypeInfo.instance_init.
++ * Operations depending on @props static properties should go into @realize.
++ * After successful realization, setting static properties will fail.
++ *
++ * As an interim step, the #DeviceState:realized property is set by deprecated
++ * functions qdev_init() and qdev_init_nofail().
++ * In the future, devices will propagate this state change to their children
++ * and along busses they expose.
++ * The point in time will be deferred to machine creation, so that values
++ * set in @realize will not be introspectable beforehand. Therefore devices
++ * must not create children during @realize; they should initialize them via
++ * object_initialize() in their own #TypeInfo.instance_init and forward the
++ * realization events appropriately.
++ *
++ * The @init callback is considered private to a particular bus implementation
++ * (immediate abstract child types of TYPE_DEVICE). Derived leaf types set an
++ * "init" callback on their parent class instead.
++ *
++ * Any type may override the @realize and/or @unrealize callbacks but needs
++ * to call the parent type's implementation if keeping their functionality
++ * is desired. Refer to QOM documentation for further discussion and examples.
++ *
++ * <note>
++ *   <para>
++ * If a type derived directly from TYPE_DEVICE implements @realize, it does
++ * not need to implement @init and therefore does not need to store and call
++ * #DeviceClass' default @realize callback.
++ * For other types consult the documentation and implementation of the
++ * respective parent types.
++ *   </para>
++ * </note>
++ */
++typedef struct DeviceClass {
++    /*< private >*/
++    ObjectClass parent_class;
++    /*< public >*/
++
++    const char *fw_name;
++    const char *desc;
++    Property *props;
++    int no_user;
++
++    /* callbacks */
++    void (*reset)(DeviceState *dev);
++    DeviceRealize realize;
++    DeviceUnrealize unrealize;
++
++    /* device state */
++    const struct VMStateDescription *vmsd;
++
++    /* Private to qdev / bus.  */
++    qdev_initfn init; /* TODO remove, once users are converted to realize */
++    qdev_event unplug;
++    qdev_event exit; /* TODO remove, once users are converted to unrealize */
++    const char *bus_type;
++} DeviceClass;
++
++/**
++ * DeviceState:
++ * @realized: Indicates whether the device has been fully constructed.
++ *
++ * This structure should not be accessed directly.  We declare it here
++ * so that it can be embedded in individual device state structures.
++ */
++
++#define TYPE_BUS "bus"
++#define BUS(obj) OBJECT_CHECK(BusState, (obj), TYPE_BUS)
++#define BUS_CLASS(klass) OBJECT_CLASS_CHECK(BusClass, (klass), TYPE_BUS)
++#define BUS_GET_CLASS(obj) OBJECT_GET_CLASS(BusClass, (obj), TYPE_BUS)
++
++struct BusClass {
++    ObjectClass parent_class;
++
++    /* FIXME first arg should be BusState */
++    void (*print_dev)(Monitor *mon, DeviceState *dev, int indent);
++    char *(*get_dev_path)(DeviceState *dev);
++    /*
++     * This callback is used to create Open Firmware device path in accordance
++     * with OF spec http://forthworks.com/standards/of1275.pdf. Individual bus
++     * bindings can be found at http://playground.sun.com/1275/bindings/.
++     */
++    char *(*get_fw_dev_path)(DeviceState *dev);
++    int (*reset)(BusState *bus);
++    /* maximum devices allowed on the bus, 0: no limit. */
++    int max_dev;
++};
++
++typedef struct BusChild {
++    DeviceState *child;
++    int index;
++    QTAILQ_ENTRY(BusChild) sibling;
++} BusChild;
++
++DeviceState *qdev_try_create(BusState *bus, const char *name);
++void qdev_set_legacy_instance_id(DeviceState *dev, int alias_id,
++                                 int required_for_version);
++
++
++DeviceState *qdev_find_recursive(BusState *bus, const char *id);
++
++
++/**
++ * @qbus_reset_all:
++ * @bus: Bus to be reset.
++ *
++ * Reset @bus and perform a bus-level ("hard") reset of all devices connected
++ * to it, including recursive processing of all buses below @bus itself.  A
++ * hard reset means that qbus_reset_all will reset all state of the device.
++ * For PCI devices, for example, this will include the base address registers
++ * or configuration space.
++ */
++void qbus_reset_all(BusState *bus);
++void qbus_reset_all_fn(void *opaque);
++
++/* This should go away once we get rid of the NULL bus hack */
++BusState *sysbus_get_default(void);
++
++
++/**
++ * @qdev_machine_init
++ *
++ * Initialize platform devices before machine init.  This is a hack until full
++ * support for composition is added.
++ */
++void qdev_machine_init(void);
++
++/**
++ * @device_reset
++ *
++ * Reset a single device (by calling the reset method).
++ */
++void device_reset(DeviceState *dev);
++
++const struct VMStateDescription *qdev_get_vmsd(DeviceState *dev);
++
++
++Object *qdev_get_machine(void);
++
++/* FIXME: make this a link<> */
++void qdev_set_parent_bus(DeviceState *dev, BusState *bus);
++
++extern int qdev_hotplug;
++
++char *qdev_get_dev_path(DeviceState *dev);
++
++#endif
+diff --git a/hw/virtio-pci.c b/hw/virtio-pci.c
+index 91880b1..23ea007 100644
+--- a/hw/virtio-pci.c
++++ b/hw/virtio-pci.c
+@@ -20,12 +20,15 @@
+ #include "virtio-net.h"
+ #include "virtio-serial.h"
+ #include "virtio-scsi.h"
++#include "virtio-rng.h"
+ #include "pci.h"
+ #include "qemu-error.h"
+ #include "msix.h"
+ #include "net.h"
+ #include "loader.h"
+ #include "kvm.h"
++#include "qom/object.h"
++#include "hw/qdev-core.h"
+ 
+ /* from Linux's linux/virtio_pci.h */
+ 
+@@ -119,6 +122,7 @@ typedef struct {
+     uint32_t host_features;
+     virtio_serial_conf serial;
+     virtio_net_conf net;
++    VirtIORNGConf rng;
+     bool ioeventfd_disabled;
+     bool ioeventfd_started;
+ } VirtIOPCIProxy;
+@@ -945,6 +949,39 @@ static int virtio_balloon_exit_pci(PCIDevice *pci_dev)
+     return virtio_exit_pci(pci_dev);
+ }
+ 
++static int virtio_rng_init_pci(PCIDevice *pci_dev)
++{
++    VirtIOPCIProxy *proxy = DO_UPCAST(VirtIOPCIProxy, pci_dev, pci_dev);
++    VirtIODevice *vdev;
++    char *path;
++
++    path = g_strdup_printf("/objects/%s", proxy->rng.name);
++    proxy->rng.rng = RNG_BACKEND(object_resolve_path_type(path,
++                                 TYPE_RNG_BACKEND, NULL));
++    g_free(path);
++
++    vdev = virtio_rng_init(&pci_dev->qdev, &proxy->rng);
++    if (!vdev) {
++        return -1;
++    }
++    virtio_init_pci(proxy, vdev,
++                    PCI_VENDOR_ID_REDHAT_QUMRANET,
++                    PCI_DEVICE_ID_VIRTIO_RNG,
++                    PCI_CLASS_OTHERS,
++                    0x00);
++    return 0;
++}
++
++static int virtio_rng_exit_pci(PCIDevice *pci_dev)
++{
++    VirtIOPCIProxy *proxy = DO_UPCAST(VirtIOPCIProxy, pci_dev, pci_dev);
++
++    virtio_pci_stop_ioeventfd(proxy);
++    virtio_rng_exit(proxy->vdev);
++    virtio_exit_pci(pci_dev);
++    return 0;
++}
++
+ static int virtio_scsi_init_pci(PCIDevice *pci_dev)
+ {
+     VirtIOPCIProxy *proxy = DO_UPCAST(VirtIOPCIProxy, pci_dev, pci_dev);
+@@ -1060,6 +1097,17 @@ static PCIDeviceInfo virtio_info[] = {
+             DEFINE_VIRTIO_SCSI_PROPERTIES(VirtIOPCIProxy, host_features, scsi),
+             DEFINE_PROP_END_OF_LIST(),
+         },
++    },{
++        .qdev.name = "virtio-rng-pci",
++        .qdev.size = sizeof(VirtIOPCIProxy),
++        .init      = virtio_rng_init_pci,
++        .exit      = virtio_rng_exit_pci,
++        .qdev.props = (Property[]) {
++            DEFINE_VIRTIO_COMMON_FEATURES(VirtIOPCIProxy, host_features),
++            DEFINE_PROP_STRING("rng", VirtIOPCIProxy, rng.name),
++            DEFINE_PROP_END_OF_LIST(),
++        },
++        .qdev.reset = virtio_pci_reset,
+     }, {
+         /* end of list */
+     }
+diff --git a/hw/virtio-rng.c b/hw/virtio-rng.c
+new file mode 100644
+index 0000000..330b080
+--- /dev/null
++++ b/hw/virtio-rng.c
+@@ -0,0 +1,211 @@
++/*
++ * A virtio device implementing a hardware random number generator.
++ *
++ * Copyright 2012 Red Hat, Inc.
++ * Copyright 2012 Amit Shah <amit.shah@redhat.com>
++ *
++ * This work is licensed under the terms of the GNU GPL, version 2 or
++ * (at your option) any later version.  See the COPYING file in the
++ * top-level directory.
++ */
++
++#include "iov.h"
++#include "qdev.h"
++#include "virtio.h"
++#include "virtio-rng.h"
++#include "qemu/rng.h"
++
++typedef struct VirtIORNG {
++    VirtIODevice vdev;
++
++    DeviceState *qdev;
++
++    /* Only one vq - guest puts buffer(s) on it when it needs entropy */
++    VirtQueue *vq;
++    VirtQueueElement elem;
++
++    /* Config data for the device -- currently only chardev */
++    VirtIORNGConf *conf;
++
++    /* Whether we've popped a vq element into 'elem' above */
++    bool popped;
++
++    RngBackend *rng;
++} VirtIORNG;
++
++static bool is_guest_ready(VirtIORNG *vrng)
++{
++    if (virtio_queue_ready(vrng->vq)
++        && (vrng->vdev.status & VIRTIO_CONFIG_S_DRIVER_OK)) {
++        return true;
++    }
++    return false;
++}
++
++static size_t pop_an_elem(VirtIORNG *vrng)
++{
++    size_t size;
++
++    if (!vrng->popped && !virtqueue_pop(vrng->vq, &vrng->elem)) {
++        return 0;
++    }
++    vrng->popped = true;
++
++    size = iov_size(vrng->elem.in_sg, vrng->elem.in_num);
++    return size;
++}
++
++/* Send data from a char device over to the guest */
++static void chr_read(void *opaque, const void *buf, size_t size)
++{
++    VirtIORNG *vrng = opaque;
++    size_t len;
++    int offset;
++
++    if (!is_guest_ready(vrng)) {
++        return;
++    }
++
++    offset = 0;
++    while (offset < size) {
++        if (!pop_an_elem(vrng)) {
++            break;
++        }
++        len = iov_from_buf(vrng->elem.in_sg, vrng->elem.in_num,
++                           buf + offset, size - offset);
++        offset += len;
++
++        virtqueue_push(vrng->vq, &vrng->elem, len);
++        vrng->popped = false;
++    }
++    virtio_notify(&vrng->vdev, vrng->vq);
++
++    /*
++     * Lastly, if we had multiple elems queued by the guest, and we
++     * didn't have enough data to fill them all, indicate we want more
++     * data.
++     */
++    len = pop_an_elem(vrng);
++    if (len) {
++        rng_backend_request_entropy(vrng->rng, size, chr_read, vrng);
++    }
++}
++
++static void handle_input(VirtIODevice *vdev, VirtQueue *vq)
++{
++    VirtIORNG *vrng = DO_UPCAST(VirtIORNG, vdev, vdev);
++    size_t size;
++
++    size = pop_an_elem(vrng);
++    if (size) {
++        rng_backend_request_entropy(vrng->rng, size, chr_read, vrng);
++    }
++}
++
++static uint32_t get_features(VirtIODevice *vdev, uint32_t f)
++{
++    return f;
++}
++
++static void virtio_rng_save(QEMUFile *f, void *opaque)
++{
++    VirtIORNG *vrng = opaque;
++
++    virtio_save(&vrng->vdev, f);
++
++    qemu_put_byte(f, vrng->popped);
++    if (vrng->popped) {
++        int i;
++
++        qemu_put_be32(f, vrng->elem.index);
++
++        qemu_put_be32(f, vrng->elem.in_num);
++        for (i = 0; i < vrng->elem.in_num; i++) {
++            qemu_put_be64(f, vrng->elem.in_addr[i]);
++        }
++
++        qemu_put_be32(f, vrng->elem.out_num);
++        for (i = 0; i < vrng->elem.out_num; i++) {
++            qemu_put_be64(f, vrng->elem.out_addr[i]);
++        }
++    }
++}
++
++static int virtio_rng_load(QEMUFile *f, void *opaque, int version_id)
++{
++    VirtIORNG *vrng = opaque;
++
++    if (version_id != 1) {
++        return -EINVAL;
++    }
++    virtio_load(&vrng->vdev, f);
++
++    vrng->popped = qemu_get_byte(f);
++    if (vrng->popped) {
++        int i;
++
++        vrng->elem.index = qemu_get_be32(f);
++
++        vrng->elem.in_num = qemu_get_be32(f);
++        g_assert(vrng->elem.in_num < VIRTQUEUE_MAX_SIZE);
++        for (i = 0; i < vrng->elem.in_num; i++) {
++            vrng->elem.in_addr[i] = qemu_get_be64(f);
++        }
++
++        vrng->elem.out_num = qemu_get_be32(f);
++        g_assert(vrng->elem.out_num < VIRTQUEUE_MAX_SIZE);
++        for (i = 0; i < vrng->elem.out_num; i++) {
++            vrng->elem.out_addr[i] = qemu_get_be64(f);
++        }
++
++        virtqueue_map_sg(vrng->elem.in_sg, vrng->elem.in_addr,
++                         vrng->elem.in_num, 1);
++        virtqueue_map_sg(vrng->elem.out_sg, vrng->elem.out_addr,
++                         vrng->elem.out_num, 0);
++    }
++    return 0;
++}
++
++VirtIODevice *virtio_rng_init(DeviceState *dev, VirtIORNGConf *conf)
++{
++    VirtIORNG *vrng;
++    VirtIODevice *vdev;
++    Error *local_err = NULL;
++
++    vdev = virtio_common_init("virtio-rng", VIRTIO_ID_RNG, 0,
++                              sizeof(VirtIORNG));
++
++    vrng = DO_UPCAST(VirtIORNG, vdev, vdev);
++
++    vrng->rng = conf->rng;
++    if (vrng->rng == NULL) {
++        qerror_report(QERR_INVALID_PARAMETER_VALUE, "rng", "a valid object");
++        return NULL;
++    }
++
++    rng_backend_open(vrng->rng, &local_err);
++    if (local_err) {
++        qerror_report_err(local_err);
++        error_free(local_err);
++        return NULL;
++    }
++
++    vrng->vq = virtio_add_queue(vdev, 8, handle_input);
++    vrng->vdev.get_features = get_features;
++
++    vrng->qdev = dev;
++    vrng->conf = conf;
++    vrng->popped = false;
++    register_savevm(dev, "virtio-rng", -1, 1, virtio_rng_save,
++                    virtio_rng_load, vrng);
++
++    return vdev;
++}
++
++void virtio_rng_exit(VirtIODevice *vdev)
++{
++    VirtIORNG *vrng = DO_UPCAST(VirtIORNG, vdev, vdev);
++
++    unregister_savevm(vrng->qdev, "virtio-rng", vrng);
++    virtio_cleanup(vdev);
++}
+diff --git a/hw/virtio-rng.h b/hw/virtio-rng.h
+new file mode 100644
+index 0000000..ad584c2
+--- /dev/null
++++ b/hw/virtio-rng.h
+@@ -0,0 +1,25 @@
++/*
++ * Virtio RNG Support
++ *
++ * Copyright Red Hat, Inc. 2012
++ * Copyright Amit Shah <amit.shah@redhat.com>
++ *
++ * This work is licensed under the terms of the GNU GPL, version 2 or
++ * (at your option) any later version.  See the COPYING file in the
++ * top-level directory.
++ */
++
++#ifndef _QEMU_VIRTIO_RNG_H
++#define _QEMU_VIRTIO_RNG_H
++
++#include "qemu/rng.h"
++
++/* The Virtio ID for the virtio rng device */
++#define VIRTIO_ID_RNG    4
++
++struct VirtIORNGConf {
++    char *name;
++    RngBackend *rng;
++};
++
++#endif
+diff --git a/hw/virtio.h b/hw/virtio.h
+index e6f96e7..f603208 100644
+--- a/hw/virtio.h
++++ b/hw/virtio.h
+@@ -206,12 +206,15 @@ VirtIODevice *virtio_serial_init(DeviceState *dev, virtio_serial_conf *serial);
+ VirtIODevice *virtio_balloon_init(DeviceState *dev);
+ typedef struct VirtIOSCSIConf VirtIOSCSIConf;
+ VirtIODevice *virtio_scsi_init(DeviceState *dev, VirtIOSCSIConf *conf);
++typedef struct VirtIORNGConf VirtIORNGConf;
++VirtIODevice *virtio_rng_init(DeviceState *dev, VirtIORNGConf *conf);
+ 
+ void virtio_net_exit(VirtIODevice *vdev);
+ void virtio_blk_exit(VirtIODevice *vdev);
+ void virtio_serial_exit(VirtIODevice *vdev);
+ void virtio_balloon_exit(VirtIODevice *vdev);
+ void virtio_scsi_exit(VirtIODevice *vdev);
++void virtio_rng_exit(VirtIODevice *vdev);
+ 
+ #define DEFINE_VIRTIO_COMMON_FEATURES(_state, _field) \
+ 	DEFINE_PROP_BIT("indirect_desc", _state, _field, \
+-- 
+1.7.1
+

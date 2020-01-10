@@ -1,0 +1,49 @@
+From ac0ba67dff2049ff8601fe686b870bba1879b99f Mon Sep 17 00:00:00 2001
+Message-Id: <ac0ba67dff2049ff8601fe686b870bba1879b99f.1376484223.git.minovotn@redhat.com>
+From: Igor Mammedov <imammedo@redhat.com>
+Date: Wed, 31 Jul 2013 07:52:54 +0200
+Subject: [PATCH 1/6] Do not quit QEMU if cpu-set is called in non ACPI mode
+
+RH-Author: Igor Mammedov <imammedo@redhat.com>
+Message-id: <1375257174-10978-1-git-send-email-imammedo@redhat.com>
+Patchwork-id: 52835
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] Do not quit QEMU if cpu-set is called in non ACPI mode
+Bugzilla: 990237
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+Bugzilla: 990237
+
+If QEMU is started with -no-acpi, report error to caller
+of cpu-set monitor command instead of crashing QEMU.
+
+Signed-off-by: Igor Mammedov <imammedo@redhat.com>
+---
+ hw/acpi.c |    5 +++++
+ 1 files changed, 5 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/acpi.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/hw/acpi.c b/hw/acpi.c
+index ddbbda7..c1c14e2 100644
+--- a/hw/acpi.c
++++ b/hw/acpi.c
+@@ -969,6 +969,11 @@ void qemu_system_cpu_hot_add(int cpu, int state, Monitor *mon)
+     CPUState *env;
+     uint32_t apic_id;
+ 
++    if (!acpi_enabled) {
++        monitor_printf(mon, "CPU hot add is disabled by -no-acpi option\n");
++        return;
++    }
++
+     if ((cpu < 1) || (cpu > max_cpus - 1)) {
+         monitor_printf(mon, "cpu id[%d] must be in range [1..%d]\n",
+             cpu, max_cpus - 1);
+-- 
+1.7.11.7
+

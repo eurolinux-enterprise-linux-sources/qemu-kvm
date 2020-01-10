@@ -1,0 +1,91 @@
+From c51ff806da61289fccd5daa07b422385028474fb Mon Sep 17 00:00:00 2001
+Message-Id: <c51ff806da61289fccd5daa07b422385028474fb.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:38 -0500
+Subject: [CHANGE 18/29] block: Drop AIOCBInfo.cancel
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-19-git-send-email-famz@redhat.com>
+Patchwork-id: 64919
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 18/28] block: Drop AIOCBInfo.cancel
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Now that all the implementations are converted to asynchronous version
+and we can emulate synchronous cancellation with it. Let's drop the
+unused member.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit ca5fd113b8ae5898853a757e06cb8d8a0c5e5d85)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+
+	block.c
+Conflict because we only have qemu_aio_wait(), not aio functions.
+---
+ block.c    | 20 ++++++++------------
+ qemu-aio.h |  1 -
+ 2 files changed, 8 insertions(+), 13 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block.c    | 20 ++++++++------------
+ qemu-aio.h |  1 -
+ 2 files changed, 8 insertions(+), 13 deletions(-)
+
+diff --git a/block.c b/block.c
+index 1f8c1c2..c493a40 100644
+--- a/block.c
++++ b/block.c
+@@ -3829,19 +3829,15 @@ fail:
+ 
+ void bdrv_aio_cancel(BlockDriverAIOCB *acb)
+ {
+-    if (acb->aiocb_info->cancel) {
+-        acb->aiocb_info->cancel(acb);
+-    } else {
+-        BlockDriverState *bs = acb->bs;
+-        qemu_aio_ref(acb);
+-        bdrv_aio_cancel_async(acb);
+-        while (acb->refcnt > 1) {
+-            qemu_co_queue_restart_all(&bs->throttled_reqs[0]);
+-            qemu_co_queue_restart_all(&bs->throttled_reqs[1]);
+-            qemu_aio_wait();
+-        }
+-        qemu_aio_release(acb);
++    BlockDriverState *bs = acb->bs;
++    qemu_aio_ref(acb);
++    bdrv_aio_cancel_async(acb);
++    while (acb->refcnt > 1) {
++        qemu_co_queue_restart_all(&bs->throttled_reqs[0]);
++        qemu_co_queue_restart_all(&bs->throttled_reqs[1]);
++        qemu_aio_wait();
+     }
++    qemu_aio_release(acb);
+ }
+ 
+ /* Async version of aio cancel. The caller is not blocked if the acb implements
+diff --git a/qemu-aio.h b/qemu-aio.h
+index 043c857..b6c7d50 100644
+--- a/qemu-aio.h
++++ b/qemu-aio.h
+@@ -22,7 +22,6 @@ typedef struct BlockDriverAIOCB BlockDriverAIOCB;
+ typedef void BlockDriverCompletionFunc(void *opaque, int ret);
+ 
+ typedef struct AIOCBInfo {
+-    void (*cancel)(BlockDriverAIOCB *acb);
+     void (*cancel_async)(BlockDriverAIOCB *acb);
+     size_t aiocb_size;
+ } AIOCBInfo;
+-- 
+2.1.0
+

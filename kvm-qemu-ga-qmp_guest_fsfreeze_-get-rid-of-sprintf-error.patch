@@ -1,0 +1,74 @@
+From 4f04f864201bf08940915fd369f10c37f3da3f10 Mon Sep 17 00:00:00 2001
+Message-Id: <4f04f864201bf08940915fd369f10c37f3da3f10.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:27:44 +0200
+Subject: [PATCH 079/114] qemu-ga: qmp_guest_fsfreeze_*(): get rid of
+ sprintf() + error_set()
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-22-git-send-email-lersek@redhat.com>
+Patchwork-id: 51120
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 21/56] qemu-ga: qmp_guest_fsfreeze_*(): get rid of sprintf() + error_set()
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Luiz Capitulino <lcapitulino@redhat.com>
+
+Convert them to error_setg_errno().
+
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+Reviewed-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit 617fbbc13219d26dd71d100d83d617ec8acf5e2d)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qga/commands-posix.c |   10 +++-------
+ 1 files changed, 3 insertions(+), 7 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/commands-posix.c | 10 +++-------
+ 1 file changed, 3 insertions(+), 7 deletions(-)
+
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index f829672..943a9b8 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -434,7 +434,6 @@ int64_t qmp_guest_fsfreeze_freeze(Error **err)
+     struct FsMount *mount;
+     Error *local_err = NULL;
+     int fd;
+-    char err_msg[512];
+ 
+     slog("guest-fsfreeze called");
+ 
+@@ -451,9 +450,7 @@ int64_t qmp_guest_fsfreeze_freeze(Error **err)
+     QTAILQ_FOREACH(mount, &mounts, next) {
+         fd = qemu_open(mount->dirname, O_RDONLY);
+         if (fd == -1) {
+-            sprintf(err_msg, "failed to open %s, %s", mount->dirname,
+-                    strerror(errno));
+-            error_set(err, QERR_QGA_COMMAND_FAILED, err_msg);
++            error_setg_errno(err, errno, "failed to open %s", mount->dirname);
+             goto error;
+         }
+ 
+@@ -469,9 +466,8 @@ int64_t qmp_guest_fsfreeze_freeze(Error **err)
+         ret = ioctl(fd, FIFREEZE);
+         if (ret == -1) {
+             if (errno != EOPNOTSUPP) {
+-                sprintf(err_msg, "failed to freeze %s, %s",
+-                        mount->dirname, strerror(errno));
+-                error_set(err, QERR_QGA_COMMAND_FAILED, err_msg);
++                error_setg_errno(err, errno, "failed to freeze %s",
++                                 mount->dirname);
+                 close(fd);
+                 goto error;
+             }
+-- 
+1.7.11.7
+

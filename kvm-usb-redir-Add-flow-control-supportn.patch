@@ -1,0 +1,115 @@
+From fe3323181b7bd11d15ef4155d42b7d84c3ce7e90 Mon Sep 17 00:00:00 2001
+Message-Id: <fe3323181b7bd11d15ef4155d42b7d84c3ce7e90.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:25 +0200
+Subject: [PATCH 51/65] usb-redir: Add flow control support
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <a66e4897c4f5f141a048d2128ebc81264f49b1c4.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50829
+O-Subject: [RHEL6.5 qemu-kvm PATCH 51/65] usb-redir: Add flow control support
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Hans de Goede <hdegoede@redhat.com>
+
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 7313cbd1279a89e87e8d4016b488d09db6b5abf2)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	usb-redir.c
+---
+ usb-redir.c | 34 +++++++++++++++++++++++++++++++++-
+ 1 file changed, 33 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ usb-redir.c | 34 +++++++++++++++++++++++++++++++++-
+ 1 file changed, 33 insertions(+), 1 deletion(-)
+
+diff --git a/usb-redir.c b/usb-redir.c
+index f8d8dab..ed56107 100644
+--- a/usb-redir.c
++++ b/usb-redir.c
+@@ -91,6 +91,8 @@ struct USBRedirDevice {
+     /* Data passed from chardev the fd_read cb to the usbredirparser read cb */
+     const uint8_t *read_buf;
+     int read_buf_size;
++    /* Active chardev-watch-tag */
++    guint watch;
+     /* For async handling of close */
+     QEMUBH *chardev_close_bh;
+     /* To delay the usb attach in case of quick chardev close + open */
+@@ -240,9 +242,21 @@ static int usbredir_read(void *priv, uint8_t *data, int count)
+     return count;
+ }
+ 
++static gboolean usbredir_write_unblocked(GIOChannel *chan, GIOCondition cond,
++                                         void *opaque)
++{
++    USBRedirDevice *dev = opaque;
++
++    dev->watch = 0;
++    usbredirparser_do_write(dev->parser);
++
++    return FALSE;
++}
++
+ static int usbredir_write(void *priv, uint8_t *data, int count)
+ {
+     USBRedirDevice *dev = priv;
++    int r;
+ 
+     if (!dev->cs->opened) {
+         return 0;
+@@ -252,7 +266,18 @@ static int usbredir_write(void *priv, uint8_t *data, int count)
+     if (!runstate_check(RUN_STATE_RUNNING)) {
+         return 0;
+     }
+-    return qemu_chr_fe_write(dev->cs, data, count);
++
++    r = qemu_chr_fe_write(dev->cs, data, count);
++    if (r < count) {
++        if (!dev->watch) {
++            dev->watch = qemu_chr_fe_add_watch(dev->cs, G_IO_OUT,
++                                               usbredir_write_unblocked, dev);
++        }
++        if (r < 0) {
++            r = 0;
++        }
++    }
++    return r;
+ }
+ 
+ /*
+@@ -899,6 +924,10 @@ static void usbredir_chardev_close_bh(void *opaque)
+         usbredirparser_destroy(dev->parser);
+         dev->parser = NULL;
+     }
++    if (dev->watch) {
++        g_source_remove(dev->watch);
++        dev->watch = 0;
++    }
+ }
+ 
+ static void usbredir_create_parser(USBRedirDevice *dev)
+@@ -1108,6 +1137,9 @@ static void usbredir_handle_destroy(USBDevice *udev)
+     if (dev->parser) {
+         usbredirparser_destroy(dev->parser);
+     }
++    if (dev->watch) {
++        g_source_remove(dev->watch);
++    }
+ 
+     free(dev->filter_rules);
+ }
+-- 
+1.7.11.7
+

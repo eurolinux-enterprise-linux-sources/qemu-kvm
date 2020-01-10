@@ -1,0 +1,86 @@
+From 3513b8ff90dc829d117d4ab471e6b563191d3ba2 Mon Sep 17 00:00:00 2001
+Message-Id: <3513b8ff90dc829d117d4ab471e6b563191d3ba2.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:06:08 +0200
+Subject: [PATCH 57/65] chardev: add console support to qapi
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-58-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52162
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 57/65] chardev: add console support to qapi
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+This patch adds 'console' support to qapi and also switches over the
+console chardev initialization to the new qapi code path.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit d9ac374f0def9a65340c1768c08e3271f4d7798d)
+---
+ qapi-schema.json |    3 ++-
+ qemu-char.c      |    9 +++++++--
+ 2 files changed, 9 insertions(+), 3 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema.json | 3 ++-
+ qemu-char.c      | 9 +++++++--
+ 2 files changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/qapi-schema.json b/qapi-schema.json
+index 1b68510..a797092 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -497,7 +497,8 @@
+                                        'mux'    : 'ChardevMux',
+                                        'msmouse': 'ChardevDummy',
+                                        'braille': 'ChardevDummy',
+-                                       'stdio'  : 'ChardevStdio' } }
++                                       'stdio'  : 'ChardevStdio',
++                                       'console': 'ChardevDummy' } }
+ 
+ ##
+ # @ChardevReturn:
+diff --git a/qemu-char.c b/qemu-char.c
+index a1a92e2..eeb35fa 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -1966,7 +1966,7 @@ static CharDriverState *qemu_chr_open_win_file(HANDLE fd_out)
+     return chr;
+ }
+ 
+-static CharDriverState *qemu_chr_open_win_con(QemuOpts *opts)
++static CharDriverState *qemu_chr_open_win_con(void)
+ {
+     return qemu_chr_open_win_file(GetStdHandle(STD_OUTPUT_HANDLE));
+ }
+@@ -3258,6 +3258,11 @@ ChardevReturn *qmp_chardev_add(const char *id, ChardevBackend *backend,
+     case CHARDEV_BACKEND_KIND_STDIO:
+         chr = qemu_chr_open_stdio(backend->stdio);
+         break;
++#ifdef _WIN32
++    case CHARDEV_BACKEND_KIND_CONSOLE:
++        chr = qemu_chr_open_win_con();
++        break;
++#endif
+     default:
+         error_setg(errp, "unknown chardev backend (%d)", backend->kind);
+         break;
+@@ -3313,9 +3318,9 @@ static void register_types(void)
+     register_char_driver_qapi("parport", CHARDEV_BACKEND_KIND_PARALLEL,
+                               qemu_chr_parse_parallel);
+     register_char_driver_qapi("pty", CHARDEV_BACKEND_KIND_PTY, NULL);
++    register_char_driver_qapi("console", CHARDEV_BACKEND_KIND_CONSOLE, NULL);
+ #ifdef _WIN32
+     register_char_driver("pipe", qemu_chr_open_win_pipe);
+-    register_char_driver("console", qemu_chr_open_win_con);
+ #else
+     register_char_driver("pipe", qemu_chr_open_pipe);
+ #endif
+-- 
+1.7.11.7
+

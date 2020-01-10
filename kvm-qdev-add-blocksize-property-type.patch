@@ -1,0 +1,152 @@
+From 144150b708ce0b28e44b39c63a7c3c04fb625e4d Mon Sep 17 00:00:00 2001
+Message-Id: <144150b708ce0b28e44b39c63a7c3c04fb625e4d.1361183855.git.minovotn@redhat.com>
+In-Reply-To: <8a5181c3fa0b1efb69153485808afcb612d0aa60.1361183855.git.minovotn@redhat.com>
+References: <8a5181c3fa0b1efb69153485808afcb612d0aa60.1361183855.git.minovotn@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Tue, 22 Jan 2013 13:46:31 +0100
+Subject: [PATCH 2/5] qdev: add blocksize property type
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1358862392-28927-2-git-send-email-stefanha@redhat.com>
+Patchwork-id: 47623
+O-Subject: [PATCH RHEL6.5 qemu-kvm 1/2] qdev: add blocksize property type
+Bugzilla: 889135
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+From 03cc53bd84efdba3ffc01ecf59ee6617311481cf Mon Sep 17 00:00:00 2001
+Message-Id: <03cc53bd84efdba3ffc01ecf59ee6617311481cf.1361183281.git.minovotn@redhat.com>
+From: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Date: Tue, 22 Jan 2013 14:46:31 +0100
+Subject: [PATCH] qdev: add blocksize property type
+
+Storage interfaces like virtio-blk can be configured with block size
+information so that the guest can take advantage of efficient I/O
+request sizes.
+
+According to the SCSI Block Commands (SBC) standard a device's block
+size is "almost always greater than one byte and may be a multiple of
+512 bytes".  QEMU currently has a 512 byte minimum block size because
+the block layer functions work at that granularity.  Furthermore, the
+block size should be a power of 2 because QEMU calculates bitmasks from
+the value.
+
+Introduce a "blocksize" property type so devices can enforce these
+constraints on block size values.  If the constraints are relaxed in the
+future then this property can be updated.
+
+Introduce the new PropertyValueNotPowerOf2 QError so QMP clients know
+exactly why a block size value was rejected.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 02fda01c3024463e561820afb0ba09daba4014d9)
+
+Conflicts:
+
+  * Upstream has QOM-based qdev properties where .get() is similar to
+    our .print() and .set() is similar to .parse().
+  * Upstream QOM-based qdev properties check dev->state and refuse
+    setting the property once the device has realized - ignore
+    downstream.
+  * .print()/.parse() return -errno and cannot set QErrors themselves.
+    Use -EINVAL for invalid inputs and don't introduce specialized
+    out-of-range or not-power-of-2 errors.  Upstream is now following a
+    generic error approach and no longer declaring specialized errors.
+    Libvirt never checked for specific blocksize errors anyway.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/qdev-properties.c | 34 ++++++++++++++++++++++++++++++++++
+ hw/qdev.h            |  4 ++++
+ 2 files changed, 38 insertions(+)
+
+--
+1.7.11.7
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/qdev-properties.c | 34 ++++++++++++++++++++++++++++++++++
+ hw/qdev.h            |  4 ++++
+ 2 files changed, 38 insertions(+)
+
+diff --git a/hw/qdev-properties.c b/hw/qdev-properties.c
+index 00afb1c..b347298 100644
+--- a/hw/qdev-properties.c
++++ b/hw/qdev-properties.c
+@@ -564,6 +564,40 @@ PropertyInfo qdev_prop_pci_devfn = {
+     .print = print_pci_devfn,
+ };
+ 
++/* --- blocksize --- */
++
++static int parse_blocksize(DeviceState *dev, Property *prop, const char *str)
++{
++    int16_t *ptr = qdev_get_prop_ptr(dev, prop);
++    unsigned long value;
++    char *end;
++
++    /* accept both hex and decimal */
++    value = strtoul(str, &end, 0);
++    if ((*end != '\0') || (end == str)) {
++        return -EINVAL;
++    }
++    if (value < 512 || value > 65024) {
++        return -EINVAL;
++    }
++
++    /* We rely on power-of-2 blocksizes for bitmasks */
++    if ((value & (value - 1)) != 0) {
++        return -EINVAL;
++    }
++
++    *ptr = value;
++    return 0;
++}
++
++PropertyInfo qdev_prop_blocksize = {
++    .name  = "blocksize",
++    .type  = PROP_TYPE_BLOCKSIZE,
++    .size  = sizeof(uint16_t),
++    .parse = parse_blocksize,
++    .print = print_uint16,
++};
++
+ /* --- public helpers --- */
+ 
+ static Property *qdev_prop_walk(Property *props, const char *name)
+diff --git a/hw/qdev.h b/hw/qdev.h
+index 9b87bd8..43899df 100644
+--- a/hw/qdev.h
++++ b/hw/qdev.h
+@@ -99,6 +99,7 @@ enum PropertyType {
+     PROP_TYPE_VLAN,
+     PROP_TYPE_PTR,
+     PROP_TYPE_BIT,
++    PROP_TYPE_BLOCKSIZE,
+ };
+ 
+ struct PropertyInfo {
+@@ -226,6 +227,7 @@ extern PropertyInfo qdev_prop_drive;
+ extern PropertyInfo qdev_prop_netdev;
+ extern PropertyInfo qdev_prop_vlan;
+ extern PropertyInfo qdev_prop_pci_devfn;
++extern PropertyInfo qdev_prop_blocksize;
+ 
+ #define DEFINE_PROP(_name, _state, _field, _prop, _type) { \
+         .name      = (_name),                                    \
+@@ -280,6 +282,8 @@ extern PropertyInfo qdev_prop_pci_devfn;
+     DEFINE_PROP(_n, _s, _f, qdev_prop_drive, BlockDriverState *)
+ #define DEFINE_PROP_MACADDR(_n, _s, _f)         \
+     DEFINE_PROP(_n, _s, _f, qdev_prop_macaddr, MACAddr)
++#define DEFINE_PROP_BLOCKSIZE(_n, _s, _f, _d) \
++    DEFINE_PROP_DEFAULT(_n, _s, _f, _d, qdev_prop_blocksize, uint16_t)
+ 
+ #define DEFINE_PROP_END_OF_LIST()               \
+     {}
+-- 
+1.7.11.7
+

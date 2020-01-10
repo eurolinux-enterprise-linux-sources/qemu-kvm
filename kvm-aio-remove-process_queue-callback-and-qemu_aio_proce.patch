@@ -1,0 +1,287 @@
+From 17cee23406805d0017f6777977c394eb4989380a Mon Sep 17 00:00:00 2001
+Message-Id: <17cee23406805d0017f6777977c394eb4989380a.1427300678.git.jen@redhat.com>
+In-Reply-To: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+References: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+From: Vlad Yasevich <vyasevic@redhat.com>
+Date: Thu, 12 Mar 2015 19:12:58 -0500
+Subject: [CHANGE 02/33] aio: remove process_queue callback and
+ qemu_aio_process_queue
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Vlad Yasevich <vyasevic@redhat.com>
+Message-id: <1426187601-21396-3-git-send-email-vyasevic@redhat.com>
+Patchwork-id: 64339
+O-Subject: [RHEL6.7 qemu-kvm PATCH v2 02/25] aio: remove process_queue callback and qemu_aio_process_queue
+Bugzilla: 1005016
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Both unused after the previous patch.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry-picked from upstream 0a08dc5c216833d8708e0f1403b42b0b0e766046)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	aio.c
+	block/curl.c
+	block/iscsi.c
+	block/nbd.c
+	block/rbd.c
+	block/sheepdog.c
+	linux-aio.c
+	posix-aio-compat.c
+
+Signed-off-by: Vladislav Yasevich <vyasevic@redhat.com>
+---
+ aio.c              | 29 ++---------------------------
+ block/curl.c       | 10 +++++-----
+ block/gluster.c    |  4 ++--
+ block/rbd.c        |  4 ++--
+ linux-aio.c        | 11 +----------
+ posix-aio-compat.c |  3 +--
+ qemu-aio.h         | 13 -------------
+ 7 files changed, 13 insertions(+), 61 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ aio.c              | 29 ++---------------------------
+ block/curl.c       | 10 +++++-----
+ block/gluster.c    |  4 ++--
+ block/rbd.c        |  4 ++--
+ linux-aio.c        | 11 +----------
+ posix-aio-compat.c |  3 +--
+ qemu-aio.h         | 13 -------------
+ 7 files changed, 13 insertions(+), 61 deletions(-)
+
+diff --git a/aio.c b/aio.c
+index 784e882..f36ae30 100644
+--- a/aio.c
++++ b/aio.c
+@@ -33,7 +33,6 @@ struct AioHandler
+     IOHandler *io_read;
+     IOHandler *io_write;
+     AioFlushHandler *io_flush;
+-    AioProcessQueue *io_process_queue;
+     int deleted;
+     void *opaque;
+     QLIST_ENTRY(AioHandler) node;
+@@ -56,7 +55,6 @@ int qemu_aio_set_fd_handler(int fd,
+                             IOHandler *io_read,
+                             IOHandler *io_write,
+                             AioFlushHandler *io_flush,
+-                            AioProcessQueue *io_process_queue,
+                             void *opaque)
+ {
+     AioHandler *node;
+@@ -89,7 +87,6 @@ int qemu_aio_set_fd_handler(int fd,
+         node->io_read = io_read;
+         node->io_write = io_write;
+         node->io_flush = io_flush;
+-        node->io_process_queue = io_process_queue;
+         node->opaque = opaque;
+     }
+ 
+@@ -118,39 +115,17 @@ void qemu_aio_flush(void)
+     } while (qemu_bh_poll() || ret > 0);
+ }
+ 
+-int qemu_aio_process_queue(void)
+-{
+-    AioHandler *node;
+-    int ret = 0;
+-
+-    walking_handlers++;
+-
+-    QLIST_FOREACH(node, &aio_handlers, node) {
+-        if (node->io_process_queue) {
+-            if (node->io_process_queue(node->opaque)) {
+-                ret = 1;
+-            }
+-        }
+-    }
+-
+-    walking_handlers--;
+-
+-    return ret;
+-}
+-
+ void qemu_aio_wait(void)
+ {
+     int ret;
+ 
+-    if (qemu_bh_poll())
+-        return;
+-
+     /*
+      * If there are callbacks left that have been queued, we need to call then.
+      * Return afterwards to avoid waiting needlessly in select().
+      */
+-    if (qemu_aio_process_queue())
++    if (qemu_bh_poll()) {
+         return;
++    }
+ 
+     do {
+         AioHandler *node;
+diff --git a/block/curl.c b/block/curl.c
+index 831850b..24b0079 100644
+--- a/block/curl.c
++++ b/block/curl.c
+@@ -83,17 +83,17 @@ static int curl_sock_cb(CURL *curl, curl_socket_t fd, int action,
+     DPRINTF("CURL (AIO): Sock action %d on fd %d\n", action, fd);
+     switch (action) {
+         case CURL_POLL_IN:
+-            qemu_aio_set_fd_handler(fd, curl_multi_do, NULL, NULL, NULL, s);
++            qemu_aio_set_fd_handler(fd, curl_multi_do, NULL, curl_aio_flush, s);
+             break;
+         case CURL_POLL_OUT:
+-            qemu_aio_set_fd_handler(fd, NULL, curl_multi_do, NULL, NULL, s);
++            qemu_aio_set_fd_handler(fd, NULL, curl_multi_do, curl_aio_flush, s);
+             break;
+         case CURL_POLL_INOUT:
+-            qemu_aio_set_fd_handler(fd, curl_multi_do,
+-                                    curl_multi_do, NULL, NULL, s);
++            qemu_aio_set_fd_handler(fd, curl_multi_do, curl_multi_do,
++                                    curl_aio_flush, s);
+             break;
+         case CURL_POLL_REMOVE:
+-            qemu_aio_set_fd_handler(fd, NULL, NULL, NULL, NULL, NULL);
++            qemu_aio_set_fd_handler(fd, NULL, NULL, NULL, NULL);
+             break;
+     }
+ 
+diff --git a/block/gluster.c b/block/gluster.c
+index c6cb509..3662335 100644
+--- a/block/gluster.c
++++ b/block/gluster.c
+@@ -334,7 +334,7 @@ static int qemu_gluster_open(BlockDriverState *bs, const char *filename,
+     }
+     fcntl(s->fds[GLUSTER_FD_READ], F_SETFL, O_NONBLOCK);
+     qemu_aio_set_fd_handler(s->fds[GLUSTER_FD_READ],
+-        qemu_gluster_aio_event_reader, NULL, qemu_gluster_aio_flush_cb, NULL, s);
++        qemu_gluster_aio_event_reader, NULL, qemu_gluster_aio_flush_cb, s);
+ 
+ out:
+     qemu_gluster_gconf_free(gconf);
+@@ -640,7 +640,7 @@ static void qemu_gluster_close(BlockDriverState *bs)
+ 
+     close(s->fds[GLUSTER_FD_READ]);
+     close(s->fds[GLUSTER_FD_WRITE]);
+-    qemu_aio_set_fd_handler(s->fds[GLUSTER_FD_READ], NULL, NULL, NULL, NULL, NULL);
++    qemu_aio_set_fd_handler(s->fds[GLUSTER_FD_READ], NULL, NULL, NULL, NULL);
+ 
+     if (s->fd) {
+         glfs_close(s->fd);
+diff --git a/block/rbd.c b/block/rbd.c
+index 448bed1..5851c21 100644
+--- a/block/rbd.c
++++ b/block/rbd.c
+@@ -531,7 +531,7 @@ static int qemu_rbd_open(BlockDriverState *bs, const char *filename, int flags)
+     fcntl(s->fds[0], F_SETFL, O_NONBLOCK);
+     fcntl(s->fds[1], F_SETFL, O_NONBLOCK);
+     qemu_aio_set_fd_handler(s->fds[RBD_FD_READ], qemu_rbd_aio_event_reader,
+-                            NULL, qemu_rbd_aio_flush_cb, NULL, s);
++                            NULL, qemu_rbd_aio_flush_cb, s);
+ 
+ 
+     return 0;
+@@ -552,7 +552,7 @@ static void qemu_rbd_close(BlockDriverState *bs)
+ 
+     close(s->fds[0]);
+     close(s->fds[1]);
+-    qemu_aio_set_fd_handler(s->fds[RBD_FD_READ], NULL, NULL, NULL, NULL, NULL);
++    qemu_aio_set_fd_handler(s->fds[RBD_FD_READ], NULL, NULL, NULL, NULL);
+ 
+     rbd_close(s->image);
+     rados_ioctx_destroy(s->io_ctx);
+diff --git a/linux-aio.c b/linux-aio.c
+index 015e6bd..73c7e47 100644
+--- a/linux-aio.c
++++ b/linux-aio.c
+@@ -77,15 +77,6 @@ static void qemu_laio_process_completion(struct qemu_laio_state *s,
+     qemu_aio_release(laiocb);
+ }
+ 
+-/*
+- * All requests are directly processed when they complete, so there's nothing
+- * left to do during qemu_aio_wait().
+- */
+-static int qemu_laio_process_requests(void *opaque)
+-{
+-    return 0;
+-}
+-
+ static void qemu_laio_completion_cb(void *opaque)
+ {
+     struct qemu_laio_state *s = opaque;
+@@ -225,7 +216,7 @@ void *laio_init(void)
+         goto out_close_efd;
+ 
+     qemu_aio_set_fd_handler(s->efd, qemu_laio_completion_cb, NULL,
+-        qemu_laio_flush_cb, qemu_laio_process_requests, s);
++        qemu_laio_flush_cb, s);
+ 
+     return s;
+ 
+diff --git a/posix-aio-compat.c b/posix-aio-compat.c
+index 378b281..1b48bc2 100644
+--- a/posix-aio-compat.c
++++ b/posix-aio-compat.c
+@@ -672,8 +672,7 @@ int paio_init(void)
+ 
+     fcntl(s->fd, F_SETFL, O_NONBLOCK);
+ 
+-    qemu_aio_set_fd_handler(s->fd, posix_aio_read, NULL, posix_aio_flush,
+-        NULL, s);
++    qemu_aio_set_fd_handler(s->fd, posix_aio_read, NULL, posix_aio_flush, s);
+ 
+     ret = pthread_attr_init(&attr);
+     if (ret)
+diff --git a/qemu-aio.h b/qemu-aio.h
+index 3bdd749..f262344 100644
+--- a/qemu-aio.h
++++ b/qemu-aio.h
+@@ -20,11 +20,6 @@
+ /* Returns 1 if there are still outstanding AIO requests; 0 otherwise */
+ typedef int (AioFlushHandler)(void *opaque);
+ 
+-/* Runs all currently allowed AIO callbacks of completed requests in the
+- * respective AIO backend. Returns 0 if no requests was handled, non-zero
+- * if at least one queued request was handled. */
+-typedef int (AioProcessQueue)(void *opaque);
+-
+ /* Flush any pending AIO operation. This function will block until all
+  * outstanding AIO operations have been completed or cancelled. */
+ void qemu_aio_flush(void);
+@@ -35,13 +30,6 @@ void qemu_aio_flush(void);
+  * result of executing I/O completion or bh callbacks. */
+ void qemu_aio_wait(void);
+ 
+-/*
+- * Runs all currently allowed AIO callbacks of completed requests. Returns 0
+- * if no requests were handled, non-zero if at least one request was
+- * processed.
+- */
+-int qemu_aio_process_queue(void);
+-
+ /* Register a file descriptor and associated callbacks.  Behaves very similarly
+  * to qemu_set_fd_handler2.  Unlike qemu_set_fd_handler2, these callbacks will
+  * be invoked when using either qemu_aio_wait() or qemu_aio_flush().
+@@ -53,7 +41,6 @@ int qemu_aio_set_fd_handler(int fd,
+                             IOHandler *io_read,
+                             IOHandler *io_write,
+                             AioFlushHandler *io_flush,
+-                            AioProcessQueue *io_process_queue,
+                             void *opaque);
+ 
+ #endif
+-- 
+2.1.0
+

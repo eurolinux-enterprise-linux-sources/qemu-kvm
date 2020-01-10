@@ -1,0 +1,123 @@
+From 9b8a816369d47b70917f2636824d7791d66b71da Mon Sep 17 00:00:00 2001
+Message-Id: <9b8a816369d47b70917f2636824d7791d66b71da.1377087281.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 12 Aug 2013 07:01:09 +0200
+Subject: [PATCH 1/2] block: use Error in do_check_io_limits()
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1376290870-15980-2-git-send-email-famz@redhat.com>
+Patchwork-id: 53147
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v4 1/2] block: use Error in do_check_io_limits()
+Bugzilla: 987725
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Asias He <asias@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@redhat.com>
+
+The do_check_io_limits() function returns false when I/O limits are
+invalid but it doesn't set an Error to indicate why.  The two
+do_check_io_limits() callers duplicate error reporting.  Solve this by
+passing an Error pointer into do_check_io_limits().
+
+Note that the two callers report slightly different errors: drive_init()
+prints a custom error message while qmp_block_set_io_throttle() does
+error_set(errp, QERR_INVALID_PARAMETER_COMBINATION).
+
+QERR_INVALID_PARAMETER_COMBINATION is a generic error, see
+include/qapi/qmp/qerror.h:
+
+  #define QERR_INVALID_PARAMETER_COMBINATION \
+    ERROR_CLASS_GENERIC_ERROR, "Invalid parameter combination"
+
+Since it is generic we are not obliged to keep this error.  Switch to
+the custom error message which contains more information.
+
+This patch prepares for adding additional checks with their own error
+messages to do_check_io_limits().  The next patch adds a new check.
+
+Reviewed-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit c546194f260fb3e391193cb8cc33505618077ecb)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+
+Conflicts:
+	blockdev.c
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ blockdev.c | 17 ++++++++++++-----
+ 1 file changed, 12 insertions(+), 5 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ blockdev.c | 17 ++++++++++++-----
+ 1 file changed, 12 insertions(+), 5 deletions(-)
+
+diff --git a/blockdev.c b/blockdev.c
+index 7decc7a..83b86a3 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -307,7 +307,7 @@ int drives_reopen(void)
+     return 0;
+ }
+ 
+-static bool do_check_io_limits(BlockIOLimit *io_limits)
++static bool do_check_io_limits(BlockIOLimit *io_limits, Error **errp)
+ {
+     bool bps_flag;
+     bool iops_flag;
+@@ -321,6 +321,8 @@ static bool do_check_io_limits(BlockIOLimit *io_limits)
+                  && ((io_limits->iops[BLOCK_IO_LIMIT_READ] != 0)
+                  || (io_limits->iops[BLOCK_IO_LIMIT_WRITE] != 0));
+     if (bps_flag || iops_flag) {
++        error_setg(errp, "bps(iops) and bps_rd/bps_wr(iops_rd/iops_wr) "
++                         "cannot be used at the same time");
+         return false;
+     }
+ 
+@@ -350,6 +352,9 @@ DriveInfo *drive_init(QemuOpts *opts, int default_to_scsi)
+     BlockIOLimit io_limits;
+     int snapshot = 0;
+     bool copy_on_read;
++#ifdef CONFIG_BLOCK_IO_THROTTLING
++    Error *error = NULL;
++#endif
+ 
+     translation = BIOS_ATA_TRANSLATION_AUTO;
+ 
+@@ -501,9 +506,9 @@ DriveInfo *drive_init(QemuOpts *opts, int default_to_scsi)
+     io_limits.iops[BLOCK_IO_LIMIT_WRITE] =
+                            qemu_opt_get_number(opts, "iops_wr", 0);
+ 
+-    if (!do_check_io_limits(&io_limits)) {
+-        error_report("bps(iops) and bps_rd/bps_wr(iops_rd/iops_wr) "
+-                     "cannot be used at the same time");
++    if (!do_check_io_limits(&io_limits, &error)) {
++        error_report("%s", error_get_pretty(error));
++        error_free(error);
+         return NULL;
+     }
+ #else
+@@ -1240,6 +1245,7 @@ int do_block_set_io_throttle(Monitor *mon,
+     BlockIOLimit io_limits;
+     const char *devname = qdict_get_str(qdict, "device");
+     BlockDriverState *bs;
++    Error *error;
+ 
+     io_limits.bps[BLOCK_IO_LIMIT_TOTAL]
+                         = qdict_get_try_int(qdict, "bps", -1);
+@@ -1271,8 +1277,9 @@ int do_block_set_io_throttle(Monitor *mon,
+         return -1;
+     }
+ 
+-    if (!do_check_io_limits(&io_limits)) {
++    if (!do_check_io_limits(&io_limits, &error)) {
+         qerror_report(QERR_INVALID_PARAMETER_COMBINATION);
++        error_free(error);
+         return -1;
+     }
+ 
+-- 
+1.7.11.7
+

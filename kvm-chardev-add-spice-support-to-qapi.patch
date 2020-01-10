@@ -1,0 +1,209 @@
+From 0c12d146cf877fb8a789eac84ca79d179438291c Mon Sep 17 00:00:00 2001
+Message-Id: <0c12d146cf877fb8a789eac84ca79d179438291c.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:06:10 +0200
+Subject: [PATCH 59/65] chardev: add spice support to qapi
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-60-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52157
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 59/65] chardev: add spice support to qapi
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+This patch adds 'spicevmc' and 'spiceport' support to qapi and also
+switches over the spice chardev initialization to the new qapi code
+path.
+(cherry picked from commit cd153e2aa2f0ec39c04c2b732ebebfc6d4766986)
+
+Conflicts:
+
+	spice-qemu-char.c
+	ui/qemu-spice.h
+---
+ qapi-schema.json  |   26 +++++++++++++++++++++++++-
+ qemu-char.c       |    5 +++++
+ spice-qemu-char.c |   40 +++++++++++++++++++++++++++-------------
+ ui/qemu-spice.h   |    2 +-
+ 4 files changed, 58 insertions(+), 15 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema.json  | 26 +++++++++++++++++++++++++-
+ qemu-char.c       |  5 +++++
+ spice-qemu-char.c | 40 +++++++++++++++++++++++++++-------------
+ ui/qemu-spice.h   |  2 +-
+ 4 files changed, 58 insertions(+), 15 deletions(-)
+
+diff --git a/qapi-schema.json b/qapi-schema.json
+index 47cf69f..73ebe20 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -480,6 +480,28 @@
+ { 'type': 'ChardevStdio', 'data': { '*signal' : 'bool' } }
+ 
+ ##
++# @ChardevSpiceChannel:
++#
++# Configuration info for spice vm channel chardevs.
++#
++# @type: kind of channel (for example vdagent).
++#
++# Since: 1.5
++##
++{ 'type': 'ChardevSpiceChannel', 'data': { 'type'  : 'str' } }
++
++##
++# @ChardevSpicePort:
++#
++# Configuration info for spice port chardevs.
++#
++# @fqdn: name of the channel (see docs/spice-port-fqdn.txt)
++#
++# Since: 1.5
++##
++{ 'type': 'ChardevSpicePort', 'data': { 'fqdn'  : 'str' } }
++
++##
+ # @ChardevBackend:
+ #
+ # Configuration info for the new chardev backend.
+@@ -499,7 +521,9 @@
+                                        'msmouse': 'ChardevDummy',
+                                        'braille': 'ChardevDummy',
+                                        'stdio'  : 'ChardevStdio',
+-                                       'console': 'ChardevDummy' } }
++                                       'console': 'ChardevDummy',
++                                       'spicevmc' : 'ChardevSpiceChannel',
++                                       'spiceport' : 'ChardevSpicePort' } }
+ 
+ ##
+ # @ChardevReturn:
+diff --git a/qemu-char.c b/qemu-char.c
+index 1579058..051fa90 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -3279,6 +3279,11 @@ ChardevReturn *qmp_chardev_add(const char *id, ChardevBackend *backend,
+         chr = qemu_chr_open_win_con();
+         break;
+ #endif
++#ifdef CONFIG_SPICE
++    case CHARDEV_BACKEND_KIND_SPICEVMC:
++        chr = qemu_chr_open_spice_vmc(backend->spicevmc->type);
++        break;
++#endif
+     default:
+         error_setg(errp, "unknown chardev backend (%d)", backend->kind);
+         break;
+diff --git a/spice-qemu-char.c b/spice-qemu-char.c
+index 35c800d..d71e161 100644
+--- a/spice-qemu-char.c
++++ b/spice-qemu-char.c
+@@ -5,6 +5,9 @@
+ 
+ #include "osdep.h"
+ 
++#include "qapi-visit.h"
++#include "qemu-char-qapi.h"
++
+ #define VMC_MAX_HOST_WRITE    2048
+ 
+ typedef struct SpiceCharDriver {
+@@ -223,27 +226,24 @@ static void print_allowed_subtypes(void)
+     fprintf(stderr, "\n");
+ }
+ 
+-CharDriverState *qemu_chr_open_spice(QemuOpts *opts)
++CharDriverState *qemu_chr_open_spice_vmc(const char *type)
+ {
+     CharDriverState *chr;
+     SpiceCharDriver *s;
+-    const char* name = qemu_opt_get(opts, "name");
+-    const char** psubtype = spice_server_char_device_recognized_subtypes();
+-    const char *subtype = NULL;
++    const char **psubtype = spice_server_char_device_recognized_subtypes();
+ 
+-    if (name == NULL) {
++    if (type == NULL) {
+         fprintf(stderr, "spice-qemu-char: missing name parameter\n");
+         print_allowed_subtypes();
+         return NULL;
+     }
+-    for(;*psubtype != NULL; ++psubtype) {
+-        if (strcmp(name, *psubtype) == 0) {
+-            subtype = *psubtype;
++    for (; *psubtype != NULL; ++psubtype) {
++        if (strcmp(type, *psubtype) == 0) {
+             break;
+         }
+     }
+-    if (subtype == NULL) {
+-        fprintf(stderr, "spice-qemu-char: unsupported name\n");
++    if (*psubtype == NULL) {
++        fprintf(stderr, "spice-qemu-char: unsupported type: %s\n", type);
+         print_allowed_subtypes();
+         return NULL;
+     }
+@@ -252,7 +252,7 @@ CharDriverState *qemu_chr_open_spice(QemuOpts *opts)
+     s = qemu_mallocz(sizeof(SpiceCharDriver));
+     s->chr = chr;
+     s->active = false;
+-    s->sin.subtype = subtype;
++    s->sin.subtype = *psubtype;
+     chr->opaque = s;
+     chr->chr_write = spice_chr_write;
+     chr->chr_add_watch = spice_chr_add_watch;
+@@ -262,7 +262,7 @@ CharDriverState *qemu_chr_open_spice(QemuOpts *opts)
+ 
+ #if SPICE_SERVER_VERSION < 0x000901
+     /* See comment in vmc_state() */
+-    if (strcmp(subtype, "vdagent") == 0) {
++    if (strcmp(type, "vdagent") == 0) {
+         qemu_chr_generic_open(chr);
+     }
+ #endif
+@@ -270,9 +270,23 @@ CharDriverState *qemu_chr_open_spice(QemuOpts *opts)
+     return chr;
+ }
+ 
++static void qemu_chr_parse_spice_vmc(QemuOpts *opts, ChardevBackend *backend,
++                                     Error **errp)
++{
++    const char *name = qemu_opt_get(opts, "name");
++
++    if (name == NULL) {
++        error_setg(errp, "chardev: spice channel: no name given");
++        return;
++    }
++    backend->spicevmc = g_new0(ChardevSpiceChannel, 1);
++    backend->spicevmc->type = g_strdup(name);
++}
++
+ static void register_types(void)
+ {
+-    register_char_driver("spicevmc", qemu_chr_open_spice);
++    register_char_driver_qapi("spicevmc", CHARDEV_BACKEND_KIND_SPICEVMC,
++                              qemu_chr_parse_spice_vmc);
+ }
+ 
+ machine_init(register_types);
+diff --git a/ui/qemu-spice.h b/ui/qemu-spice.h
+index 187c982..2d01a6e 100644
+--- a/ui/qemu-spice.h
++++ b/ui/qemu-spice.h
+@@ -44,7 +44,7 @@ int qemu_spice_migrate_info(const char *hostname, int port, int tls_port,
+ void do_info_spice_print(Monitor *mon, const QObject *data);
+ void do_info_spice(Monitor *mon, QObject **ret_data);
+ 
+-CharDriverState *qemu_chr_open_spice(QemuOpts *opts);
++CharDriverState *qemu_chr_open_spice_vmc(const char *type);
+ 
+ #else  /* CONFIG_SPICE */
+ 
+-- 
+1.7.11.7
+

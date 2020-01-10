@@ -1,0 +1,76 @@
+From 334abe2b0650178d4fe09ffdcae5a1767a36c6ec Mon Sep 17 00:00:00 2001
+From: Amos Kong <akong@redhat.com>
+Date: Tue, 10 Sep 2013 06:07:54 +0200
+Subject: [PATCH 12/39] rng-egd: don't use gslist_free_full
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1378793288-3371-13-git-send-email-akong@redhat.com>
+Patchwork-id: 54247
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v3 12/26] rng-egd: don't use gslist_free_full
+Bugzilla: 786407
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+This function was only introduced in glib 2.28.0.
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 9cb535fe4ef08b01e583ec955767a0899ff79afe)
+---
+ backends/rng-egd.c |   19 ++++++++++++++-----
+ 1 files changed, 14 insertions(+), 5 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ backends/rng-egd.c |   19 ++++++++++++++-----
+ 1 files changed, 14 insertions(+), 5 deletions(-)
+
+diff --git a/backends/rng-egd.c b/backends/rng-egd.c
+index ec58358..ad84737 100644
+--- a/backends/rng-egd.c
++++ b/backends/rng-egd.c
+@@ -110,6 +110,18 @@ static void rng_egd_chr_read(void *opaque, const uint8_t *buf, int size)
+     }
+ }
+ 
++static void rng_egd_free_requests(RngEgd *s)
++{
++    GSList *i;
++
++    for (i = s->requests; i; i = i->next) {
++        rng_egd_free_request(i->data);
++    }
++
++    g_slist_free(s->requests);
++    s->requests = NULL;
++}
++
+ static void rng_egd_cancel_requests(RngBackend *b)
+ {
+     RngEgd *s = RNG_EGD(b);
+@@ -118,9 +130,7 @@ static void rng_egd_cancel_requests(RngBackend *b)
+      * queue waiting to be read, this is okay, because there will always be
+      * more data than we requested originally
+      */
+-    g_slist_free_full(s->requests,
+-                      (GDestroyNotify)rng_egd_free_request);
+-    s->requests = NULL;
++    rng_egd_free_requests(s);
+ }
+ 
+ static void rng_egd_opened(RngBackend *b, Error **errp)
+@@ -185,8 +195,7 @@ static void rng_egd_finalize(Object *obj)
+ 
+     g_free(s->chr_name);
+ 
+-    g_slist_free_full(s->requests, (GDestroyNotify)rng_egd_free_request);
+-    s->requests = NULL;
++    rng_egd_free_requests(s);
+ }
+ 
+ static void rng_egd_class_init(ObjectClass *klass, void *data)
+-- 
+1.7.1
+

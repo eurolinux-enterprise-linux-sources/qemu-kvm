@@ -1,0 +1,61 @@
+From 0d809c5cc520038b99caf1e2354431164eb69afc Mon Sep 17 00:00:00 2001
+Message-Id: <0d809c5cc520038b99caf1e2354431164eb69afc.1484162498.git.ymankad@redhat.com>
+In-Reply-To: <6da299cbd22aeea340aaabe3e57b8efc46a477f6.1484162498.git.ymankad@redhat.com>
+References: <6da299cbd22aeea340aaabe3e57b8efc46a477f6.1484162498.git.ymankad@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Mon, 9 Jan 2017 20:21:00 -0500
+Subject: [CHANGE 4/7] iotests: Fix 049's reference output
+To: ymankad@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <20170109202103.28932-5-mreitz@redhat.com>
+Patchwork-id: 73227
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 4/7] iotests: Fix 049's reference output
+Bugzilla: 1405882
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+This is a downstream-only patch.
+
+8c4eb58e156a34fcbb9bb6b1a7910f8279be2fc7 brought iotest 049 to such a
+state that it would pass. This included some necessary downstream-only
+changes. After that, 35c3c8bcbd6ddd538cd8a8e0222a49e0afce5f55 was merged
+whose corresponding upstream patch actually came before 049 was created.
+Unfortunately, the backport forgot to revert some of the changes the
+former commit did to 049's reference output, so this patch makes up for
+it.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ tests/qemu-iotests/049.out | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/tests/qemu-iotests/049.out b/tests/qemu-iotests/049.out
+index c679afb..5b28795 100644
+--- a/tests/qemu-iotests/049.out
++++ b/tests/qemu-iotests/049.out
+@@ -92,16 +92,14 @@ Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=1649267441664 encryption=off clust
+ == 3. Invalid sizes ==
+ 
+ qemu-img create -f qcow2 TEST_DIR/t.qcow2 -- -1024
+-Invalid image size specified! You may use k, M, G or T suffixes for 
+-kilobytes, megabytes, gigabytes and terabytes.
++Image size must be less than 8 EiB!
+ 
+ qemu-img create -f qcow2 -o size=-1024 TEST_DIR/t.qcow2
+ Formatting or formatting option not supported for file format 'qcow2'
+ Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=-1024 encryption=off cluster_size=65536 
+ 
+ qemu-img create -f qcow2 TEST_DIR/t.qcow2 -- -1k
+-Invalid image size specified! You may use k, M, G or T suffixes for 
+-kilobytes, megabytes, gigabytes and terabytes.
++Image size must be less than 8 EiB!
+ 
+ qemu-img create -f qcow2 -o size=-1k TEST_DIR/t.qcow2
+ Formatting or formatting option not supported for file format 'qcow2'
+-- 
+2.7.4
+

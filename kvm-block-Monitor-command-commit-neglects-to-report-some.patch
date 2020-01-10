@@ -1,0 +1,73 @@
+From 336391160aece8710381123ef8b94f294bacb1e3 Mon Sep 17 00:00:00 2001
+Message-Id: <336391160aece8710381123ef8b94f294bacb1e3.1376917686.git.minovotn@redhat.com>
+In-Reply-To: <36750bf64a907139115140007a802b2520a202bd.1376917686.git.minovotn@redhat.com>
+References: <36750bf64a907139115140007a802b2520a202bd.1376917686.git.minovotn@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Thu, 15 Aug 2013 20:19:41 +0200
+Subject: [PATCH 2/3] block: Monitor command commit neglects to report some
+ errors
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <b1836c21d4bd8ed3232edbc4b9409f07ce82caf3.1376596451.git.jcody@redhat.com>
+Patchwork-id: 53529
+O-Subject: [RHEL6.5 qemu-kvm PATCH 2/3] block: Monitor command commit neglects to report some errors
+Bugzilla: 856505
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+The non-live bdrv_commit() function may return one of the following
+errors: -ENOTSUP, -EBUSY, -EACCES, -EIO.  The only error that is
+checked in the HMP handler is -EBUSY, so the monitor command 'commit'
+silently fails for all error cases other than 'Device is in use'.
+
+Report error using monitor_printf() and strerror(), and convert existing
+qerror_report() calls in do_commit() to monitor_printf().
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+Reviewed-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 58513bde833804bc9395d79fd81aae631b97c348)
+---
+ blockdev.c | 14 +++++---------
+ 1 file changed, 5 insertions(+), 9 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ blockdev.c | 14 +++++---------
+ 1 file changed, 5 insertions(+), 9 deletions(-)
+
+diff --git a/blockdev.c b/blockdev.c
+index d0b3925..7decc7a 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -714,21 +714,17 @@ void do_commit(Monitor *mon, const QDict *qdict)
+ 
+     if (!strcmp(device, "all")) {
+         ret = bdrv_commit_all();
+-        if (ret == -EBUSY) {
+-            qerror_report(QERR_DEVICE_IN_USE, device);
+-            return;
+-        }
+     } else {
+         bs = bdrv_find(device);
+         if (!bs) {
+-            qerror_report(QERR_DEVICE_NOT_FOUND, device);
++            monitor_printf(mon, "Device '%s' not found\n", device);
+             return;
+         }
+         ret = bdrv_commit(bs);
+-        if (ret == -EBUSY) {
+-            qerror_report(QERR_DEVICE_IN_USE, device);
+-            return;
+-        }
++    }
++    if (ret < 0) {
++        monitor_printf(mon, "'commit' error for '%s': %s\n", device,
++                       strerror(-ret));
+     }
+ }
+ 
+-- 
+1.7.11.7
+

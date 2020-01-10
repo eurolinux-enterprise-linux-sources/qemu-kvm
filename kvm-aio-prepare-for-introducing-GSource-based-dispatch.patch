@@ -1,0 +1,233 @@
+From ea5f8648d5f662c63e14a78f373fe9563b7f9094 Mon Sep 17 00:00:00 2001
+Message-Id: <ea5f8648d5f662c63e14a78f373fe9563b7f9094.1427300678.git.jen@redhat.com>
+In-Reply-To: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+References: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+From: Vlad Yasevich <vyasevic@redhat.com>
+Date: Thu, 12 Mar 2015 19:13:07 -0500
+Subject: [CHANGE 11/33] aio: prepare for introducing GSource-based dispatch
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Vlad Yasevich <vyasevic@redhat.com>
+Message-id: <1426187601-21396-12-git-send-email-vyasevic@redhat.com>
+Patchwork-id: 64346
+O-Subject: [RHEL6.7 qemu-kvm PATCH v2 11/25] aio: prepare for introducing GSource-based dispatch
+Bugzilla: 1005016
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+This adds a GPollFD to each AioHandler.  It will then be possible to
+attach these GPollFDs to a GSource, and from there to the main loop.
+aio_wait examines the GPollFDs and avoids calling select() if any
+is set (similar to what it does if bottom halves are available).
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit cd9ba1ebcf0439457f22b75b38533f6634f23c5f)
+Signed-off-by: Vladislav Yasevich <vyasevic@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	aio.c
+---
+ aio.c      | 96 +++++++++++++++++++++++++++++++++++++++++++++++++++++---------
+ qemu-aio.h |  7 +++++
+ 2 files changed, 89 insertions(+), 14 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ aio.c      | 96 +++++++++++++++++++++++++++++++++++++++++++++++++++++---------
+ qemu-aio.h |  7 +++++
+ 2 files changed, 89 insertions(+), 14 deletions(-)
+
+diff --git a/aio.c b/aio.c
+index 416771c..292ba06 100644
+--- a/aio.c
++++ b/aio.c
+@@ -18,7 +18,7 @@
+ 
+ struct AioHandler
+ {
+-    int fd;
++    GPollFD pfd;
+     IOHandler *io_read;
+     IOHandler *io_write;
+     AioFlushHandler *io_flush;
+@@ -32,7 +32,7 @@ static AioHandler *find_aio_handler(AioContext *ctx, int fd)
+     AioHandler *node;
+ 
+     QLIST_FOREACH(node, &ctx->aio_handlers, node) {
+-        if (node->fd == fd)
++        if (node->pfd.fd == fd)
+             if (!node->deleted)
+                 return node;
+     }
+@@ -55,9 +55,10 @@ void aio_set_fd_handler(AioContext *ctx,
+     if (!io_read && !io_write) {
+         if (node) {
+             /* If the lock is held, just mark the node as deleted */
+-            if (ctx->walking_handlers)
++            if (ctx->walking_handlers) {
+                 node->deleted = 1;
+-            else {
++                node->pfd.revents = 0;
++            } else {
+                 /* Otherwise, delete it for real.  We can't just mark it as
+                  * deleted because deleted nodes are only cleaned up after
+                  * releasing the walking_handlers lock.
+@@ -69,8 +70,8 @@ void aio_set_fd_handler(AioContext *ctx,
+     } else {
+         if (node == NULL) {
+             /* Alloc and insert if it's not already there */
+-            node = qemu_mallocz(sizeof(AioHandler));
+-            node->fd = fd;
++            node = g_malloc0(sizeof(AioHandler));
++            node->pfd.fd = fd;
+             QLIST_INSERT_HEAD(&ctx->aio_handlers, node, node);
+         }
+         /* Update handler with latest information */
+@@ -78,9 +79,39 @@ void aio_set_fd_handler(AioContext *ctx,
+         node->io_write = io_write;
+         node->io_flush = io_flush;
+         node->opaque = opaque;
++
++        node->pfd.events = (io_read ? G_IO_IN | G_IO_HUP : 0);
++        node->pfd.events |= (io_write ? G_IO_OUT : 0);
+     }
+ }
+ 
++
++bool aio_pending(AioContext *ctx)
++{
++    AioHandler *node;
++
++    QLIST_FOREACH(node, &ctx->aio_handlers, node) {
++        int revents;
++
++        /*
++         * FIXME: right now we cannot get G_IO_HUP and G_IO_ERR because
++         * main-loop.c is still select based (due to the slirp legacy).
++         * If main-loop.c ever switches to poll, G_IO_ERR should be
++         * tested too.  Dispatching G_IO_ERR to both handlers should be
++         * okay, since handlers need to be ready for spurious wakeups.
++         */
++        revents = node->pfd.revents & node->pfd.events;
++        if (revents & (G_IO_IN | G_IO_HUP | G_IO_ERR) && node->io_read) {
++            return true;
++        }
++        if (revents & (G_IO_OUT | G_IO_ERR) && node->io_write) {
++            return true;
++        }
++    }
++
++    return false;
++}
++
+ bool aio_poll(AioContext *ctx, bool blocking)
+ {
+     static struct timeval tv0;
+@@ -102,6 +133,43 @@ bool aio_poll(AioContext *ctx, bool blocking)
+         progress = true;
+     }
+ 
++    /*
++     * Then dispatch any pending callbacks from the GSource.
++     *
++     * We have to walk very carefully in case qemu_aio_set_fd_handler is
++     * called while we're walking.
++     */
++    node = QLIST_FIRST(&ctx->aio_handlers);
++    while (node) {
++        AioHandler *tmp;
++        int revents;
++
++        ctx->walking_handlers++;
++
++        revents = node->pfd.revents & node->pfd.events;
++        node->pfd.revents = 0;
++
++        /* See comment in aio_pending.  */
++        if (revents & (G_IO_IN | G_IO_HUP | G_IO_ERR) && node->io_read) {
++            node->io_read(node->opaque);
++            progress = true;
++        }
++        if (revents & (G_IO_OUT | G_IO_ERR) && node->io_write) {
++            node->io_write(node->opaque);
++            progress = true;
++        }
++
++        tmp = node;
++        node = QLIST_NEXT(node, node);
++
++        ctx->walking_handlers--;
++
++        if (!ctx->walking_handlers && tmp->deleted) {
++            QLIST_REMOVE(tmp, node);
++            g_free(tmp);
++        }
++    }
++
+     if (progress && !blocking) {
+         return true;
+     }
+@@ -125,12 +193,12 @@ bool aio_poll(AioContext *ctx, bool blocking)
+             busy = true;
+         }
+         if (!node->deleted && node->io_read) {
+-            FD_SET(node->fd, &rdfds);
+-            max_fd = MAX(max_fd, node->fd + 1);
++            FD_SET(node->pfd.fd, &rdfds);
++            max_fd = MAX(max_fd, node->pfd.fd + 1);
+         }
+         if (!node->deleted && node->io_write) {
+-            FD_SET(node->fd, &wrfds);
+-            max_fd = MAX(max_fd, node->fd + 1);
++            FD_SET(node->pfd.fd, &wrfds);
++            max_fd = MAX(max_fd, node->pfd.fd + 1);
+         }
+     }
+ 
+@@ -155,16 +223,16 @@ bool aio_poll(AioContext *ctx, bool blocking)
+             ctx->walking_handlers++;
+ 
+             if (!node->deleted &&
+-                FD_ISSET(node->fd, &rdfds) &&
++                FD_ISSET(node->pfd.fd, &rdfds) &&
+                 node->io_read) {
+-                progress = true;
+                 node->io_read(node->opaque);
++                progress = true;
+             }
+             if (!node->deleted &&
+-                FD_ISSET(node->fd, &wrfds) &&
++                FD_ISSET(node->pfd.fd, &wrfds) &&
+                 node->io_write) {
+-                progress = true;
+                 node->io_write(node->opaque);
++                progress = true;
+             }
+ 
+             tmp = node;
+diff --git a/qemu-aio.h b/qemu-aio.h
+index 4c9f033..d1ee8a3 100644
+--- a/qemu-aio.h
++++ b/qemu-aio.h
+@@ -137,6 +137,13 @@ void qemu_bh_delete(QEMUBH *bh);
+  * outstanding AIO operations have been completed or cancelled. */
+ void aio_flush(AioContext *ctx);
+ 
++/* Return whether there are any pending callbacks from the GSource
++ * attached to the AioContext.
++ *
++ * This is used internally in the implementation of the GSource.
++ */
++bool aio_pending(AioContext *ctx);
++
+ /* Progress in completing AIO work to occur.  This can issue new pending
+  * aio as a result of executing I/O completion or bh callbacks.
+  *
+-- 
+2.1.0
+

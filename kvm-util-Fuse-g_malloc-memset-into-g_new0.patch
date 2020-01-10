@@ -1,0 +1,52 @@
+From 2cdcdbadd8c8153ea23b264ca4eadf7c603b0cb5 Mon Sep 17 00:00:00 2001
+Message-Id: <2cdcdbadd8c8153ea23b264ca4eadf7c603b0cb5.1430931597.git.jen@redhat.com>
+In-Reply-To: <167537380706cbdedae56a1c6445daa9e414396d.1430931597.git.jen@redhat.com>
+References: <167537380706cbdedae56a1c6445daa9e414396d.1430931597.git.jen@redhat.com>
+From: Markus Armbruster <armbru@redhat.com>
+Date: Wed, 6 May 2015 07:51:07 -0500
+Subject: [CHANGE 5/9] util: Fuse g_malloc(); memset() into g_new0()
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1430898671-22595-5-git-send-email-armbru@redhat.com>
+Patchwork-id: 65008
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 4/8] util: Fuse g_malloc(); memset() into g_new0()
+Bugzilla: 1205288
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Michael Tokarev <mjt@tls.msk.ru>
+(cherry picked from commit 9be71be5bda27b068176ab9b982cf3d7d41a4acd)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	util/uri.c
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ uri.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/uri.c b/uri.c
+index c028fba..f00f644 100644
+--- a/uri.c
++++ b/uri.c
+@@ -1004,8 +1004,7 @@ URI *
+ uri_new(void) {
+     URI *ret;
+ 
+-    ret = (URI *) g_malloc(sizeof(URI));
+-    memset(ret, 0, sizeof(URI));
++    ret = g_new0(URI, 1);
+     return(ret);
+ }
+ 
+-- 
+2.1.0
+

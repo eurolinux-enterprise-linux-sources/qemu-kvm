@@ -1,0 +1,196 @@
+From fb798f9ad48cae1c9526f66aca63df043e40eeb8 Mon Sep 17 00:00:00 2001
+From: Amos Kong <akong@redhat.com>
+Date: Tue, 10 Sep 2013 06:07:56 +0200
+Subject: [PATCH 14/39] virtio-rng: add rate limiting support
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1378793288-3371-15-git-send-email-akong@redhat.com>
+Patchwork-id: 54249
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v3 14/26] virtio-rng: add rate limiting support
+Bugzilla: 786407
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+This adds parameters to virtio-rng-pci to allow rate limiting the entropy a
+guest receives.  An example command line:
+
+$ qemu -device virtio-rng-pci,max-bytes=1024,period=1000
+
+Would limit entropy collection to 1Kb/s.
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 904d6f588063fb5ad2b61998acdf1e73fb465067)
+---
+ hw/virtio-pci.c |   10 ++++++++
+ hw/virtio-rng.c |   63 ++++++++++++++++++++++++++++++++++++++++++++++++-------
+ hw/virtio-rng.h |    2 +
+ 3 files changed, 67 insertions(+), 8 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ hw/virtio-pci.c |   10 ++++++++
+ hw/virtio-rng.c |   63 ++++++++++++++++++++++++++++++++++++++++++++++++-------
+ hw/virtio-rng.h |    2 +
+ 3 files changed, 67 insertions(+), 8 deletions(-)
+
+diff --git a/hw/virtio-pci.c b/hw/virtio-pci.c
+index 23ea007..554ce17 100644
+--- a/hw/virtio-pci.c
++++ b/hw/virtio-pci.c
+@@ -1105,6 +1105,16 @@ static PCIDeviceInfo virtio_info[] = {
+         .qdev.props = (Property[]) {
+             DEFINE_VIRTIO_COMMON_FEATURES(VirtIOPCIProxy, host_features),
+             DEFINE_PROP_STRING("rng", VirtIOPCIProxy, rng.name),
++            /* Set a default rate limit of 2^47 bytes per minute or roughly
++             * 2TB/s.  If you have an entropy source capable of generating more
++             * entropy than this and you can pass it through via virtio-rng,
++             * then hats off to you.  Until then, this is unlimited for all
++             * practical purposes.
++             */
++            DEFINE_PROP_UINT64("max-bytes", VirtIOPCIProxy, rng.max_bytes,
++                               INT64_MAX),
++            DEFINE_PROP_UINT32("period", VirtIOPCIProxy, rng.period_ms,
++                               1 << 16),
+             DEFINE_PROP_END_OF_LIST(),
+         },
+         .qdev.reset = virtio_pci_reset,
+diff --git a/hw/virtio-rng.c b/hw/virtio-rng.c
+index 330b080..07a27b9 100644
+--- a/hw/virtio-rng.c
++++ b/hw/virtio-rng.c
+@@ -31,6 +31,12 @@ typedef struct VirtIORNG {
+     bool popped;
+ 
+     RngBackend *rng;
++
++    /* We purposefully don't migrate this state.  The quota will reset on the
++     * destination as a result.  Rate limiting is host state, not guest state.
++     */
++    QEMUTimer *rate_limit_timer;
++    int64_t quota_remaining;
+ } VirtIORNG;
+ 
+ static bool is_guest_ready(VirtIORNG *vrng)
+@@ -55,6 +61,8 @@ static size_t pop_an_elem(VirtIORNG *vrng)
+     return size;
+ }
+ 
++static void virtio_rng_process(VirtIORNG *vrng);
++
+ /* Send data from a char device over to the guest */
+ static void chr_read(void *opaque, const void *buf, size_t size)
+ {
+@@ -66,6 +74,8 @@ static void chr_read(void *opaque, const void *buf, size_t size)
+         return;
+     }
+ 
++    vrng->quota_remaining -= size;
++
+     offset = 0;
+     while (offset < size) {
+         if (!pop_an_elem(vrng)) {
+@@ -85,23 +95,32 @@ static void chr_read(void *opaque, const void *buf, size_t size)
+      * didn't have enough data to fill them all, indicate we want more
+      * data.
+      */
+-    len = pop_an_elem(vrng);
+-    if (len) {
+-        rng_backend_request_entropy(vrng->rng, size, chr_read, vrng);
+-    }
++    virtio_rng_process(vrng);
+ }
+ 
+-static void handle_input(VirtIODevice *vdev, VirtQueue *vq)
++static void virtio_rng_process(VirtIORNG *vrng)
+ {
+-    VirtIORNG *vrng = DO_UPCAST(VirtIORNG, vdev, vdev);
+-    size_t size;
++    ssize_t size;
++
++    if (!is_guest_ready(vrng)) {
++        return;
++    }
+ 
+     size = pop_an_elem(vrng);
+-    if (size) {
++    size = MIN(vrng->quota_remaining, size);
++
++    if (size > 0) {
+         rng_backend_request_entropy(vrng->rng, size, chr_read, vrng);
+     }
+ }
+ 
++
++static void handle_input(VirtIODevice *vdev, VirtQueue *vq)
++{
++    VirtIORNG *vrng = DO_UPCAST(VirtIORNG, vdev, vdev);
++    virtio_rng_process(vrng);
++}
++
+ static uint32_t get_features(VirtIODevice *vdev, uint32_t f)
+ {
+     return f;
+@@ -163,9 +182,27 @@ static int virtio_rng_load(QEMUFile *f, void *opaque, int version_id)
+         virtqueue_map_sg(vrng->elem.out_sg, vrng->elem.out_addr,
+                          vrng->elem.out_num, 0);
+     }
++
++    /* We may have an element ready but couldn't process it due to a quota
++       limit.  Make sure to try again after live migration when the quota may
++       have been reset.
++    */
++    virtio_rng_process(vrng);
++
+     return 0;
+ }
+ 
++static void check_rate_limit(void *opaque)
++{
++    VirtIORNG *s = opaque;
++
++    s->quota_remaining = s->conf->max_bytes;
++    virtio_rng_process(s);
++    qemu_mod_timer(s->rate_limit_timer,
++                   qemu_get_clock(vm_clock) + s->conf->period_ms * 1000000);
++}
++
++
+ VirtIODevice *virtio_rng_init(DeviceState *dev, VirtIORNGConf *conf)
+ {
+     VirtIORNG *vrng;
+@@ -196,6 +233,16 @@ VirtIODevice *virtio_rng_init(DeviceState *dev, VirtIORNGConf *conf)
+     vrng->qdev = dev;
+     vrng->conf = conf;
+     vrng->popped = false;
++    vrng->quota_remaining = vrng->conf->max_bytes;
++
++    g_assert_cmpint(vrng->conf->max_bytes, <=, INT64_MAX);
++
++    vrng->rate_limit_timer = qemu_new_timer(vm_clock,
++                                               check_rate_limit, vrng);
++
++    qemu_mod_timer(vrng->rate_limit_timer,
++                   qemu_get_clock(vm_clock) + vrng->conf->period_ms * 1000000);
++
+     register_savevm(dev, "virtio-rng", -1, 1, virtio_rng_save,
+                     virtio_rng_load, vrng);
+ 
+diff --git a/hw/virtio-rng.h b/hw/virtio-rng.h
+index ad584c2..c823a57 100644
+--- a/hw/virtio-rng.h
++++ b/hw/virtio-rng.h
+@@ -20,6 +20,8 @@
+ struct VirtIORNGConf {
+     char *name;
+     RngBackend *rng;
++    uint64_t max_bytes;
++    uint32_t period_ms;
+ };
+ 
+ #endif
+-- 
+1.7.1
+

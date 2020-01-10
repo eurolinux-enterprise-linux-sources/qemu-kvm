@@ -1,0 +1,52 @@
+From 4e19566736d8e7c6fba1df7e31ce83266f1ccdaf Mon Sep 17 00:00:00 2001
+Message-Id: <4e19566736d8e7c6fba1df7e31ce83266f1ccdaf.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:48 +0200
+Subject: [PATCH 33/47] block/vmdk: Fix warning from splint (comparision of
+ unsigned value)
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-34-git-send-email-famz@redhat.com>
+Patchwork-id: 51469
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 33/47] block/vmdk: Fix warning from splint (comparision of unsigned value)
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Stefan Weil <sw@weilnetz.de>
+
+l1_entry_sectors will never be less than 0.
+
+Signed-off-by: Stefan Weil <sw@weilnetz.de>
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+(cherry picked from commit 75d1234103d47e59311203bf5e73f85b2e0fd983)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 1935ff2..9668993 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -451,7 +451,7 @@ static int vmdk_open_vmdk4(BlockDriverState *bs,
+     }
+     l1_entry_sectors = le32_to_cpu(header.num_gtes_per_gte)
+                         * le64_to_cpu(header.granularity);
+-    if (l1_entry_sectors <= 0) {
++    if (l1_entry_sectors == 0) {
+         return -EINVAL;
+     }
+     l1_size = (le64_to_cpu(header.capacity) + l1_entry_sectors - 1)
+-- 
+1.7.11.7
+

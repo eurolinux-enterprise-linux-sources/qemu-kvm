@@ -1,0 +1,61 @@
+From fa614bdb2b86f889d40663ae77ed04c426146441 Mon Sep 17 00:00:00 2001
+Message-Id: <fa614bdb2b86f889d40663ae77ed04c426146441.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:28:18 +0200
+Subject: [PATCH 113/114] qga schema: document generic QERR_UNSUPPORTED
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-56-git-send-email-lersek@redhat.com>
+Patchwork-id: 51154
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 55/56] qga schema: document generic QERR_UNSUPPORTED
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Part of the wording was shamelessly stolen from Michael Roth's email.
+
+Suggested-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit 9481ecd737b91d507baf347287c62efe6760784f)
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=924684
+---
+ qapi-schema-guest.json |   11 +++++++++++
+ 1 files changed, 11 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema-guest.json | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/qapi-schema-guest.json b/qapi-schema-guest.json
+index 2af3515..7155b7a 100644
+--- a/qapi-schema-guest.json
++++ b/qapi-schema-guest.json
+@@ -2,6 +2,17 @@
+ 
+ ##
+ #
++# General note concerning the use of guest agent interfaces:
++#
++# "unsupported" is a higher-level error than the errors that individual
++# commands might document. The caller should always be prepared to receive
++# QERR_UNSUPPORTED, even if the given command doesn't specify it, or doesn't
++# document any failure mode at all.
++#
++##
++
++##
++#
+ # Echo back a unique integer value, and prepend to response a
+ # leading sentinel byte (0xFF) the client can check scan for.
+ #
+-- 
+1.7.11.7
+

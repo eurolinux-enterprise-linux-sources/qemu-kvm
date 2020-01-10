@@ -1,0 +1,54 @@
+From d71285cd9d447f46e7909d423e10b74ccf0abfdd Mon Sep 17 00:00:00 2001
+Message-Id: <d71285cd9d447f46e7909d423e10b74ccf0abfdd.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:28:05 +0200
+Subject: [PATCH 100/114] qga: cast to int for DWORD type
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-43-git-send-email-lersek@redhat.com>
+Patchwork-id: 51141
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 42/56] qga: cast to int for DWORD type
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Lei Li <lilei@linux.vnet.ibm.com>
+
+This patch fixes a compiler warning when cross-build:
+
+qga/service-win32.c: In function 'printf_win_error':
+qga/service-win32.c:32:5: warning: format '%d' expects argument of type 'int',
+                          but argument 3 has type 'DWORD' [-Wformat]
+
+Signed-off-by: Lei Li <lilei@linux.vnet.ibm.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit ed2cbf74446b008f9de526a50e4b06265635120c)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qga/service-win32.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/service-win32.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/qga/service-win32.c b/qga/service-win32.c
+index 0905456..843398a 100644
+--- a/qga/service-win32.c
++++ b/qga/service-win32.c
+@@ -29,7 +29,7 @@ static int printf_win_error(const char *text)
+         MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+         (char *)&message, 0,
+         NULL);
+-    n = printf("%s. (Error: %d) %s", text, err, message);
++    n = printf("%s. (Error: %d) %s", text, (int)err, message);
+     LocalFree(message);
+ 
+     return n;
+-- 
+1.7.11.7
+

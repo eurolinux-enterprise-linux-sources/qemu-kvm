@@ -1,0 +1,49 @@
+From e08cffdc58d655cda82d11917bedf8344a52cde6 Mon Sep 17 00:00:00 2001
+From: Michael S. Tsirkin <mst@redhat.com>
+Date: Wed, 21 May 2014 14:37:50 -0500
+Subject: [PATCH 26/26] device-assignment: don't update msix if vector's unchanged
+
+RH-Author: Michael S. Tsirkin <mst@redhat.com>
+Message-id: <1400683021-23190-1-git-send-email-mst@redhat.com>
+Patchwork-id: 58971
+O-Subject: [PATCH qemu-kvm RHEL6.6] device-assignment: don't update msix if vector's unchanged
+Bugzilla: 1096984
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Alex Williamson <alex.williamson@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Old guests constantly mask/unmask msix vectors,
+doing slow path interrupt routing ioctls slows
+them down significantly.
+
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+
+Upstream status: N/A closest is 40509f7f52672fe41c2cce895e187352fc09f53a
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1096984
+Brew build: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7482162
+---
+ hw/device-assignment.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/device-assignment.c |    3 +++
+ 1 files changed, 3 insertions(+), 0 deletions(-)
+
+diff --git a/hw/device-assignment.c b/hw/device-assignment.c
+index e9fa3e0..63a1c5a 100644
+--- a/hw/device-assignment.c
++++ b/hw/device-assignment.c
+@@ -1773,6 +1773,9 @@ static void msix_mmio_writel(void *opaque,
+                 adev->entry[i].u.msi.address_lo = entry->addr_lo;
+                 adev->entry[i].u.msi.address_hi = entry->addr_hi;
+                 adev->entry[i].u.msi.data = entry->data;
++                if (!memcmp(&adev->entry[i].u.msi, &orig.u.msi, sizeof orig.u.msi)) {
++                    return;
++                }
+ 
+                 ret = kvm_update_routing_entry(kvm_context, &orig,
+                                                &adev->entry[i]);
+-- 
+1.7.1
+

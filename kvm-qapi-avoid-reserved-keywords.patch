@@ -1,0 +1,71 @@
+From 17710032260e3437561741678499bdb113ea4abf Mon Sep 17 00:00:00 2001
+Message-Id: <17710032260e3437561741678499bdb113ea4abf.1374754301.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:15 +0200
+Subject: [PATCH 04/65] qapi: avoid reserved keywords
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-5-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52146
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 04/65] qapi: avoid reserved keywords
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Eduardo Habkost <ehabkost@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Blue Swirl <blauwirbel@gmail.com>
+
+Clang compiler complained about use of reserved word 'restrict' in SLIRP
+and QAPI.
+
+Prefix C keywords with "q_", adjust SLIRP accordingly.
+
+Reviewed-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Blue Swirl <blauwirbel@gmail.com>
+(cherry picked from commit 427a1a2cb1d35b83b6302886f46289f6d617134d)
+
+Conflicts:
+
+	net/slirp.c
+---
+ scripts/qapi.py |   16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ scripts/qapi.py | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/scripts/qapi.py b/scripts/qapi.py
+index e062336..cbb76e5 100644
+--- a/scripts/qapi.py
++++ b/scripts/qapi.py
+@@ -131,6 +131,22 @@ def camel_case(name):
+     return new_name
+ 
+ def c_var(name):
++    # ANSI X3J11/88-090, 3.1.1
++    c89_words = set(['auto', 'break', 'case', 'char', 'const', 'continue',
++                     'default', 'do', 'double', 'else', 'enum', 'extern', 'float',
++                     'for', 'goto', 'if', 'int', 'long', 'register', 'return',
++                     'short', 'signed', 'sizeof', 'static', 'struct', 'switch',
++                     'typedef', 'union', 'unsigned', 'void', 'volatile', 'while'])
++    # ISO/IEC 9899:1999, 6.4.1
++    c99_words = set(['inline', 'restrict', '_Bool', '_Complex', '_Imaginary'])
++    # ISO/IEC 9899:2011, 6.4.1
++    c11_words = set(['_Alignas', '_Alignof', '_Atomic', '_Generic', '_Noreturn',
++                     '_Static_assert', '_Thread_local'])
++    # GCC http://gcc.gnu.org/onlinedocs/gcc-4.7.1/gcc/C-Extensions.html
++    # excluding _.*
++    gcc_words = set(['asm', 'typeof'])
++    if name in c89_words | c99_words | c11_words | gcc_words:
++        return "q_" + name
+     return name.replace('-', '_').lstrip("*")
+ 
+ def c_fun(name):
+-- 
+1.7.11.7
+

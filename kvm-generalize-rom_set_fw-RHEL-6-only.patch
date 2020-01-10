@@ -1,0 +1,175 @@
+From 47ef29bdfe32726b9b4393f5d64e8ee34d58dc83 Mon Sep 17 00:00:00 2001
+Message-Id: <47ef29bdfe32726b9b4393f5d64e8ee34d58dc83.1369899578.git.minovotn@redhat.com>
+In-Reply-To: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+References: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Wed, 22 May 2013 11:31:09 +0200
+Subject: [PATCH 10/15] generalize rom_set_fw() (RHEL-6 only)
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1369222273-3298-6-git-send-email-lersek@redhat.com>
+Patchwork-id: 51526
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 5/9] generalize rom_set_fw() (RHEL-6 only)
+Bugzilla: 833530
+RH-Acked-by: Andrew Jones <drjones@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+The next patch to backport in the pvpanic series is
+
+  commit 10a584b2875a391d1036adac18955a892e56f5e3
+  Author: Hu Tao <hutao@cn.fujitsu.com>
+  Date:   Fri Apr 26 11:24:44 2013 +0800
+
+      pvpanic: pass configurable ioport to seabios
+
+      This lets seabios patch the corresponding SSDT entry.
+
+      Also add fw_cfg object to /machine/fw_cfg so we can reference
+      it elsewhere.
+
+In order to insert the pvpanic ioport into fw_cfg as a new file, the
+singleton pvpanic device will need access to the singleton fw_cfg object.
+The upstream commit provides the pvpanic device with this access through a
+named, hierarchical object store:
+
+  fw_cfg = object_resolve_path("/machine/fw_cfg", NULL);
+
+This infrastructure is too big for RHEL-6.
+
+However we already export fw_cfg as a static storage duration pointer,
+it's just nothing but "hw/loader.c" can see it. Generalize this approach
+for all interested clients, and rebase "hw/loader.c" upon it.
+
+This machinery is only available for the IO thread (just like in
+upstream).
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ v2:
+ - dropped "enforce" parameter of fw_get_global(), and dependent
+   g_assert() [Paolo Bonzini]
+
+ hw/fw_cfg.h |    3 +++
+ hw/loader.h |    1 -
+ hw/fw_cfg.c |   14 ++++++++++++++
+ hw/loader.c |   11 +++--------
+ hw/pc.c     |    2 +-
+ 5 files changed, 21 insertions(+), 10 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/fw_cfg.c | 14 ++++++++++++++
+ hw/fw_cfg.h |  3 +++
+ hw/loader.c | 11 +++--------
+ hw/loader.h |  1 -
+ hw/pc.c     |  2 +-
+ 5 files changed, 21 insertions(+), 10 deletions(-)
+
+diff --git a/hw/fw_cfg.c b/hw/fw_cfg.c
+index e480fd9..c34b095 100644
+--- a/hw/fw_cfg.c
++++ b/hw/fw_cfg.c
+@@ -387,3 +387,17 @@ FWCfgState *fw_cfg_init(uint32_t ctl_port, uint32_t data_port,
+ 
+     return s;
+ }
++
++static FWCfgState *global_fw_config;
++
++void fw_set_global(FWCfgState *f)
++{
++    g_assert(f != NULL);
++    g_assert(global_fw_config == NULL);
++    global_fw_config = f;
++}
++
++FWCfgState *fw_get_global(void)
++{
++    return global_fw_config;
++}
+diff --git a/hw/fw_cfg.h b/hw/fw_cfg.h
+index 5ec13ac..a2b00ea 100644
+--- a/hw/fw_cfg.h
++++ b/hw/fw_cfg.h
+@@ -70,6 +70,9 @@ int fw_cfg_add_file(FWCfgState *s, const char *filename, uint8_t *data,
+ FWCfgState *fw_cfg_init(uint32_t ctl_port, uint32_t data_port,
+                         target_phys_addr_t crl_addr, target_phys_addr_t data_addr);
+ 
++void fw_set_global(FWCfgState *f);
++FWCfgState *fw_get_global(void);
++
+ #endif /* NO_QEMU_PROTOS */
+ 
+ #endif
+diff --git a/hw/loader.c b/hw/loader.c
+index 7dcf5ad..cfe2b45 100644
+--- a/hw/loader.c
++++ b/hw/loader.c
+@@ -536,7 +536,6 @@ struct Rom {
+     QTAILQ_ENTRY(Rom) next;
+ };
+ 
+-static FWCfgState *fw_cfg;
+ static QTAILQ_HEAD(, Rom) roms = QTAILQ_HEAD_INITIALIZER(roms);
+ int rom_enable_driver_roms;
+ 
+@@ -595,7 +594,7 @@ int rom_add_file(const char *file, const char *fw_dir,
+     }
+     close(fd);
+     rom_insert(rom);
+-    if (rom->fw_file && fw_cfg) {
++    if (rom->fw_file && fw_get_global()) {
+         const char *basename;
+         char fw_file_name[56];
+ 
+@@ -607,7 +606,8 @@ int rom_add_file(const char *file, const char *fw_dir,
+         }
+         snprintf(fw_file_name, sizeof(fw_file_name), "%s/%s", rom->fw_dir,
+                  basename);
+-        fw_cfg_add_file(fw_cfg, fw_file_name, rom->data, rom->romsize);
++        fw_cfg_add_file(fw_get_global(), fw_file_name, rom->data,
++                        rom->romsize);
+         snprintf(devpath, sizeof(devpath), "/rom@%s", fw_file_name);
+     } else {
+         snprintf(devpath, sizeof(devpath), "/rom@" TARGET_FMT_plx, addr);
+@@ -703,11 +703,6 @@ int rom_load_all(void)
+     return 0;
+ }
+ 
+-void rom_set_fw(void *f)
+-{
+-    fw_cfg = f;
+-}
+-
+ static Rom *find_rom(target_phys_addr_t addr)
+ {
+     Rom *rom;
+diff --git a/hw/loader.h b/hw/loader.h
+index 27e2022..53da3c1 100644
+--- a/hw/loader.h
++++ b/hw/loader.h
+@@ -25,7 +25,6 @@ int rom_add_file(const char *file, const char *fw_dir,
+ int rom_add_blob(const char *name, const void *blob, size_t len,
+                  target_phys_addr_t addr);
+ int rom_load_all(void);
+-void rom_set_fw(void *f);
+ int rom_copy(uint8_t *dest, target_phys_addr_t addr, size_t size);
+ void *rom_ptr(target_phys_addr_t addr);
+ void do_info_roms(Monitor *mon);
+diff --git a/hw/pc.c b/hw/pc.c
+index 27bdeb8..04c1b70 100644
+--- a/hw/pc.c
++++ b/hw/pc.c
+@@ -1247,7 +1247,7 @@ static void pc_init1(ram_addr_t ram_size,
+                                  bios_size, bios_offset | IO_MEM_ROM);
+ 
+     fw_cfg = bochs_bios_init();
+-    rom_set_fw(fw_cfg);
++    fw_set_global(fw_cfg);
+ 
+     if (linux_boot) {
+         load_linux(fw_cfg, kernel_filename, initrd_filename, kernel_cmdline, below_4g_mem_size);
+-- 
+1.7.11.7
+

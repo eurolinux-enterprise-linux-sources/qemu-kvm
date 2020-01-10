@@ -1,0 +1,94 @@
+From 80bbcb3855c5f16e2ac799a20f99b8ed1001e7b6 Mon Sep 17 00:00:00 2001
+Message-Id: <80bbcb3855c5f16e2ac799a20f99b8ed1001e7b6.1368098699.git.minovotn@redhat.com>
+In-Reply-To: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+References: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+From: Alex Williamson <alex.williamson@redhat.com>
+Date: Fri, 19 Apr 2013 22:16:34 +0200
+Subject: [PATCH 14/24] pci-assign: Convert iommu property to booleam
+
+RH-Author: Alex Williamson <alex.williamson@redhat.com>
+Message-id: <20130419221634.15531.74191.stgit@bling.home>
+Patchwork-id: 50707
+O-Subject: [RHEL6.5 qemu-kvm PATCH 1/2] pci-assign: Convert iommu property to booleam
+Bugzilla: 925170
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Don Dutile <ddutile@redhat.com>
+
+From: Jan Kiszka <jan.kiszka@siemens.com>
+
+Bugzilla: 925170
+
+Defining the iommu property as an integer opens the door for confusion
+(Is it an index or a switch?). Fix this by converting it to a bit
+property that can be on or off, nothing else.
+
+Signed-off-by: Jan Kiszka <jan.kiszka@siemens.com>
+Signed-off-by: Marcelo Tosatti <mtosatti@redhat.com>
+(cherry picked from commit 3d6c783ab0a84a4a51fda7acec2c9858e9b4c51c)
+---
+ hw/device-assignment.c |    7 ++++---
+ hw/device-assignment.h |    6 +++++-
+ 2 files changed, 9 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/device-assignment.c | 7 ++++---
+ hw/device-assignment.h | 6 +++++-
+ 2 files changed, 9 insertions(+), 4 deletions(-)
+
+diff --git a/hw/device-assignment.c b/hw/device-assignment.c
+index 589e8d0..09505d4 100644
+--- a/hw/device-assignment.c
++++ b/hw/device-assignment.c
+@@ -937,7 +937,7 @@ static int assign_device(AssignedDevice *dev)
+ 
+ #ifdef KVM_CAP_IOMMU
+     /* We always enable the IOMMU unless disabled on the command line */
+-    if (dev->use_iommu) {
++    if (dev->features & ASSIGNED_DEVICE_USE_IOMMU_MASK) {
+         if (!kvm_check_extension(kvm_state, KVM_CAP_IOMMU)) {
+             fprintf(stderr, "No IOMMU found.  Unable to assign device \"%s\"\n",
+                     dev->dev.qdev.id);
+@@ -946,7 +946,7 @@ static int assign_device(AssignedDevice *dev)
+         assigned_dev_data.flags |= KVM_DEV_ASSIGN_ENABLE_IOMMU;
+     }
+ #else
+-    dev->use_iommu = 0;
++    dev->features &= ~ASSIGNED_DEVICE_USE_IOMMU_MASK;
+ #endif
+ 
+     r = kvm_assign_pci_device(kvm_context, &assigned_dev_data);
+@@ -2021,7 +2021,8 @@ static PCIDeviceInfo assign_info = {
+     .config_write = assigned_dev_pci_write_config,
+     .qdev.props   = (Property[]) {
+         DEFINE_PROP("host", AssignedDevice, host, qdev_prop_hostaddr, PCIHostDevice),
+-        DEFINE_PROP_UINT32("iommu", AssignedDevice, use_iommu, 1),
++        DEFINE_PROP_BIT("iommu", AssignedDevice, features,
++                        ASSIGNED_DEVICE_USE_IOMMU_BIT, true),
+         DEFINE_PROP_INT32("bootindex", AssignedDevice, bootindex, -1),
+         DEFINE_PROP_STRING("configfd", AssignedDevice, configfd_name),
+         DEFINE_PROP_END_OF_LIST(),
+diff --git a/hw/device-assignment.h b/hw/device-assignment.h
+index b598e80..92318c8 100644
+--- a/hw/device-assignment.h
++++ b/hw/device-assignment.h
+@@ -81,10 +81,14 @@ typedef struct {
+     uint32_t ctrl;
+ } MSIXTableEntry;
+ 
++#define ASSIGNED_DEVICE_USE_IOMMU_BIT	0
++
++#define ASSIGNED_DEVICE_USE_IOMMU_MASK	(1 << ASSIGNED_DEVICE_USE_IOMMU_BIT)
++
+ typedef struct AssignedDevice {
+     PCIDevice dev;
+     PCIHostDevice host;
+-    uint32_t use_iommu;
++    uint32_t features;
+     int intpin;
+     uint8_t debug_flags;
+     AssignedDevRegion v_addrs[PCI_NUM_REGIONS - 1];
+-- 
+1.7.11.7
+

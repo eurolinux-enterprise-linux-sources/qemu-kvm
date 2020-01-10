@@ -1,0 +1,64 @@
+From 2130add8159e0898eac1efd175e563148ec75ec6 Mon Sep 17 00:00:00 2001
+Message-Id: <2130add8159e0898eac1efd175e563148ec75ec6.1454086772.git.jen@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Tue, 4 Aug 2015 09:36:50 -0400
+Subject: [CHANGE 1/2] virtio-scsi: use virtqueue_map_sg() when loading
+ requests
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1438681011-13108-2-git-send-email-stefanha@redhat.com>
+Patchwork-id: 67269
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 1/2] virtio-scsi: use virtqueue_map_sg() when loading requests
+Bugzilla: 1249740
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+The VirtQueueElement struct is serialized during migration but the
+in_sg[]/out_sg[] iovec arrays are not usable on the destination host
+because the pointers are meaningless.
+
+Use virtqueue_map_sg() to refresh in_sg[]/out_sg[] to valid pointers
+based on in_addr[]/out_addr[] hwaddrs.
+
+Cc: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Message-Id: <1438262173-11546-2-git-send-email-stefanha@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 1cc933453bf2baae1feb7c8e757bdfd0ef639002)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+ * Context conflict because downstream does not check for
+   virtio_scsi_parse_req() error and the file has moved from
+   hw/scsi/virtio-scsi.c to hw/virtio-scsi.c.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/virtio-scsi.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/hw/virtio-scsi.c b/hw/virtio-scsi.c
+index 45c6742..a30fa82 100644
+--- a/hw/virtio-scsi.c
++++ b/hw/virtio-scsi.c
+@@ -284,6 +284,12 @@ static void *virtio_scsi_load_request(QEMUFile *f, SCSIRequest *sreq)
+ #endif
+     assert(req->elem.in_num <= ARRAY_SIZE(req->elem.in_sg));
+     assert(req->elem.out_num <= ARRAY_SIZE(req->elem.out_sg));
++
++    virtqueue_map_sg(req->elem.in_sg, req->elem.in_addr,
++                     req->elem.in_num, 1);
++    virtqueue_map_sg(req->elem.out_sg, req->elem.out_addr,
++                     req->elem.out_num, 0);
++
+     virtio_scsi_parse_req(s, s->cmd_vq, req);
+ 
+     scsi_req_ref(sreq);
+-- 
+2.1.0
+

@@ -1,0 +1,51 @@
+From cf8b080a7743acb552109b4be767c81600128a9a Mon Sep 17 00:00:00 2001
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Fri, 11 Jul 2014 14:38:58 +0200
+Subject: [PATCH 35/44] docs: update qemu-img man page to reflect vhdx image support.
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <9bdb22fddb55ac4ff295de095ded6ba7ed512566.1405089400.git.jcody@redhat.com>
+Patchwork-id: 59857
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v2] docs: update qemu-img man page to reflect vhdx image support.
+Bugzilla: 1017649
+RH-Acked-by: Ademar de Souza Reis Jr. <areis@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+Downstream-only; the upstream and downstream man pages differ enough
+that the simplest solution is to modify the man pages directly rather
+than attempt a backport.
+
+BZ: 1017649
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+
+RHEL6 v2 notes: The part about the VHDX image being read-only for qemu-img
+                has been dropped, as the series for log replay has been
+                backported for RHEL6.
+
+ qemu-img.texi | 3 +++
+ 1 file changed, 3 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ qemu-img.texi |    3 +++
+ 1 files changed, 3 insertions(+), 0 deletions(-)
+
+diff --git a/qemu-img.texi b/qemu-img.texi
+index 2267313..2816d87 100644
+--- a/qemu-img.texi
++++ b/qemu-img.texi
+@@ -336,6 +336,9 @@ Create a VMDK version 6 image (instead of version 4)
+ @item vpc
+ VirtualPC compatible image format (VHD).
+ 
++@item vhdx
++Hyper-V compatible image format (VHDX).
++
+ @item cloop
+ Linux Compressed Loop image, useful only to reuse directly compressed
+ CD-ROM images present for example in the Knoppix CD-ROMs.
+-- 
+1.7.1
+

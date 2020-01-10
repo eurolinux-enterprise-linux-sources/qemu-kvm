@@ -1,0 +1,116 @@
+From 387ea7cb8345bdcc900ffe145cbcdcf65da91257 Mon Sep 17 00:00:00 2001
+Message-Id: <387ea7cb8345bdcc900ffe145cbcdcf65da91257.1380723420.git.minovotn@redhat.com>
+In-Reply-To: <68de4f1434a46df7d1b6e59cb348f11c92dbf17c.1380723420.git.minovotn@redhat.com>
+References: <68de4f1434a46df7d1b6e59cb348f11c92dbf17c.1380723420.git.minovotn@redhat.com>
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Tue, 1 Oct 2013 12:27:04 +0200
+Subject: [PATCH 08/13] qemu-img: make "info" backing file output correct and
+ easier to use
+
+RH-Author: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: <1380630429-29077-4-git-send-email-pbonzini@redhat.com>
+Patchwork-id: 54618
+O-Subject: [RHEL 6.5 qemu-kvm PATCH 3/8] qemu-img: make "info" backing file output correct and easier to use
+Bugzilla: 1010610
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Eduardo Habkost <ehabkost@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+qemu-img info should use the same logic as qemu when printing the
+backing file path, or debugging becomes quite tricky.  We can also
+simplify the output in case the backing file has an absolute path
+or a protocol.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit dc5a137125d6ac641c566f10e68bf6e1fe31bcb5)
+
+Conflicts:
+	qemu-img.c [patch already present in RHEL6, reconcile with upstream]
+---
+ block.c    | 19 +++++++++++--------
+ block.h    |  2 ++
+ qemu-img.c |  9 ++-------
+ 3 files changed, 15 insertions(+), 15 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.c    | 19 +++++++++++--------
+ block.h    |  2 ++
+ qemu-img.c |  9 ++-------
+ 3 files changed, 15 insertions(+), 15 deletions(-)
+
+diff --git a/block.c b/block.c
+index a99ca2b..660cb44 100644
+--- a/block.c
++++ b/block.c
+@@ -262,6 +262,15 @@ void path_combine(char *dest, int dest_size,
+     }
+ }
+ 
++void bdrv_get_full_backing_filename(BlockDriverState *bs, char *dest, size_t sz)
++{
++    if (bs->backing_file[0] == '\0' || path_has_protocol(bs->backing_file)) {
++        pstrcpy(dest, sz, bs->backing_file);
++    } else {
++        path_combine(dest, sz, bs->filename, bs->backing_file);
++    }
++}
++
+ void bdrv_register(BlockDriver *bdrv)
+ {
+     /* Block drivers without coroutine functions need emulation */
+@@ -753,14 +762,8 @@ int bdrv_open(BlockDriverState *bs, const char *filename, int flags,
+         BlockDriver *back_drv = NULL;
+ 
+         bs->backing_hd = bdrv_new("");
+-
+-        if (path_has_protocol(bs->backing_file)) {
+-            pstrcpy(backing_filename, sizeof(backing_filename),
+-                    bs->backing_file);
+-        } else {
+-            path_combine(backing_filename, sizeof(backing_filename),
+-                         filename, bs->backing_file);
+-        }
++        bdrv_get_full_backing_filename(bs, backing_filename,
++                                       sizeof(backing_filename));
+ 
+         if (bs->backing_format[0] != '\0') {
+             back_drv = bdrv_find_format(bs->backing_format);
+diff --git a/block.h b/block.h
+index 8af4617..d6764a5 100644
+--- a/block.h
++++ b/block.h
+@@ -361,6 +361,8 @@ int bdrv_get_info(BlockDriverState *bs, BlockDriverInfo *bdi);
+ const char *bdrv_get_encrypted_filename(BlockDriverState *bs);
+ void bdrv_get_backing_filename(BlockDriverState *bs,
+                                char *filename, int filename_size);
++void bdrv_get_full_backing_filename(BlockDriverState *bs,
++                                    char *dest, size_t sz);
+ int bdrv_can_snapshot(BlockDriverState *bs);
+ int bdrv_is_snapshot(BlockDriverState *bs);
+ BlockDriverState *bdrv_snapshots(void);
+diff --git a/qemu-img.c b/qemu-img.c
+index 2b2bc13..f07c5c7 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -1284,13 +1284,8 @@ static int img_info(int argc, char **argv)
+     }
+     bdrv_get_backing_filename(bs, backing_filename, sizeof(backing_filename));
+     if (backing_filename[0] != '\0') {
+-        if (path_has_protocol(backing_filename)) {
+-            pstrcpy(backing_filename2, sizeof(backing_filename2),
+-                    backing_filename);
+-        } else {
+-            path_combine(backing_filename2, sizeof(backing_filename2),
+-                         filename, backing_filename);
+-        }
++        bdrv_get_full_backing_filename(bs, backing_filename2,
++                                       sizeof(backing_filename2));
+         printf("backing file: %s", backing_filename);
+         if (strcmp(backing_filename, backing_filename2) != 0) {
+             printf(" (actual path: %s)", backing_filename2);
+-- 
+1.7.11.7
+

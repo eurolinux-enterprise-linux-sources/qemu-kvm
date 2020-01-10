@@ -1,0 +1,57 @@
+From 25af0e5da56971946c2d201cad6621d648f80bb4 Mon Sep 17 00:00:00 2001
+Message-Id: <25af0e5da56971946c2d201cad6621d648f80bb4.1432667955.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Wed, 20 May 2015 02:10:26 -0500
+Subject: [CHANGE] block: Fix bdrv_aio_cancel (RHEL only)
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1432087826-10645-1-git-send-email-famz@redhat.com>
+Patchwork-id: 65095
+O-Subject: [RHEL-6.7 qemu-kvm PATCH] block: Fix bdrv_aio_cancel (RHEL only)
+Bugzilla: 1220674
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1220674
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=9182711 (RHEL)
+      http://brewweb.devel.redhat.com/brew/taskinfo?taskID=9207503 (RHEV)
+
+Upstream uses aio_poll, doesn't apply.
+
+There are two problems with downstream bdrv_aio_cancel. One is the
+throttle state timers are still scheduled after the request
+cancellation; the other is the BH is not processed, which may have some
+pending request completion.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/block.c b/block.c
+index d12218f..58a2f00 100644
+--- a/block.c
++++ b/block.c
+@@ -3857,13 +3857,12 @@ void bdrv_aio_cancel(BlockDriverAIOCB *acb)
+             now = qemu_get_clock(vm_clock);
+             if (throttle_compute_timer(&bs->throttle_state,
+                                        i, now, &next_timestamp)) {
++                qemu_del_timer(bs->throttle_state.timers[i]);
+                 usleep((next_timestamp - now) / 1000);
+             }
+             qemu_co_queue_next(&bs->throttled_reqs[i]);
+         }
+-        if (!QLIST_EMPTY(&bs->tracked_requests)) {
+-            qemu_aio_wait();
+-        }
++        qemu_aio_wait();
+     }
+     qemu_aio_unref(acb);
+ }
+-- 
+2.1.0
+

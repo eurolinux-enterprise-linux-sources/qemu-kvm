@@ -1,0 +1,80 @@
+From dc14f246e67aab826d96bea4547604f33794dcac Mon Sep 17 00:00:00 2001
+From: Amos Kong <akong@redhat.com>
+Date: Tue, 10 Sep 2013 06:07:57 +0200
+Subject: [PATCH 15/39] virtio-rng-pci: create a default backend if none exists
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1378793288-3371-16-git-send-email-akong@redhat.com>
+Patchwork-id: 54250
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v3 15/26] virtio-rng-pci: create a default backend if none exists
+Bugzilla: 786407
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+This allows you to specify:
+
+  $ qemu -device virtio-rng-pci
+
+And things will Just Work with a reasonable default.
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(backported from commit 500054f161c29ff9db125c0b872809191ad6920b)
+
+PCI devices aren't organized by qobject, so directly assign
+created obj to rng.default_backend & rng.rng
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+---
+ hw/virtio-pci.c |    6 ++++++
+ hw/virtio-rng.h |    2 ++
+ 2 files changed, 8 insertions(+), 0 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ hw/virtio-pci.c |    6 ++++++
+ hw/virtio-rng.h |    2 ++
+ 2 files changed, 8 insertions(+), 0 deletions(-)
+
+diff --git a/hw/virtio-pci.c b/hw/virtio-pci.c
+index 554ce17..347d415 100644
+--- a/hw/virtio-pci.c
++++ b/hw/virtio-pci.c
+@@ -960,6 +960,12 @@ static int virtio_rng_init_pci(PCIDevice *pci_dev)
+                                  TYPE_RNG_BACKEND, NULL));
+     g_free(path);
+ 
++    if (proxy->rng.name == NULL) {
++        Object *obj = object_new(TYPE_RNG_RANDOM);
++        proxy->rng.default_backend = RNG_RANDOM(obj);
++        proxy->rng.rng = RNG_BACKEND(obj);
++    }
++
+     vdev = virtio_rng_init(&pci_dev->qdev, &proxy->rng);
+     if (!vdev) {
+         return -1;
+diff --git a/hw/virtio-rng.h b/hw/virtio-rng.h
+index c823a57..66e7c92 100644
+--- a/hw/virtio-rng.h
++++ b/hw/virtio-rng.h
+@@ -13,6 +13,7 @@
+ #define _QEMU_VIRTIO_RNG_H
+ 
+ #include "qemu/rng.h"
++#include "qemu/rng-random.h"
+ 
+ /* The Virtio ID for the virtio rng device */
+ #define VIRTIO_ID_RNG    4
+@@ -22,6 +23,7 @@ struct VirtIORNGConf {
+     RngBackend *rng;
+     uint64_t max_bytes;
+     uint32_t period_ms;
++    RndRandom *default_backend;
+ };
+ 
+ #endif
+-- 
+1.7.1
+

@@ -1,0 +1,112 @@
+From 24179ed85855f5bd918c449865542190be13bf6e Mon Sep 17 00:00:00 2001
+Message-Id: <24179ed85855f5bd918c449865542190be13bf6e.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:28:09 +0200
+Subject: [PATCH 104/114] qga: add guest-get-time command
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-47-git-send-email-lersek@redhat.com>
+Patchwork-id: 51145
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 46/56] qga: add guest-get-time command
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Lei Li <lilei@linux.vnet.ibm.com>
+
+Signed-off-by: Lei Li <lilei@linux.vnet.ibm.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+
+*added stub for w32
+
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit 6912e6a94cb0a1d650271103efbc3ac2299e4fd0)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qapi-schema-guest.json |   13 +++++++++++++
+ qga/commands-posix.c   |   16 ++++++++++++++++
+ qga/commands-win32.c   |    6 ++++++
+ 3 files changed, 35 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema-guest.json | 13 +++++++++++++
+ qga/commands-posix.c   | 16 ++++++++++++++++
+ qga/commands-win32.c   |  6 ++++++
+ 3 files changed, 35 insertions(+)
+
+diff --git a/qapi-schema-guest.json b/qapi-schema-guest.json
+index d91d903..bb0f75e 100644
+--- a/qapi-schema-guest.json
++++ b/qapi-schema-guest.json
+@@ -83,6 +83,19 @@
+ { 'command': 'guest-ping' }
+ 
+ ##
++# @guest-get-time:
++#
++# Get the information about guest time relative to the Epoch
++# of 1970-01-01 in UTC.
++#
++# Returns: Time in nanoseconds.
++#
++# Since 1.5
++##
++{ 'command': 'guest-get-time',
++  'returns': 'int' }
++
++##
+ # @GuestAgentCommandInfo:
+ #
+ # Information about guest agent commands.
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index 0033439..91841a0 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -120,6 +120,22 @@ void qmp_guest_shutdown(bool has_mode, const char *mode, Error **err)
+     /* succeded */
+ }
+ 
++int64_t qmp_guest_get_time(Error **errp)
++{
++   int ret;
++   qemu_timeval tq;
++   int64_t time_ns;
++
++   ret = qemu_gettimeofday(&tq);
++   if (ret < 0) {
++       error_setg_errno(errp, errno, "Failed to get time");
++       return -1;
++   }
++
++   time_ns = tq.tv_sec * 1000000000LL + tq.tv_usec * 1000;
++   return time_ns;
++}
++
+ typedef struct GuestFileHandle {
+     uint64_t id;
+     FILE *fh;
+diff --git a/qga/commands-win32.c b/qga/commands-win32.c
+index 5bd8fb2..88fe5ba 100644
+--- a/qga/commands-win32.c
++++ b/qga/commands-win32.c
+@@ -278,6 +278,12 @@ GuestNetworkInterfaceList *qmp_guest_network_get_interfaces(Error **err)
+     return NULL;
+ }
+ 
++int64_t qmp_guest_get_time(Error **errp)
++{
++    error_set(errp, QERR_UNSUPPORTED);
++    return -1;
++}
++
+ /* register init/cleanup routines for stateful command groups */
+ void ga_command_state_init(GAState *s, GACommandState *cs)
+ {
+-- 
+1.7.11.7
+

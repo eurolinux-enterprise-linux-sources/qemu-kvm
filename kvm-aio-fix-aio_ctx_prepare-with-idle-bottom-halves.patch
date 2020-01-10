@@ -1,0 +1,112 @@
+From 821e1ebc73063ed7e2ab67e71884db4def8a90ec Mon Sep 17 00:00:00 2001
+Message-Id: <821e1ebc73063ed7e2ab67e71884db4def8a90ec.1427300678.git.jen@redhat.com>
+In-Reply-To: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+References: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+From: Vlad Yasevich <vyasevic@redhat.com>
+Date: Thu, 12 Mar 2015 19:13:21 -0500
+Subject: [CHANGE 25/33] aio: fix aio_ctx_prepare with idle bottom halves
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Vlad Yasevich <vyasevic@redhat.com>
+Message-id: <1426187601-21396-26-git-send-email-vyasevic@redhat.com>
+Patchwork-id: 64362
+O-Subject: [RHEL6.7 qemu-kvm PATCH v2 25/25] aio: fix aio_ctx_prepare with idle bottom halves
+Bugzilla: 1005016
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Commit ed2aec4867f0d5f5de496bb765347b5d0cfe113d changed the return
+value of aio_ctx_prepare from false to true when only idle bottom
+halves are available.  This broke PC old-style DMA, which uses them.
+Fix this by making aio_ctx_prepare return true only when non-idle
+bottom halves are scheduled to run.
+
+Reported-by: malc <av1474@comtv.ru>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: malc <av1474@comtv.ru>
+(cherry picked from commit f5022a135e4309a54d433c69b2a056756b2d0d6b)
+
+RHEL6 secific: I skipped upstream commit 22bfa75eaf
+(aio: clean up now-unused functions) as it tries to clean-up
+functions that we still need in rhel6 source mainly because we
+dont have aio_notify support.  I've attempted to correct the issue
+by reworking the existing code a bit to match the return
+values that upstream would produce.
+
+Signed-off-by: Vladislav Yasevich <vyasevic@redhat.com>
+---
+ async.c    | 14 +++++++-------
+ qemu-aio.h |  2 +-
+ 2 files changed, 8 insertions(+), 8 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ async.c    | 14 +++++++-------
+ qemu-aio.h |  2 +-
+ 2 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/async.c b/async.c
+index 530333e..69539ba 100644
+--- a/async.c
++++ b/async.c
+@@ -116,7 +116,7 @@ void qemu_bh_delete(QEMUBH *bh)
+     bh->deleted = 1;
+ }
+ 
+-void aio_bh_update_timeout(AioContext *ctx, uint32_t *timeout)
++gboolean aio_bh_update_timeout(AioContext *ctx, uint32_t *timeout)
+ {
+     QEMUBH *bh;
+ 
+@@ -130,10 +130,12 @@ void aio_bh_update_timeout(AioContext *ctx, uint32_t *timeout)
+                 /* non-idle bottom halves will be executed
+                  * immediately */
+                 *timeout = 0;
+-                break;
++                return true;
+             }
+         }
+     }
++
++    return false;
+ }
+ 
+ static gboolean
+@@ -141,14 +143,12 @@ aio_ctx_prepare(GSource *source, gint    *timeout)
+ {
+     AioContext *ctx = (AioContext *) source;
+     uint32_t wait = -1;
+-    aio_bh_update_timeout(ctx, &wait);
++    gboolean run = aio_bh_update_timeout(ctx, &wait);
+ 
+-    if (wait != -1) {
++    if (wait != -1)
+         *timeout = MIN(*timeout, wait);
+-        return wait == 0;
+-    }
+ 
+-    return false;
++    return run;
+ }
+ 
+ static gboolean
+diff --git a/qemu-aio.h b/qemu-aio.h
+index 7a5b78a..aac97bf 100644
+--- a/qemu-aio.h
++++ b/qemu-aio.h
+@@ -114,7 +114,7 @@ QEMUBH *aio_bh_new(AioContext *ctx, QEMUBHFunc *cb, void *opaque);
+  * These are internal functions used by the QEMU main loop.
+  */
+ int aio_bh_poll(AioContext *ctx);
+-void aio_bh_update_timeout(AioContext *ctx, uint32_t *timeout);
++gboolean aio_bh_update_timeout(AioContext *ctx, uint32_t *timeout);
+ 
+ /**
+  * qemu_bh_schedule: Schedule a bottom half.
+-- 
+2.1.0
+

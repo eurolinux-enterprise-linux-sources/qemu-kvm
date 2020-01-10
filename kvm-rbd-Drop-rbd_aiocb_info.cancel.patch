@@ -1,0 +1,101 @@
+From e75cb689ebc693a53e4787553cfb11683a3649b9 Mon Sep 17 00:00:00 2001
+Message-Id: <e75cb689ebc693a53e4787553cfb11683a3649b9.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:35 -0500
+Subject: [CHANGE 15/29] rbd: Drop rbd_aiocb_info.cancel
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-16-git-send-email-famz@redhat.com>
+Patchwork-id: 64916
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 15/28] rbd: Drop rbd_aiocb_info.cancel
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+And also drop the now unused "cancelled" field.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 7691e24dbebb46658e89b3f950fda6ec78bbb823)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	block/rbd.c
+The removed acb->cancelled check is in a BH instead of
+qemu_rbd_complete_aio, but the removal is straightforward.
+---
+ block/rbd.c | 24 +-----------------------
+ 1 file changed, 1 insertion(+), 23 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/rbd.c | 24 +-----------------------
+ 1 file changed, 1 insertion(+), 23 deletions(-)
+
+diff --git a/block/rbd.c b/block/rbd.c
+index 337dd70..93d33b5 100644
+--- a/block/rbd.c
++++ b/block/rbd.c
+@@ -70,7 +70,6 @@ typedef struct RBDAIOCB {
+     int64_t sector_num;
+     int error;
+     struct BDRVRBDState *s;
+-    int cancelled;
+     int status;
+ } RBDAIOCB;
+ 
+@@ -567,25 +566,8 @@ static void qemu_rbd_close(BlockDriverState *bs)
+     (*librados.rados_shutdown)(s->cluster);
+ }
+ 
+-/*
+- * Cancel aio. Since we don't reference acb in a non qemu threads,
+- * it is safe to access it here.
+- */
+-static void qemu_rbd_aio_cancel(BlockDriverAIOCB *blockacb)
+-{
+-    RBDAIOCB *acb = (RBDAIOCB *) blockacb;
+-    acb->cancelled = 1;
+-
+-    while (acb->status == -EINPROGRESS) {
+-        qemu_aio_wait();
+-    }
+-
+-    qemu_aio_release(acb);
+-}
+-
+ static const AIOCBInfo rbd_aiocb_info = {
+     .aiocb_size = sizeof(RBDAIOCB),
+-    .cancel = qemu_rbd_aio_cancel,
+ };
+ 
+ static int qemu_rbd_send_pipe(BDRVRBDState *s, RADOSCB *rcb)
+@@ -653,10 +635,7 @@ static void rbd_aio_bh_cb(void *opaque)
+     qemu_bh_delete(acb->bh);
+     acb->bh = NULL;
+     acb->status = 0;
+-
+-    if (!acb->cancelled) {
+-        qemu_aio_release(acb);
+-    }
++    qemu_aio_release(acb);
+ }
+ 
+ static BlockDriverAIOCB *rbd_start_aio(BlockDriverState *bs,
+@@ -687,7 +666,6 @@ static BlockDriverAIOCB *rbd_start_aio(BlockDriverState *bs,
+     acb->ret = 0;
+     acb->error = 0;
+     acb->s = s;
+-    acb->cancelled = 0;
+     acb->bh = NULL;
+     acb->status = -EINPROGRESS;
+ 
+-- 
+2.1.0
+

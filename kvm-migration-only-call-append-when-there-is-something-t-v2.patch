@@ -1,0 +1,50 @@
+From 20791010604e32a0cffb02d64b5a792aaab1dfe7 Mon Sep 17 00:00:00 2001
+Message-Id: <20791010604e32a0cffb02d64b5a792aaab1dfe7.1421272770.git.jen@redhat.com>
+In-Reply-To: <acd6d327ae856e72f084949fd71314237a4b9b8b.1421272770.git.jen@redhat.com>
+References: <acd6d327ae856e72f084949fd71314237a4b9b8b.1421272770.git.jen@redhat.com>
+From: Juan Quintela <quintela@redhat.com>
+Date: Wed, 7 Jan 2015 16:45:08 -0600
+Subject: [CHANGE 04/10] migration: only call append when there is something to
+ append
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Juan Quintela <quintela@redhat.com>
+Message-id: <1420649114-17435-5-git-send-email-quintela@redhat.com>
+Patchwork-id: 63161
+O-Subject: [PATCH qemu-kvm RHEL6.7 04/10] migration: only call append when there is something to append
+Bugzilla: 970103
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+Ditto, no need to call a function we know is going to do nothing.
+
+v2: Change >= to > that is the propper thing
+
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+---
+ buffered_file.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ buffered_file.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/buffered_file.c b/buffered_file.c
+index dd1f172..1a88cc0 100644
+--- a/buffered_file.c
++++ b/buffered_file.c
+@@ -152,7 +152,7 @@ static int buffered_put_buffer(void *opaque, const uint8_t *buf, int64_t pos, in
+         s->bytes_xfer += ret;
+     }
+ 
+-    if (offset >= 0) {
++    if ((size - offset) > 0) {
+         DPRINTF("buffering %d bytes\n", size - offset);
+         buffered_append(s, buf + offset, size - offset);
+         offset = size;
+-- 
+2.1.0
+

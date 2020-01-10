@@ -1,0 +1,53 @@
+From 6da299cbd22aeea340aaabe3e57b8efc46a477f6 Mon Sep 17 00:00:00 2001
+Message-Id: <6da299cbd22aeea340aaabe3e57b8efc46a477f6.1484162498.git.ymankad@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Mon, 9 Jan 2017 20:20:57 -0500
+Subject: [CHANGE 1/7] qcow2: Free allocated L2 cluster on error
+To: ymankad@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <20170109202103.28932-2-mreitz@redhat.com>
+Patchwork-id: 73224
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 1/7] qcow2: Free allocated L2 cluster on error
+Bugzilla: 1405882
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+If an error occurs in l2_allocate, the allocated (but unused) L2 cluster
+should be freed.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Benoit Canet <benoit@irqsave.net>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit e3b21ef9e016e6d91fd71e44af5e23fb359e18f9)
+
+Conflicts:
+	block/qcow2-cluster.c
+
+qcow2_free_clusters() does not take the @type parameter downstream.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ block/qcow2-cluster.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/block/qcow2-cluster.c b/block/qcow2-cluster.c
+index 780cc83..2f337fe 100644
+--- a/block/qcow2-cluster.c
++++ b/block/qcow2-cluster.c
+@@ -254,6 +254,9 @@ static int l2_allocate(BlockDriverState *bs, int l1_index, uint64_t **table)
+ fail:
+     qcow2_cache_put(bs, s->l2_table_cache, (void**) table);
+     s->l1_table[l1_index] = old_l2_offset;
++    if (l2_offset > 0) {
++        qcow2_free_clusters(bs, l2_offset, s->l2_size * sizeof(uint64_t));
++    }
+     return ret;
+ }
+ 
+-- 
+2.7.4
+

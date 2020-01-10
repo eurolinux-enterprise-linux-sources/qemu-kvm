@@ -1,0 +1,50 @@
+From 096960a07031688b3b8d4c5378c40f4a7f46b14f Mon Sep 17 00:00:00 2001
+Message-Id: <096960a07031688b3b8d4c5378c40f4a7f46b14f.1411757522.git.jen@redhat.com>
+In-Reply-To: <c52ca58a7a8b9f87bde7ca1ab5b11a39d82854e5.1411757522.git.jen@redhat.com>
+References: <c52ca58a7a8b9f87bde7ca1ab5b11a39d82854e5.1411757522.git.jen@redhat.com>
+From: Jeff Nelson <jenelson@redhat.com>
+Date: Fri, 26 Sep 2014 16:39:46 -0400
+Subject: [CHANGE 4/7] Revert "migration: avoid no-op memmove() of potential
+ large buffer"
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Jeff Nelson <jenelson@redhat.com>
+Message-id: <41fa3b76ac6b0fe7422669fe9993fccc1b13ea90.1411747689.git.jen@redhat.com>
+Patchwork-id: 61460
+O-Subject: [RHEL-6.6.z qemu-kvm PATCH 4/7] Revert "migration: avoid no-op memmove() of potential large buffer"
+Bugzilla: 970103
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+This reverts commit 617e53c307e6d7c3de761a14744c50d1b250db19.
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ buffered_file.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ buffered_file.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/buffered_file.c b/buffered_file.c
+index 38abbac..424dbd1 100644
+--- a/buffered_file.c
++++ b/buffered_file.c
+@@ -104,10 +104,8 @@ static void buffered_flush(QEMUFileBuffered *s)
+     }
+ 
+     DPRINTF("flushed %zu of %zu byte(s)\n", offset, s->buffer_size);
+-    if ((offset > 0) && ((s->buffer_size - offset) > 0)) {
+-        memmove(s->buffer, s->buffer + offset, s->buffer_size - offset);
+-        s->buffer_size -= offset;
+-    }
++    memmove(s->buffer, s->buffer + offset, s->buffer_size - offset);
++    s->buffer_size -= offset;
+ }
+ 
+ static int buffered_put_buffer(void *opaque, const uint8_t *buf, int64_t pos, int size)
+-- 
+1.9.3
+

@@ -1,0 +1,90 @@
+From e9da2a80f20eda528e7d0a8c5f93b210ceb5a192 Mon Sep 17 00:00:00 2001
+Message-Id: <e9da2a80f20eda528e7d0a8c5f93b210ceb5a192.1376492227.git.minovotn@redhat.com>
+In-Reply-To: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+References: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+From: Asias He <asias@redhat.com>
+Date: Wed, 14 Aug 2013 10:24:21 +0200
+Subject: [PATCH 20/22] gluster: Return bdrv_has_zero_init = 0
+
+RH-Author: Asias He <asias@redhat.com>
+Message-id: <1376475863-27929-16-git-send-email-asias@redhat.com>
+Patchwork-id: 53402
+O-Subject: [RHEL6.5 qemu-kvm PATCH v4 15/17] gluster: Return bdrv_has_zero_init = 0
+Bugzilla: 848070
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+GlusterFS volumes can be backed by block devices, in which case
+bdrv_create() doesn't make sure that the image is zeroed out. It is
+currently not possibly to detect whether a given image is backed by a
+file or a block device, and incorrectly assuming that it is zeroed
+corrupts images during qemu-img convert, so let's err on the side of
+caution and always return 0.
+
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 8ab6feec2c7500faafd9a4571fb40d03dd360a64)
+---
+ block/gluster.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/gluster.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/block/gluster.c b/block/gluster.c
+index 5310b98..5544c3a 100644
+--- a/block/gluster.c
++++ b/block/gluster.c
+@@ -557,6 +557,12 @@ static void qemu_gluster_close(BlockDriverState *bs)
+     glfs_fini(s->glfs);
+ }
+ 
++static int qemu_gluster_has_zero_init(BlockDriverState *bs)
++{
++    /* GlusterFS volume could be backed by a block device */
++    return 0;
++}
++
+ static QEMUOptionParameter qemu_gluster_create_options[] = {
+     {
+         .name = BLOCK_OPT_SIZE,
+@@ -579,6 +585,7 @@ static BlockDriver bdrv_gluster = {
+     .bdrv_aio_readv               = qemu_gluster_aio_readv,
+     .bdrv_aio_writev              = qemu_gluster_aio_writev,
+     .bdrv_aio_flush               = qemu_gluster_aio_flush,
++    .bdrv_has_zero_init           = qemu_gluster_has_zero_init,
+     .create_options               = qemu_gluster_create_options,
+ };
+ 
+@@ -595,6 +602,7 @@ static BlockDriver bdrv_gluster_tcp = {
+     .bdrv_aio_readv               = qemu_gluster_aio_readv,
+     .bdrv_aio_writev              = qemu_gluster_aio_writev,
+     .bdrv_aio_flush               = qemu_gluster_aio_flush,
++    .bdrv_has_zero_init           = qemu_gluster_has_zero_init,
+     .create_options               = qemu_gluster_create_options,
+ };
+ 
+@@ -611,6 +619,7 @@ static BlockDriver bdrv_gluster_unix = {
+     .bdrv_aio_readv               = qemu_gluster_aio_readv,
+     .bdrv_aio_writev              = qemu_gluster_aio_writev,
+     .bdrv_aio_flush               = qemu_gluster_aio_flush,
++    .bdrv_has_zero_init           = qemu_gluster_has_zero_init,
+     .create_options               = qemu_gluster_create_options,
+ };
+ 
+@@ -627,6 +636,7 @@ static BlockDriver bdrv_gluster_rdma = {
+     .bdrv_aio_readv               = qemu_gluster_aio_readv,
+     .bdrv_aio_writev              = qemu_gluster_aio_writev,
+     .bdrv_aio_flush               = qemu_gluster_aio_flush,
++    .bdrv_has_zero_init           = qemu_gluster_has_zero_init,
+     .create_options               = qemu_gluster_create_options,
+ };
+ 
+-- 
+1.7.11.7
+

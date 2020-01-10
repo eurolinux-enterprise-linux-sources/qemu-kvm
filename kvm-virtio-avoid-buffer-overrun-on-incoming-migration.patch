@@ -1,0 +1,64 @@
+From c04f00735b61043ef5279161c747a32b20c41d7c Mon Sep 17 00:00:00 2001
+From: Michael S. Tsirkin <mst@redhat.com>
+Date: Sun, 11 May 2014 16:29:27 -0500
+Subject: [PATCH 14/20] virtio: avoid buffer overrun on incoming migration
+
+RH-Author: Michael S. Tsirkin <mst@redhat.com>
+Message-id: <1399825695-9493-1-git-send-email-mst@redhat.com>
+Patchwork-id: 58792
+O-Subject: [PATCH qemu-kvm RHEL6.6] virtio: avoid buffer overrun on incoming migration
+Bugzilla: 1096093
+RH-Acked-by: Xiao Wang <jasowang@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+
+From: Michael Roth <mdroth@linux.vnet.ibm.com>
+
+CVE-2013-6399
+
+vdev->queue_sel is read from the wire, and later used in the
+emulation code as an index into vdev->vq[]. If the value of
+vdev->queue_sel exceeds the length of vdev->vq[], currently
+allocated to be VIRTIO_PCI_QUEUE_MAX elements, subsequent PIO
+operations such as VIRTIO_PCI_QUEUE_PFN can be used to overrun
+the buffer with arbitrary data originating from the source.
+
+Fix this by failing migration if the value from the wire exceeds
+VIRTIO_PCI_QUEUE_MAX.
+
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+Reviewed-by: Peter Maydell <peter.maydell@linaro.org>
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+(cherry picked from commit 4b53c2c72cb5541cf394033b528a6fe2a86c0ac1)
+
+Bugzilla: 1096093
+Tested: lightly on developer's box
+Brew build: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7440381
+---
+ hw/virtio.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/virtio.c |    3 +++
+ 1 files changed, 3 insertions(+), 0 deletions(-)
+
+diff --git a/hw/virtio.c b/hw/virtio.c
+index 06c6a25..dc05365 100644
+--- a/hw/virtio.c
++++ b/hw/virtio.c
+@@ -806,6 +806,9 @@ int virtio_load_with_features(VirtIODevice *vdev, QEMUFile *f,
+     qemu_get_8s(f, &vdev->status);
+     qemu_get_8s(f, &vdev->isr);
+     qemu_get_be16s(f, &vdev->queue_sel);
++    if (vdev->queue_sel >= VIRTIO_PCI_QUEUE_MAX) {
++        return -1;
++    }
+     qemu_get_be32s(f, &features);
+ 
+     vdev->binding->force_features(vdev->binding_opaque,
+-- 
+1.7.1
+

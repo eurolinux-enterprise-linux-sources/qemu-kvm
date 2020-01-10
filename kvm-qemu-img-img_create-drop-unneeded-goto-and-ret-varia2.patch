@@ -1,0 +1,84 @@
+From d0fd501fdc07bcfbb186d7a78450887a5a4a66ba Mon Sep 17 00:00:00 2001
+Message-Id: <d0fd501fdc07bcfbb186d7a78450887a5a4a66ba.1368098699.git.minovotn@redhat.com>
+In-Reply-To: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+References: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Thu, 18 Apr 2013 19:04:42 +0200
+Subject: [PATCH 18/24] qemu-img: img_create(): drop unneeded goto and ret
+ variable
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1366311884-18091-4-git-send-email-lersek@redhat.com>
+Patchwork-id: 50692
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 3/5] qemu-img: img_create(): drop unneeded goto and ret variable
+Bugzilla: 877240
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit a930091189cedcc0023dd38f705e2a46e530f4a4)
+
+Conflicts:
+
+	qemu-img.c
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qemu-img.c |   14 ++++----------
+ 1 files changed, 4 insertions(+), 10 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-img.c | 14 ++++----------
+ 1 file changed, 4 insertions(+), 10 deletions(-)
+
+diff --git a/qemu-img.c b/qemu-img.c
+index fcf63f0..384868f 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -321,7 +321,7 @@ static int add_old_style_options(const char *fmt, QEMUOptionParameter *list,
+ 
+ static int img_create(int argc, char **argv)
+ {
+-    int c, ret = 0;
++    int c;
+     uint64_t img_size = -1;
+     const char *fmt = "raw";
+     const char *base_fmt = NULL;
+@@ -377,15 +377,13 @@ static int img_create(int argc, char **argv)
+             error_report("Invalid image size specified! You may use k, M, G or "
+                   "T suffixes for ");
+             error_report("kilobytes, megabytes, gigabytes and terabytes.");
+-            ret = -1;
+-            goto out;
++            return 1;
+         }
+         img_size = (uint64_t)sval;
+     }
+ 
+     if (options && !strcmp(options, "?")) {
+-        ret = print_block_option_help(filename, fmt);
+-        goto out;
++        return print_block_option_help(filename, fmt);
+     }
+ 
+     bdrv_img_create(filename, fmt, base_filename, base_fmt,
+@@ -393,13 +391,9 @@ static int img_create(int argc, char **argv)
+     if (error_is_set(&local_err)) {
+         error_report("%s", error_get_pretty(local_err));
+         error_free(local_err);
+-        ret = -1;
+-    }
+-
+-out:
+-    if (ret) {
+         return 1;
+     }
++
+     return 0;
+ }
+ 
+-- 
+1.7.11.7
+

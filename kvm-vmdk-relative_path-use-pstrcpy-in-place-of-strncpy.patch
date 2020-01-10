@@ -1,0 +1,53 @@
+From 3c81f88fe1d3b82e2cca14e625835b46ac324889 Mon Sep 17 00:00:00 2001
+Message-Id: <3c81f88fe1d3b82e2cca14e625835b46ac324889.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:52 +0200
+Subject: [PATCH 37/47] vmdk: relative_path: use pstrcpy in place of strncpy
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-38-git-send-email-famz@redhat.com>
+Patchwork-id: 51473
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 37/47] vmdk: relative_path: use pstrcpy in place of strncpy
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Jim Meyering <meyering@redhat.com>
+
+Avoid strncpy+manual-NUL-terminate.  Use pstrcpy instead.
+
+Acked-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Jim Meyering <meyering@redhat.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit d66f8e7bd3de4a2ecf0680c635f870f2138425b8)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index bfacea4..c1e83ba 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -1400,8 +1400,7 @@ static int relative_path(char *dest, int dest_size,
+         return -1;
+     }
+     if (path_is_absolute(target)) {
+-        dest[dest_size - 1] = '\0';
+-        strncpy(dest, target, dest_size - 1);
++        pstrcpy(dest, dest_size, target);
+         return 0;
+     }
+     while (base[i] == target[i]) {
+-- 
+1.7.11.7
+

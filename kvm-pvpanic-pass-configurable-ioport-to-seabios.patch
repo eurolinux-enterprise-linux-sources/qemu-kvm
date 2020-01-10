@@ -1,0 +1,80 @@
+From 5e41e6e4933a821b3ac022aba2df052a468a357a Mon Sep 17 00:00:00 2001
+Message-Id: <5e41e6e4933a821b3ac022aba2df052a468a357a.1369899578.git.minovotn@redhat.com>
+In-Reply-To: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+References: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Wed, 22 May 2013 11:31:10 +0200
+Subject: [PATCH 11/15] pvpanic: pass configurable ioport to seabios
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1369222273-3298-7-git-send-email-lersek@redhat.com>
+Patchwork-id: 51525
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 6/9] pvpanic: pass configurable ioport to seabios
+Bugzilla: 833530
+RH-Acked-by: Andrew Jones <drjones@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+This lets seabios patch the corresponding SSDT entry.
+
+Also add fw_cfg object to /machine/fw_cfg so we can reference
+it elsewhere.
+
+Signed-off-by: Hu Tao <hutao@cn.fujitsu.com>
+Reviewed-by: Markus Armbruster <armbru@redhat.com>
+Message-id: 60c65d95fe2b23b12bea67099126566010a11a1a.1366945969.git.hutao@cn.fujitsu.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+
+RHEL-6 notes:
+- manual backport of upstream commit
+  10a584b2875a391d1036adac18955a892e56f5e3,
+- ported it to global fw_cfg pointer generalized in previous patch.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ v2:
+ - argument to fw_get_global() dropped [Paolo Bonzini]
+
+ hw/pvpanic.c |   11 +++++++++++
+ 1 files changed, 11 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/pvpanic.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/hw/pvpanic.c b/hw/pvpanic.c
+index 918c86f..bfad31c 100644
+--- a/hw/pvpanic.c
++++ b/hw/pvpanic.c
+@@ -20,6 +20,8 @@
+ #include "sysemu.h"
+ #include "qemu-log.h"
+ 
++#include "hw/fw_cfg.h"
++
+ /* The bit of supported pv event */
+ #define PVPANIC_F_PANICKED      0
+ 
+@@ -73,9 +75,18 @@ static void pvpanic_ioport_write(void *opaque, uint32_t address, uint32_t data)
+ static int pvpanic_isa_init(ISADevice *dev)
+ {
+     PVPanicState *s = DO_UPCAST(PVPanicState, isa_dev, dev);
++    static bool port_configured;
+ 
+     register_ioport_read(s->ioport, 1, 1, &pvpanic_ioport_read, s);
+     register_ioport_write(s->ioport, 1, 1, &pvpanic_ioport_write, s);
++
++    if (!port_configured && fw_get_global()) {
++        fw_cfg_add_file(fw_get_global(), "etc/pvpanic-port",
++                        g_memdup(&s->ioport, sizeof(s->ioport)),
++                        sizeof(s->ioport));
++        port_configured = true;
++    }
++
+     return 0;
+ }
+ 
+-- 
+1.7.11.7
+

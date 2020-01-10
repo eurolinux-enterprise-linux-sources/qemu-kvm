@@ -1,0 +1,81 @@
+From c06984e47d6c6ddf26a30ac8b1fe5c72d497711d Mon Sep 17 00:00:00 2001
+Message-Id: <c06984e47d6c6ddf26a30ac8b1fe5c72d497711d.1368111913.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:17:47 +0200
+Subject: [PATCH 13/65] Revert "char: Split out tcp socket close code in a
+ separate function"
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <bf0cc79a64daca4b98fc6d70323cb28c41bd62f8.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50791
+O-Subject: [RHEL6.5 qemu-kvm PATCH 13/65] Revert "char: Split out tcp socket close code in a separate function"
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+This reverts commit d6c52c3edf6aef391ee1c7e8383cc0a3af97bad2.
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	qemu-char.c
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ qemu-char.c | 25 +++++++++----------------
+ 1 file changed, 9 insertions(+), 16 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 25 +++++++++----------------
+ 1 file changed, 9 insertions(+), 16 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index a31d772..c19ad8b 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -1923,21 +1923,6 @@ typedef struct {
+ 
+ static void tcp_chr_accept(void *opaque);
+ 
+-static void tcp_closed(void *opaque)
+-{
+-    CharDriverState *chr = opaque;
+-    TCPCharDriver *s = chr->opaque;
+-
+-    s->connected = 0;
+-    if (s->listen_fd >= 0) {
+-        qemu_set_fd_handler(s->listen_fd, tcp_chr_accept, NULL, chr);
+-    }
+-    qemu_set_fd_handler(s->fd, NULL, NULL, NULL);
+-    closesocket(s->fd);
+-    s->fd = -1;
+-    qemu_chr_event(chr, CHR_EVENT_CLOSED);
+-}
+-
+ static int tcp_chr_write(CharDriverState *chr, const uint8_t *buf, int len)
+ {
+     TCPCharDriver *s = chr->opaque;
+@@ -2088,7 +2073,15 @@ static void tcp_chr_read(void *opaque)
+         len = s->max_size;
+     size = tcp_chr_recv(chr, (void *)buf, len);
+     if (size == 0) {
+-        tcp_closed(chr);
++        /* connection closed */
++        s->connected = 0;
++        if (s->listen_fd >= 0) {
++            qemu_set_fd_handler(s->listen_fd, tcp_chr_accept, NULL, chr);
++        }
++        qemu_set_fd_handler(s->fd, NULL, NULL, NULL);
++        closesocket(s->fd);
++        s->fd = -1;
++        qemu_chr_event(chr, CHR_EVENT_CLOSED);
+     } else if (size > 0) {
+         if (s->do_telnetopt)
+             tcp_chr_process_IAC_bytes(chr, s, buf, &size);
+-- 
+1.7.11.7
+

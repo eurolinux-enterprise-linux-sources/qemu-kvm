@@ -1,0 +1,177 @@
+From 6b9fb164081a2579a24e01c1b2a36953b26e3318 Mon Sep 17 00:00:00 2001
+Message-Id: <6b9fb164081a2579a24e01c1b2a36953b26e3318.1427300678.git.jen@redhat.com>
+In-Reply-To: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+References: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+From: Vlad Yasevich <vyasevic@redhat.com>
+Date: Thu, 12 Mar 2015 19:13:06 -0500
+Subject: [CHANGE 10/33] aio: add non-blocking variant of aio_wait
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Vlad Yasevich <vyasevic@redhat.com>
+Message-id: <1426187601-21396-11-git-send-email-vyasevic@redhat.com>
+Patchwork-id: 64349
+O-Subject: [RHEL6.7 qemu-kvm PATCH v2 10/25] aio: add non-blocking variant of aio_wait
+Bugzilla: 1005016
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+This will be used when polling the GSource attached to an AioContext.
+
+Reviewed-by: Anthony Liguori <aliguori@us.ibm.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 7c0628b20e7c56b7e04abb8b5f8d7da3f7cb87e8)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	aio.c
+	async.c
+	main-loop.c
+	qemu-aio.h
+
+Signed-off-by: Vladislav Yasevich <vyasevic@redhat.com>
+---
+ aio.c      | 21 +++++++++++++++------
+ async.c    |  4 ++--
+ qemu-aio.h | 20 ++++++++++++++------
+ 3 files changed, 31 insertions(+), 14 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ aio.c      | 21 +++++++++++++++------
+ async.c    |  4 ++--
+ qemu-aio.h | 20 ++++++++++++++------
+ 3 files changed, 31 insertions(+), 14 deletions(-)
+
+diff --git a/aio.c b/aio.c
+index a258f87..416771c 100644
+--- a/aio.c
++++ b/aio.c
+@@ -81,14 +81,16 @@ void aio_set_fd_handler(AioContext *ctx,
+     }
+ }
+ 
+-
+-bool aio_wait(AioContext *ctx)
++bool aio_poll(AioContext *ctx, bool blocking)
+ {
++    static struct timeval tv0;
+     AioHandler *node;
+     fd_set rdfds, wrfds;
+     int max_fd = -1;
+     int ret;
+-    bool busy;
++    bool busy, progress;
++
++    progress = false;
+ 
+     /*
+      * If there are callbacks left that have been queued, we need to call then.
+@@ -96,6 +98,11 @@ bool aio_wait(AioContext *ctx)
+      * does not need a complete flush (as is the case for qemu_aio_wait loops).
+      */
+     if (aio_bh_poll(ctx)) {
++        blocking = false;
++        progress = true;
++    }
++
++    if (progress && !blocking) {
+         return true;
+     }
+ 
+@@ -131,11 +138,11 @@ bool aio_wait(AioContext *ctx)
+ 
+     /* No AIO operations?  Get us out of here */
+     if (!busy) {
+-        return false;
++        return progress;
+     }
+ 
+     /* wait until next event */
+-    ret = select(max_fd, &rdfds, &wrfds, NULL, NULL);
++    ret = select(max_fd, &rdfds, &wrfds, NULL, blocking ? NULL : &tv0);
+ 
+     /* if we have any readable fds, dispatch event */
+     if (ret > 0) {
+@@ -150,11 +157,13 @@ bool aio_wait(AioContext *ctx)
+             if (!node->deleted &&
+                 FD_ISSET(node->fd, &rdfds) &&
+                 node->io_read) {
++                progress = true;
+                 node->io_read(node->opaque);
+             }
+             if (!node->deleted &&
+                 FD_ISSET(node->fd, &wrfds) &&
+                 node->io_write) {
++                progress = true;
+                 node->io_write(node->opaque);
+             }
+ 
+@@ -170,5 +179,5 @@ bool aio_wait(AioContext *ctx)
+         }
+     }
+ 
+-    return true;
++    return progress;
+ }
+diff --git a/async.c b/async.c
+index 7d4ffac..861502d 100644
+--- a/async.c
++++ b/async.c
+@@ -144,7 +144,7 @@ AioContext *aio_context_new(void)
+ 
+ void aio_flush(AioContext *ctx)
+ {
+-    while (aio_wait(ctx));
++    while (aio_poll(ctx, true));
+ }
+ 
+ /*
+@@ -183,7 +183,7 @@ void qemu_aio_flush(void)
+ 
+ bool qemu_aio_wait(void)
+ {
+-    return aio_wait(qemu_aio_context());
++    return aio_poll(qemu_aio_context(), true);
+ }
+ 
+ void qemu_aio_set_fd_handler(int fd,
+diff --git a/qemu-aio.h b/qemu-aio.h
+index 3f2821f..4c9f033 100644
+--- a/qemu-aio.h
++++ b/qemu-aio.h
+@@ -137,14 +137,22 @@ void qemu_bh_delete(QEMUBH *bh);
+  * outstanding AIO operations have been completed or cancelled. */
+ void aio_flush(AioContext *ctx);
+ 
+-/* Wait for a single AIO completion to occur.  This function will wait
+- * until a single AIO event has completed and it will ensure something
+- * has moved before returning. This can issue new pending aio as
+- * result of executing I/O completion or bh callbacks.
++/* Progress in completing AIO work to occur.  This can issue new pending
++ * aio as a result of executing I/O completion or bh callbacks.
+  *
+- * Return whether there is still any pending AIO operation.
++ * If there is no pending AIO operation or completion (bottom half),
++ * return false.  If there are pending bottom halves, return true.
++ *
++ * If there are no pending bottom halves, but there are pending AIO
++ * operations, it may not be possible to make any progress without
++ * blocking.  If @blocking is true, this function will wait until one
++ * or more AIO events have completed, to ensure something has moved
++ * before returning.
++ *
++ * If @blocking is false, this function will also return false if the
++ * function cannot make any progress without blocking.
+  */
+-bool aio_wait(AioContext *ctx);
++bool aio_poll(AioContext *ctx, bool blocking);
+ 
+ /* Register a file descriptor and associated callbacks.  Behaves very similarly
+  * to qemu_set_fd_handler2.  Unlike qemu_set_fd_handler2, these callbacks will
+-- 
+2.1.0
+

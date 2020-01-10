@@ -1,0 +1,53 @@
+From e55bdd45e1444ae656ee32fa78891b99ddded2e0 Mon Sep 17 00:00:00 2001
+Message-Id: <e55bdd45e1444ae656ee32fa78891b99ddded2e0.1389010971.git.minovotn@redhat.com>
+In-Reply-To: <a87ad12db7a2b9bd2cbee8587d4f4bb359fa7ea5.1389010971.git.minovotn@redhat.com>
+References: <a87ad12db7a2b9bd2cbee8587d4f4bb359fa7ea5.1389010971.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Wed, 2 Oct 2013 10:16:00 +0200
+Subject: [PATCH 2/3] qxl: Fix QXLRam initialisation.
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1380708960-6827-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 54642
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 1/1] qxl: Fix QXLRam initialisation.
+Bugzilla: 1013300
+RH-Acked-by: Michal Novotny <minovotn@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Anthony PERARD <anthony.perard@citrix.com>
+
+The qxl driver expect NULL for QXLRam.memory_configs, but this is never
+initialized.
+
+If memory is set to 0xc2c2.., it leads to a spice-critical error when
+trying to start qxl.
+
+Signed-off-by: Anthony PERARD <anthony.perard@citrix.com>
+Reviewed-by: Gerd Hoffmann <kraxel@redhat.com>
+Signed-off-by: Michael Tokarev <mjt@tls.msk.ru>
+(cherry picked from commit 329f97fc4ff4b533fcd2d8f4eab6c9c2568aed27)
+---
+ hw/qxl.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/qxl.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/hw/qxl.c b/hw/qxl.c
+index 2e86c6c..e329326 100644
+--- a/hw/qxl.c
++++ b/hw/qxl.c
+@@ -403,6 +403,7 @@ static void init_qxl_ram(PCIQXLDevice *d)
+     d->ram->int_pending = cpu_to_le32(0);
+     d->ram->int_mask    = cpu_to_le32(0);
+     d->ram->update_surface = 0;
++    d->ram->monitors_config = 0;
+     SPICE_RING_INIT(&d->ram->cmd_ring);
+     SPICE_RING_INIT(&d->ram->cursor_ring);
+     SPICE_RING_INIT(&d->ram->release_ring);
+-- 
+1.7.11.7
+

@@ -1,0 +1,74 @@
+From c10e623b36735849d345155ff007ea884d9498ed Mon Sep 17 00:00:00 2001
+Message-Id: <c10e623b36735849d345155ff007ea884d9498ed.1375955382.git.minovotn@redhat.com>
+In-Reply-To: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+References: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+From: Alon Levy <alevy@redhat.com>
+Date: Thu, 1 Aug 2013 11:53:25 +0200
+Subject: [PATCH 06/35] Spelling fixes in comments (it's -> its)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Alon Levy <alevy@redhat.com>
+Message-id: <1375358029-12968-7-git-send-email-alevy@redhat.com>
+Patchwork-id: 52896
+O-Subject: [RHEL-6.5 RHEL-6.4.z qemu-kvm v6 06/30] Spelling fixes in comments (it's -> its)
+Bugzilla: 917860
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+From: Stefan Weil <weil@mail.berlios.de>
+
+* it's -> its (fixed for all files)
+* dont -> don't (only fixed in a line which was touched by the previous fix)
+* distrub -> disturb (fixed in the same line)
+
+Reviewed-by: Andreas Färber <afaerber@suse.de>
+Signed-off-by: Stefan Weil <sw@weilnetz.de>
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+
+(cherry picked from 93148aa5c341810b0ecefdbe4e760fddb38d9085)
+Changes:
+    only took libcacard/vscclient.c & usb-ccid.c, patch doesn't apply otherwise
+    anyway, needed for further patches to apply cleanly on top.
+---
+ hw/usb-ccid.c         | 2 +-
+ libcacard/vscclient.c | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/usb-ccid.c         | 2 +-
+ libcacard/vscclient.c | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/hw/usb-ccid.c b/hw/usb-ccid.c
+index 88a9621..191a502 100644
+--- a/hw/usb-ccid.c
++++ b/hw/usb-ccid.c
+@@ -5,7 +5,7 @@
+  *
+  * Written by Alon Levy, with contributions from Robert Relyea.
+  *
+- * Based on usb-serial.c, see it's copyright and attributions below.
++ * Based on usb-serial.c, see its copyright and attributions below.
+  *
+  * This work is licensed under the terms of the GNU GPL, version 2.1 or later.
+  * See the COPYING file in the top-level directory.
+diff --git a/libcacard/vscclient.c b/libcacard/vscclient.c
+index b6e5786..3e49d83 100644
+--- a/libcacard/vscclient.c
++++ b/libcacard/vscclient.c
+@@ -129,7 +129,7 @@ event_thread(void *arg)
+                 vevent_delete(event);
+                 continue;
+             }
+-            /* this reader hasn't been told it's status from qemu yet, wait for
++            /* this reader hasn't been told its status from qemu yet, wait for
+              * that status */
+             while (pending_reader != NULL) {
+                 qemu_cond_wait(&pending_reader_condition, &pending_reader_lock);
+-- 
+1.7.11.7
+

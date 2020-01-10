@@ -1,0 +1,71 @@
+From e7da6567a654e6acc7aa08e6bf7d48373d1219d0 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:50 -0500
+Subject: [CHANGE 28/31] qemu-iotests: Backport 086
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-29-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60381
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 28/29] qemu-iotests: Backport 086
+Bugzilla: 1122410
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+RHEL 6 updates progress in a different granularity, adapt the reference
+output.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ tests/qemu-iotests/086.out | 29 ++++++++++++++++++++++++++++-
+ 1 file changed, 28 insertions(+), 1 deletion(-)
+
+diff --git a/tests/qemu-iotests/086.out b/tests/qemu-iotests/086.out
+index 9c0bf23..0b149e3 100644
+--- a/tests/qemu-iotests/086.out
++++ b/tests/qemu-iotests/086.out
+@@ -9,10 +9,37 @@ wrote 1048576/1048576 bytes at offset 4194304
+ wrote 1048576/1048576 bytes at offset 33554432
+ 1 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+     (0.00/100%)
++    (3.12/100%)
++    (6.25/100%)
++    (9.38/100%)
++    (12.50/100%)
++    (15.62/100%)
++    (18.75/100%)
++    (21.88/100%)
+     (25.00/100%)
++    (28.12/100%)
++    (31.25/100%)
++    (34.38/100%)
++    (37.50/100%)
++    (40.62/100%)
++    (43.75/100%)
++    (46.88/100%)
+     (50.00/100%)
++    (53.12/100%)
++    (56.25/100%)
++    (59.38/100%)
++    (62.50/100%)
++    (65.62/100%)
++    (68.75/100%)
++    (71.88/100%)
+     (75.00/100%)
+-    (100.00/100%)
++    (78.12/100%)
++    (81.25/100%)
++    (84.38/100%)
++    (87.50/100%)
++    (90.62/100%)
++    (93.75/100%)
++    (96.88/100%)
+     (100.00/100%)
+ 
+ *** done
+-- 
+1.9.3
+

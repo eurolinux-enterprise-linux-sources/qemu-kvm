@@ -1,0 +1,46 @@
+From 4e084843c51e971ed3e46773decb6a85fce571c6 Mon Sep 17 00:00:00 2001
+From: Amit Shah <amit.shah@redhat.com>
+Date: Fri, 11 Jul 2014 10:47:22 -0500
+Subject: [CHANGE 11/18] tests: vmstate static checker: change description name
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <72e18348cac53a8bd37f148e6516e4f250eb3a9b.1405075344.git.amit.shah@redhat.com>
+Patchwork-id: 59811
+O-Subject: [RHEL6.6 qemu-kvm PATCH 11/18] tests: vmstate static checker: change description name
+Bugzilla: 1118718
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Reviewed-by: Juan Quintela <quintela@redhat.com>
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+(cherry picked from commit 1d681c712af592287750fc9ac9f7f75005e7b039)
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ tests/vmstate-static-checker-data/dump2.json | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ tests/vmstate-static-checker-data/dump2.json | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/vmstate-static-checker-data/dump2.json b/tests/vmstate-static-checker-data/dump2.json
+index 34bfbf6..f69966d 100644
+--- a/tests/vmstate-static-checker-data/dump2.json
++++ b/tests/vmstate-static-checker-data/dump2.json
+@@ -749,7 +749,7 @@
+     "version_id": 1,
+     "minimum_version_id": 1,
+     "Description": {
+-      "name": "tpci200",
++      "name": "tpci2002",
+       "version_id": 1,
+       "minimum_version_id": 1,
+       "Fields": [
+-- 
+1.9.3
+

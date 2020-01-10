@@ -1,0 +1,75 @@
+From 17658e0660b29e530c3083a8371ddaded7337ed3 Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Sat, 22 Mar 2014 03:31:00 +0100
+Subject: [PATCH 09/30] dump: add API to write vmcore
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1395459071-19118-9-git-send-email-lersek@redhat.com>
+Patchwork-id: 58220
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 08/19] dump: add API to write vmcore
+Bugzilla: 1035162
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: qiaonuohan <qiaonuohan@cn.fujitsu.com>
+
+Function is used to write vmcore in flatten format. In flatten format, data is
+written block by block, and in front of each block, a struct
+MakedumpfileDataHeader is stored there to indicate the offset and size of the
+data block.
+
+struct MakedumpfileDataHeader {
+    int64_t offset;
+    int64_t buf_size;
+};
+
+Signed-off-by: Qiao Nuohan <qiaonuohan@cn.fujitsu.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 5d31babe5c7d854d6b8470bc9fa67a698926e65d)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ dump.c | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ dump.c |   21 +++++++++++++++++++++
+ 1 files changed, 21 insertions(+), 0 deletions(-)
+
+diff --git a/dump.c b/dump.c
+index 12d234d..42dabe3 100644
+--- a/dump.c
++++ b/dump.c
+@@ -728,6 +728,27 @@ static int write_end_flat_header(int fd)
+     return 0;
+ }
+ 
++static int write_buffer(int fd, off_t offset, const void *buf, size_t size)
++{
++    size_t written_size;
++    MakedumpfileDataHeader mdh;
++
++    mdh.offset = cpu_to_be64(offset);
++    mdh.buf_size = cpu_to_be64(size);
++
++    written_size = qemu_write_full(fd, &mdh, sizeof(mdh));
++    if (written_size != sizeof(mdh)) {
++        return -1;
++    }
++
++    written_size = qemu_write_full(fd, buf, size);
++    if (written_size != size) {
++        return -1;
++    }
++
++    return 0;
++}
++
+ static ram_addr_t get_start_block(DumpState *s)
+ {
+     GuestPhysBlock *block;
+-- 
+1.7.1
+

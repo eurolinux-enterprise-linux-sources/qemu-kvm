@@ -1,0 +1,69 @@
+From f4f0ee7acca96e51aef6fc74e688e25e83d3c3bd Mon Sep 17 00:00:00 2001
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Thu, 1 Feb 2018 08:44:26 -0200
+Subject: [PATCH] cirrus: fix oob access in mode4and5 write functions
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <20180201084426.26279-2-kraxel@redhat.com>
+Patchwork-id: 78843
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 1/1] cirrus: fix oob access in mode4and5 write functions
+Bugzilla: 1501296
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Move dst calculation into the loop, so we apply the mask on each
+interation and will not overflow vga memory.
+
+Cc: Prasad J Pandit <pjp@fedoraproject.org>
+Reported-by: Niu Guoxiang <niuguoxiang@huawei.com>
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: 20171011084314.21752-1-kraxel@redhat.com
+(cherry picked from commit eb38e1bc3740725ca29a535351de94107ec58d51)
+Signed-off-by: Wainer dos Santos Moschetta <wainersm@redhat.com>
+---
+ hw/cirrus_vga.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/hw/cirrus_vga.c b/hw/cirrus_vga.c
+index 184dc28d53..fb2679cdea 100644
+--- a/hw/cirrus_vga.c
++++ b/hw/cirrus_vga.c
+@@ -2018,15 +2018,14 @@ static void cirrus_mem_writeb_mode4and5_8bpp(CirrusVGAState * s,
+     unsigned val = mem_value;
+     uint8_t *dst;
+ 
+-    dst = s->vga.vram_ptr + (offset &= s->cirrus_addr_mask);
+     for (x = 0; x < 8; x++) {
++        dst = s->vga.vram_ptr + ((offset + x) & s->cirrus_addr_mask);
+ 	if (val & 0x80) {
+ 	    *dst = s->cirrus_shadow_gr1;
+ 	} else if (mode == 5) {
+ 	    *dst = s->cirrus_shadow_gr0;
+ 	}
+ 	val <<= 1;
+-	dst++;
+     }
+     cpu_physical_memory_set_dirty(s->vga.vram_offset + offset);
+     cpu_physical_memory_set_dirty(s->vga.vram_offset + offset + 7);
+@@ -2041,8 +2040,8 @@ static void cirrus_mem_writeb_mode4and5_16bpp(CirrusVGAState * s,
+     unsigned val = mem_value;
+     uint8_t *dst;
+ 
+-    dst = s->vga.vram_ptr + (offset &= s->cirrus_addr_mask);
+     for (x = 0; x < 8; x++) {
++        dst = s->vga.vram_ptr + ((offset + 2 * x) & s->cirrus_addr_mask & ~1);
+ 	if (val & 0x80) {
+ 	    *dst = s->cirrus_shadow_gr1;
+ 	    *(dst + 1) = s->vga.gr[0x11];
+@@ -2051,7 +2050,6 @@ static void cirrus_mem_writeb_mode4and5_16bpp(CirrusVGAState * s,
+ 	    *(dst + 1) = s->vga.gr[0x10];
+ 	}
+ 	val <<= 1;
+-	dst += 2;
+     }
+     cpu_physical_memory_set_dirty(s->vga.vram_offset + offset);
+     cpu_physical_memory_set_dirty(s->vga.vram_offset + offset + 15);
+-- 
+2.13.6
+

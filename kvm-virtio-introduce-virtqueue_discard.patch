@@ -1,0 +1,71 @@
+From 9e7eba4fb95717acc2f4ca73ccea1d4c32bb55a9 Mon Sep 17 00:00:00 2001
+Message-Id: <9e7eba4fb95717acc2f4ca73ccea1d4c32bb55a9.1481738366.git.ymankad@redhat.com>
+In-Reply-To: <be7cc66c94d4b6c77f9f1e674d4783c7d1c3efac.1481738366.git.ymankad@redhat.com>
+References: <be7cc66c94d4b6c77f9f1e674d4783c7d1c3efac.1481738366.git.ymankad@redhat.com>
+From: Ladi Prosek <lprosek@redhat.com>
+Date: Mon, 5 Dec 2016 13:57:43 -0500
+Subject: [CHANGE 02/10] virtio: introduce virtqueue_discard()
+To: ymankad@redhat.com
+
+RH-Author: Ladi Prosek <lprosek@redhat.com>
+Message-id: <1480946267-6514-3-git-send-email-lprosek@redhat.com>
+Patchwork-id: 72984
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 2/6] virtio: introduce virtqueue_discard()
+Bugzilla: 1392520
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Ladi Prosek <lprosek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+
+From: Jason Wang <jasowang@redhat.com>
+
+This patch introduces virtqueue_discard() to discard a descriptor and
+unmap the sgs. This will be used by the patch that will discard
+descriptor when packet is truncated.
+
+Cc: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Jason Wang <jasowang@redhat.com>
+Reviewed-by: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+(cherry picked from commit 29b9f5efd78ae0f9cc02dd169b6e80d2c404bade)
+Signed-off-by: Ladi Prosek <lprosek@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ hw/virtio.c | 7 +++++++
+ hw/virtio.h | 2 ++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/hw/virtio.c b/hw/virtio.c
+index 47637e0..3af7a18 100644
+--- a/hw/virtio.c
++++ b/hw/virtio.c
+@@ -257,6 +257,13 @@ static void virtqueue_unmap_sg(VirtQueue *vq, const VirtQueueElement *elem,
+                                   0, elem->out_sg[i].iov_len);
+ }
+ 
++void virtqueue_discard(VirtQueue *vq, const VirtQueueElement *elem,
++                       unsigned int len)
++{
++    vq->last_avail_idx--;
++    virtqueue_unmap_sg(vq, elem, len);
++}
++
+ void virtqueue_fill(VirtQueue *vq, const VirtQueueElement *elem,
+                     unsigned int len, unsigned int idx)
+ {
+diff --git a/hw/virtio.h b/hw/virtio.h
+index 1773654..fbe44c1 100644
+--- a/hw/virtio.h
++++ b/hw/virtio.h
+@@ -147,6 +147,8 @@ VirtQueue *virtio_add_queue(VirtIODevice *vdev, int queue_size,
+ void virtqueue_push(VirtQueue *vq, const VirtQueueElement *elem,
+                     unsigned int len);
+ void virtqueue_flush(VirtQueue *vq, unsigned int count);
++void virtqueue_discard(VirtQueue *vq, const VirtQueueElement *elem,
++                       unsigned int len);
+ void virtqueue_fill(VirtQueue *vq, const VirtQueueElement *elem,
+                     unsigned int len, unsigned int idx);
+ 
+-- 
+2.7.4
+

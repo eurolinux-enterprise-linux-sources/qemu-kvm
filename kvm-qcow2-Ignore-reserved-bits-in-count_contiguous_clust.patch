@@ -1,0 +1,138 @@
+From 2ac728f96c56939949a1836a340fabc3ab899b05 Mon Sep 17 00:00:00 2001
+Message-Id: <2ac728f96c56939949a1836a340fabc3ab899b05.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:21:46 -0500
+Subject: [CHANGE 03/42] qcow2: Ignore reserved bits in
+ count_contiguous_clusters()
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-4-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64467
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 03/39] qcow2: Ignore reserved bits in count_contiguous_clusters()
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+BZ: 1129892
+
+Until now, count_contiguous_clusters() has an argument that allowed to
+specify flags that should be ignored in the comparison, i.e. that are
+allowed to change between contiguous clusters.
+
+This patch changes the function so that it ignores all flags by default
+now and you need to pass the flags on which it should stop.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 2bfcc4a0a0b5120b6518e1c823c18cf0e8b963cb)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	block/qcow2-cluster.c
+
+250196f19c6e7df12965d74a5073e10aba06c802 missing downstream.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-cluster.c | 38 ++++++++++++++++++++++++++++----------
+ 1 file changed, 28 insertions(+), 10 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-cluster.c | 38 ++++++++++++++++++++++++++++----------
+ 1 file changed, 28 insertions(+), 10 deletions(-)
+
+diff --git a/block/qcow2-cluster.c b/block/qcow2-cluster.c
+index d2c7beb..7ff8b50 100644
+--- a/block/qcow2-cluster.c
++++ b/block/qcow2-cluster.c
+@@ -255,28 +255,44 @@ fail:
+     return ret;
+ }
+ 
++/*
++ * Checks how many clusters in a given L2 table are contiguous in the image
++ * file. As soon as one of the flags in the bitmask stop_flags changes compared
++ * to the first cluster, the search is stopped and the cluster is not counted
++ * as contiguous. (This allows it, for example, to stop at the first compressed
++ * cluster which may require a different handling)
++ */
+ static int count_contiguous_clusters(uint64_t nb_clusters, int cluster_size,
+-        uint64_t *l2_table, uint64_t start, uint64_t mask)
++        uint64_t *l2_table, uint64_t start, uint64_t stop_flags)
+ {
+     int i;
+-    uint64_t offset = be64_to_cpu(l2_table[0]) & ~mask;
++    uint64_t mask = stop_flags | L2E_OFFSET_MASK;
++    uint64_t offset = be64_to_cpu(l2_table[0]) & mask;
+ 
+     if (!offset)
+         return 0;
+ 
+-    for (i = start; i < start + nb_clusters; i++)
+-        if (offset + (uint64_t) i * cluster_size != (be64_to_cpu(l2_table[i]) & ~mask))
++    for (i = start; i < start + nb_clusters; i++) {
++        uint64_t l2_entry = be64_to_cpu(l2_table[i]) & mask;
++        if (offset + (uint64_t) i * cluster_size != l2_entry) {
+             break;
++        }
++    }
+ 
+ 	return (i - start);
+ }
+ 
+ static int count_contiguous_free_clusters(uint64_t nb_clusters, uint64_t *l2_table)
+ {
+-    int i = 0;
++    int i;
+ 
+-    while(nb_clusters-- && l2_table[i] == 0)
+-        i++;
++    for (i = 0; i < nb_clusters; i++) {
++        int type = qcow2_get_cluster_type(be64_to_cpu(l2_table[i]));
++
++        if (type != QCOW2_CLUSTER_UNALLOCATED) {
++            break;
++        }
++    }
+ 
+     return i;
+ }
+@@ -493,7 +509,7 @@ int qcow2_get_cluster_offset(BlockDriverState *bs, uint64_t offset,
+     case QCOW2_CLUSTER_NORMAL:
+         /* how many allocated clusters ? */
+         c = count_contiguous_clusters(nb_clusters, s->cluster_size,
+-                &l2_table[l2_index], 0, QCOW_OFLAG_COPIED);
++                &l2_table[l2_index], 0, QCOW_OFLAG_COMPRESSED);
+         *cluster_offset &= L2E_OFFSET_MASK;
+         break;
+     }
+@@ -741,7 +757,8 @@ static int count_cow_clusters(BDRVQcowState *s, int nb_clusters,
+ 
+     while (i < nb_clusters) {
+         i += count_contiguous_clusters(nb_clusters - i, s->cluster_size,
+-                &l2_table[l2_index], i, 0);
++                &l2_table[l2_index], i,
++                QCOW_OFLAG_COPIED | QCOW_OFLAG_COMPRESSED);
+         if ((i >= nb_clusters) || be64_to_cpu(l2_table[l2_index + i])) {
+             break;
+         }
+@@ -808,7 +825,8 @@ again:
+ 
+     if (cluster_offset & QCOW_OFLAG_COPIED) {
+         nb_clusters = count_contiguous_clusters(nb_clusters, s->cluster_size,
+-                &l2_table[l2_index], 0, 0);
++                &l2_table[l2_index], 0,
++                QCOW_OFLAG_COPIED);
+ 
+         cluster_offset &= L2E_OFFSET_MASK;
+         m->nb_clusters = 0;
+-- 
+2.1.0
+

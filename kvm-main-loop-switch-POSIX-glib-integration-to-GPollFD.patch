@@ -1,0 +1,167 @@
+From 2cd8554fdadf216b527dc12eab01d90c4190409a Mon Sep 17 00:00:00 2001
+Message-Id: <2cd8554fdadf216b527dc12eab01d90c4190409a.1427300678.git.jen@redhat.com>
+In-Reply-To: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+References: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+From: Vlad Yasevich <vyasevic@redhat.com>
+Date: Thu, 12 Mar 2015 19:13:12 -0500
+Subject: [CHANGE 16/33] main-loop: switch POSIX glib integration to GPollFD
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Vlad Yasevich <vyasevic@redhat.com>
+Message-id: <1426187601-21396-17-git-send-email-vyasevic@redhat.com>
+Patchwork-id: 64352
+O-Subject: [RHEL6.7 qemu-kvm PATCH v2 16/25] main-loop: switch POSIX glib integration to GPollFD
+Bugzilla: 1005016
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@redhat.com>
+
+Convert glib file descriptor polling from rfds/wfds/xfds to GPollFD.
+
+The Windows code still needs poll_fds[] and n_poll_fds but they can now
+become local variables.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Message-id: 1361356113-11049-4-git-send-email-stefanha@redhat.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 48ce11ff972c733afaed3e2a2613a2e56081ec92)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	main-loop.c
+
+main-loop.c is not present in current version.  Posix changes
+were hand ported to vl.c.  Win32 changes were dropped.
+
+Signed-off-by: Vlad Yasevich <vyasevic@redhat.com>
+---
+ vl.c | 68 +++++++++++++++++++-------------------------------------------------
+ 1 file changed, 19 insertions(+), 49 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ vl.c | 68 +++++++++++++++++++-------------------------------------------------
+ 1 file changed, 19 insertions(+), 49 deletions(-)
+
+diff --git a/vl.c b/vl.c
+index 9020f0c..be80e91 100644
+--- a/vl.c
++++ b/vl.c
+@@ -3954,8 +3954,8 @@ void vm_stop(RunState reason)
+ 
+ static fd_set rfds, wfds, xfds;
+ static int nfds;
+-static GPollFD poll_fds[1024 * 2]; /* this is probably overkill */
+-static int n_poll_fds;
++static int glib_pollfds_idx;
++static int glib_n_poll_fds;
+ static int max_priority;
+ 
+ /* Load rfds/wfds/xfds into gpollfds.  Will be removed a few commits later. */
+@@ -4014,66 +4014,36 @@ static void gpollfds_to_select(int ret)
+     }
+ }
+ 
+-static void glib_select_fill(int *max_fd, fd_set *rfds, fd_set *wfds,
+-                             fd_set *xfds, int *cur_timeout)
++static void glib_pollfds_fill(int *cur_timeout)
+ {
+     GMainContext *context = g_main_context_default();
+-    int i;
+     int timeout = 0;
++    int n;
+ 
+     g_main_context_prepare(context, &max_priority);
+ 
+-    n_poll_fds = g_main_context_query(context, max_priority, &timeout,
+-                                      poll_fds, ARRAY_SIZE(poll_fds));
+-    g_assert(n_poll_fds <= ARRAY_SIZE(poll_fds));
+-
+-    for (i = 0; i < n_poll_fds; i++) {
+-        GPollFD *p = &poll_fds[i];
+-
+-        assert(p->fd < FD_SETSIZE);
+-        if ((p->events & G_IO_IN)) {
+-            FD_SET(p->fd, rfds);
+-            *max_fd = MAX(*max_fd, p->fd);
+-        }
+-        if ((p->events & G_IO_OUT)) {
+-            FD_SET(p->fd, wfds);
+-            *max_fd = MAX(*max_fd, p->fd);
+-        }
+-        if ((p->events & G_IO_ERR)) {
+-            FD_SET(p->fd, xfds);
+-            *max_fd = MAX(*max_fd, p->fd);
+-        }
+-    }
++    glib_pollfds_idx = gpollfds->len;
++    n = glib_n_poll_fds;
++    do {
++        GPollFD *pfds;
++        glib_n_poll_fds = n;
++        g_array_set_size(gpollfds, glib_pollfds_idx + glib_n_poll_fds);
++        pfds = &g_array_index(gpollfds, GPollFD, glib_pollfds_idx);
++        n = g_main_context_query(context, max_priority, &timeout, pfds,
++                                 glib_n_poll_fds);
++    } while (n != glib_n_poll_fds);
+ 
+     if (timeout >= 0 && timeout < *cur_timeout) {
+         *cur_timeout = timeout;
+     }
+ }
+ 
+-static void glib_select_poll(fd_set *rfds, fd_set *wfds, fd_set *xfds,
+-                             bool err)
++static void glib_pollfds_poll(void)
+ {
+     GMainContext *context = g_main_context_default();
++    GPollFD *pfds = &g_array_index(gpollfds, GPollFD, glib_pollfds_idx);
+ 
+-    if (!err) {
+-        int i;
+-
+-        for (i = 0; i < n_poll_fds; i++) {
+-            GPollFD *p = &poll_fds[i];
+-
+-            if ((p->events & G_IO_IN) && FD_ISSET(p->fd, rfds)) {
+-                p->revents |= G_IO_IN;
+-            }
+-            if ((p->events & G_IO_OUT) && FD_ISSET(p->fd, wfds)) {
+-                p->revents |= G_IO_OUT;
+-            }
+-            if ((p->events & G_IO_ERR) && FD_ISSET(p->fd, xfds)) {
+-                p->revents |= G_IO_ERR;
+-            }
+-        }
+-    }
+-
+-    if (g_main_context_check(context, max_priority, poll_fds, n_poll_fds)) {
++    if (g_main_context_check(context, max_priority, pfds, glib_n_poll_fds)) {
+         g_main_context_dispatch(context);
+     }
+ }
+@@ -4113,7 +4083,7 @@ void main_loop_wait(int timeout)
+ 
+     slirp_select_fill(&nfds, &rfds, &wfds, &xfds);
+ 
+-    glib_select_fill(&nfds, &rfds, &wfds, &xfds, &timeout);
++    glib_pollfds_fill(&timeout);
+     os_host_main_loop_wait(&timeout);
+ 
+     /* We'll eventually drop fd_set completely.  But for now we still have
+@@ -4149,7 +4119,7 @@ void main_loop_wait(int timeout)
+     }
+ 
+     slirp_select_poll(&rfds, &wfds, &xfds, (ret < 0));
+-    glib_select_poll(&rfds, &wfds, &xfds, (ret < 0));
++    glib_pollfds_poll();
+ 
+     /* rearm timer, if not periodic */
+     if (alarm_timer->flags & ALARM_FLAG_EXPIRED) {
+-- 
+2.1.0
+

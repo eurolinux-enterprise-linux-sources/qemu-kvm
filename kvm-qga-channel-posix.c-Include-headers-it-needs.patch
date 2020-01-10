@@ -1,0 +1,64 @@
+From 4f664742eed4ba023243e58b48cdd3a843930e3b Mon Sep 17 00:00:00 2001
+Message-Id: <4f664742eed4ba023243e58b48cdd3a843930e3b.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:27:38 +0200
+Subject: [PATCH 073/114] qga/channel-posix.c: Include headers it needs
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-16-git-send-email-lersek@redhat.com>
+Patchwork-id: 51114
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 15/56] qga/channel-posix.c: Include headers it needs
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Eduardo Habkost <ehabkost@redhat.com>
+
+Include:
+ - <errno.h> for errno
+ - <unistd.h> & <fcntl.h> for fcntl()
+ - <stdlib.h> for exit()
+ - "osdep.h" for qemu_open()
+
+Some of those headers were probably being included by accident because
+some other headers were including qemu-common.h, but those headers
+should eventually stop including qemu-common.h.
+
+Signed-off-by: Eduardo Habkost <ehabkost@redhat.com>
+Signed-off-by: Igor Mammedov <imammedo@redhat.com>
+Signed-off-by: Andreas Färber <afaerber@suse.de>
+(cherry picked from commit 4d4922c339abf67e47c79068d343ed41a020b8e2)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qga/channel-posix.c |    5 +++++
+ 1 files changed, 5 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/channel-posix.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/qga/channel-posix.c b/qga/channel-posix.c
+index e345baf..484dd95 100644
+--- a/qga/channel-posix.c
++++ b/qga/channel-posix.c
+@@ -1,5 +1,10 @@
+ #include <glib.h>
+ #include <termios.h>
++#include <errno.h>
++#include <unistd.h>
++#include <fcntl.h>
++#include <stdlib.h>
++#include "osdep.h"
+ #include "qemu_socket.h"
+ #include "qga/channel.h"
+ 
+-- 
+1.7.11.7
+

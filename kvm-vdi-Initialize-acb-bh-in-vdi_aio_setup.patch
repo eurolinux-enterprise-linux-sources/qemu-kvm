@@ -1,0 +1,56 @@
+From be4525e2db8626fa0cd5cdf0ca9ae52e8fbf6369 Mon Sep 17 00:00:00 2001
+Message-Id: <be4525e2db8626fa0cd5cdf0ca9ae52e8fbf6369.1433306137.git.jen@redhat.com>
+In-Reply-To: <34921ae37a632e1d6a2bdfe4893684dec8eafba4.1433306137.git.jen@redhat.com>
+References: <34921ae37a632e1d6a2bdfe4893684dec8eafba4.1433306137.git.jen@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Tue, 2 Jun 2015 04:53:49 -0400
+Subject: [CHANGE 2/2] vdi: Initialize acb->bh in vdi_aio_setup().
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <d5a11cb6327d1097381ec5536a446f9b31450464.1433220006.git.jcody@redhat.com>
+Patchwork-id: 65245
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 2/2] vdi: Initialize acb->bh in vdi_aio_setup().
+Bugzilla: 1130046
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+The VDI driver incorrectly relied on qemu_aio_get() to return a
+zero-filled buffer.  Commit b9900cb7f changed the qemu_aio_get()
+behavior to use g_slice_alloc(), which causes VDI to return -EIO as the
+acb->bh is not NULL when checked in vdi_schedule_bh().
+
+This is not an issue upstream, as once the patch to convert
+qemu_aio_get() to g_slice_alloc() was committed, the vdi driver was
+already converted to coroutines, and no longer managed its own bounce
+buffers.
+
+Downstream only.
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ block/vdi.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/vdi.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/block/vdi.c b/block/vdi.c
+index 430c392..224e642 100644
+--- a/block/vdi.c
++++ b/block/vdi.c
+@@ -514,6 +514,7 @@ static VdiAIOCB *vdi_aio_setup(BlockDriverState *bs, int64_t sector_num,
+         acb->sector_num = sector_num;
+         acb->qiov = qiov;
+         acb->is_write = is_write;
++        acb->bh = NULL;
+ 
+         if (qiov->niov > 1) {
+             acb->buf = qemu_blockalign(bs, qiov->size);
+-- 
+2.1.0
+

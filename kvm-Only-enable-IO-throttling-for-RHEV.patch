@@ -1,0 +1,50 @@
+From 2aef7fcd704c5b1273ce1d0060565aa53dd720bf Mon Sep 17 00:00:00 2001
+Message-Id: <2aef7fcd704c5b1273ce1d0060565aa53dd720bf.1375709547.git.minovotn@redhat.com>
+In-Reply-To: <3351a61f3d3d17e088298983ea624dd8995fb1a5.1375709547.git.minovotn@redhat.com>
+References: <3351a61f3d3d17e088298983ea624dd8995fb1a5.1375709547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Tue, 23 Jul 2013 04:48:39 +0200
+Subject: [PATCH 3/4] Only enable IO throttling for RHEV
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1374554919-24665-3-git-send-email-famz@redhat.com>
+Patchwork-id: 52645
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 2/2] Only enable IO throttling for RHEV
+Bugzilla: 975468
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Set/unset io_throttling option in configure as RHEV feature, to only
+enable io throttling for RHEV.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ configure | 2 ++
+ 1 file changed, 2 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ configure | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/configure b/configure
+index 89a665a..82a9990 100755
+--- a/configure
++++ b/configure
+@@ -707,10 +707,12 @@ for opt do
+   --disable-rhev-features)
+        live_snapshots="no";
+        block_stream="no";
++       io_throttling="no"
+   ;;
+   --enable-rhev-features)
+        live_snapshots="yes";
+        block_stream="yes";
++       io_throttling="yes"
+   ;;
+   --disable-virtio-blk-data-plane) virtio_blk_data_plane="no"
+   ;;
+-- 
+1.7.11.7
+

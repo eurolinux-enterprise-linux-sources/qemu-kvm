@@ -1,0 +1,75 @@
+From c12edc6452023b72b3eb25aeddf56b7bf5e9c627 Mon Sep 17 00:00:00 2001
+Message-Id: <c12edc6452023b72b3eb25aeddf56b7bf5e9c627.1376387172.git.minovotn@redhat.com>
+In-Reply-To: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+References: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Fri, 9 Aug 2013 15:56:48 +0200
+Subject: [PATCH 13/13] dataplane: refuse to start if device is already in use
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1376063808-9815-1-git-send-email-stefanha@redhat.com>
+Patchwork-id: 53136
+O-Subject: [PATCH RHEL6.5 qemu-kvm] dataplane: refuse to start if device is already in use
+Bugzilla: 995530
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+BZ: 995530
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=6150474
+Upstream-status: b0f2027cde31c645524256763672e09eeb204a9a
+
+Dataplane must check whether a block device is in use before launching
+the dataplane thread.  This is necessary since the thread does not
+synchronize with the main loop and I/O requests could cause corruption.
+
+One example is when a drive is added and a block job is started before
+hotplugging the virtio-blk-pci adapter.  In this case we must not use
+dataplane mode.
+
+Cc: qemu-stable@nongnu.org
+Reviewed-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit b0f2027cde31c645524256763672e09eeb204a9a)
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Conflicts:
+  hw/block/dataplane/virtio-blk.c
+  Upstream hw/ was reorganized but RHEL 6.5 qemu-kvm still uses
+  hw/dataplane/virtio-blk.c.
+---
+Laszlo pointed out that this fix could help RHEL6.5, not just RHEL7.0 where I
+backported the live migration feature.  Although dataplane is tech preview in
+RHEL6.5, it's good to avoid data corruption so let's take this fix.
+
+ hw/dataplane/virtio-blk.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/dataplane/virtio-blk.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/hw/dataplane/virtio-blk.c b/hw/dataplane/virtio-blk.c
+index 7d67e11..9485411 100644
+--- a/hw/dataplane/virtio-blk.c
++++ b/hw/dataplane/virtio-blk.c
+@@ -391,6 +391,14 @@ bool virtio_blk_data_plane_create(VirtIODevice *vdev, VirtIOBlkConf *blk,
+         return false;
+     }
+ 
++    /* If dataplane is (re-)enabled while the guest is running there could be
++     * block jobs that can conflict.
++     */
++    if (bdrv_in_use(blk->conf.bs)) {
++        error_report("cannot start dataplane thread while device is in use");
++        return false;
++    }
++
+     fd = raw_get_aio_fd(blk->conf.bs);
+     if (fd < 0) {
+         error_report("drive is incompatible with x-data-plane, "
+-- 
+1.7.11.7
+

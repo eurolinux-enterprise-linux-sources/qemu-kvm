@@ -1,0 +1,69 @@
+From dc2a9b8c12e9ff30068246f503ecde00344c8da2 Mon Sep 17 00:00:00 2001
+Message-Id: <dc2a9b8c12e9ff30068246f503ecde00344c8da2.1378302750.git.minovotn@redhat.com>
+In-Reply-To: <b9370b63e1ba262320933a8d26c1dd9b3b2bc4b1.1378302750.git.minovotn@redhat.com>
+References: <b9370b63e1ba262320933a8d26c1dd9b3b2bc4b1.1378302750.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Tue, 27 Aug 2013 01:14:33 +0200
+Subject: [PATCH 2/6] vmdk: fix L1 and L2 table size in vmdk3 open
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1377566075-3289-3-git-send-email-famz@redhat.com>
+Patchwork-id: 53777
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 2/4] vmdk: fix L1 and L2 table size in vmdk3 open
+Bugzilla: 995865
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+VMDK3 header has the field l1dir_size, but vmdk_open_vmdk3 hardcoded the
+value. This patch honors the header field.
+
+And the L2 table size is 4096 according to VMDK spec[1], instead of
+1 << 9 (512).
+
+[1]:
+http://www.vmware.com/support/developer/vddk/vmdk_50_technote.pdf?src=vmdk
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit f6b61e54bdd5b9ef46837c15547e1819b3bb4f37)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 30205f3..841d38b 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -492,14 +492,14 @@ static int vmdk_open_vmdk3(BlockDriverState *bs,
+     if (ret < 0) {
+         return ret;
+     }
+-
+-    ret = vmdk_add_extent(bs,
+-                             bs->file, false,
+-                             le32_to_cpu(header.disk_sectors),
+-                             le32_to_cpu(header.l1dir_offset) << 9,
+-                             0, 1 << 6, 1 << 9,
+-                             le32_to_cpu(header.granularity),
+-                             &extent);
++    ret = vmdk_add_extent(bs, file, false,
++                          le32_to_cpu(header.disk_sectors),
++                          le32_to_cpu(header.l1dir_offset) << 9,
++                          0,
++                          le32_to_cpu(header.l1dir_size),
++                          4096,
++                          le32_to_cpu(header.granularity),
++                          &extent);
+     if (ret < 0) {
+         return ret;
+     }
+-- 
+1.7.11.7
+

@@ -1,0 +1,80 @@
+From f8eac9dff08f5c8df80b4459af155b7021228b18 Mon Sep 17 00:00:00 2001
+Message-Id: <f8eac9dff08f5c8df80b4459af155b7021228b18.1430862434.git.jen@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Fri, 1 May 2015 13:23:22 -0500
+Subject: [CHANGE] blockdev: preserve I/O throttling across drives_reopen()
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1430486602-4018-1-git-send-email-stefanha@redhat.com>
+Patchwork-id: 64966
+O-Subject: [RHEL-6.7 qemu-kvm PATCH] blockdev: preserve I/O throttling across drives_reopen()
+Bugzilla: 1211513
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+Bugzilla: 1211513
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=9081292
+Upstream: Downstream only (see below)
+
+Commit db3124b1393 ("Migration: reopen block devices files") added
+drives_reopen() and calls it during live migration handover on the
+destination QEMU.  The function ensures that QEMU sees the latest image
+file contents and does not suffer from stale caches after migration.
+
+One quirk of drives_reopen() is that it throws away I/O throttling
+settings by calling bdrv_close().  After live migration, -drive
+iops=,bps= settings are lost!
+
+Upstream does not suffer from this bug because it does not have
+drives_reopen().  Backporting the upstream solution would be much more
+involved and risky, so a tiny downstream fix is appropriate here.
+
+This patch simply stashes I/O throttling settings across
+bdrv_close()/bdrv_open() and restores them afterwards.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+---
+ blockdev.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ blockdev.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/blockdev.c b/blockdev.c
+index aa72843..963ab87 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -295,6 +295,13 @@ int drives_reopen(void)
+     QTAILQ_FOREACH(dinfo, &drives, next) {
+         if (dinfo->opened && !bdrv_is_read_only(dinfo->bdrv)) {
+             int res;
++            ThrottleConfig cfg;
++            bool io_limits_enabled = dinfo->bdrv->io_limits_enabled;
++
++            if (io_limits_enabled) {
++                throttle_get_config(&dinfo->bdrv->throttle_state, &cfg);
++            }
++
+             bdrv_close(dinfo->bdrv);
+             res = drive_open(dinfo);
+             if (res) {
+@@ -302,6 +309,11 @@ int drives_reopen(void)
+ 			    dinfo->file, res);
+ 		    return res;
+ 	    }
++
++            if (io_limits_enabled) {
++                bdrv_io_limits_enable(dinfo->bdrv);
++                bdrv_set_io_limits(dinfo->bdrv, &cfg);
++            }
+         }
+     }
+     return 0;
+-- 
+2.1.0
+

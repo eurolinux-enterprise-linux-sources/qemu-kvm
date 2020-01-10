@@ -1,0 +1,63 @@
+From 4f30b4b0615ac259b81f47b374690621dfa8a310 Mon Sep 17 00:00:00 2001
+Message-Id: <4f30b4b0615ac259b81f47b374690621dfa8a310.1419012926.git.jen@redhat.com>
+In-Reply-To: <6542ba6203e55ba5fa5a30171f9fa0690468aa33.1419012926.git.jen@redhat.com>
+References: <6542ba6203e55ba5fa5a30171f9fa0690468aa33.1419012926.git.jen@redhat.com>
+From: Miroslav Rezanina <mrezanin@redhat.com>
+Date: Mon, 27 Oct 2014 10:17:39 -0500
+Subject: [CHANGE 3/6] slirp: udp: fix NULL pointer dereference because of
+ uninitialized socket
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Miroslav Rezanina <mrezanin@redhat.com>
+Message-id: <1414405059-18407-1-git-send-email-mrezanin@redhat.com>
+Patchwork-id: 61901
+O-Subject: [RHEL-6.7 qemu-kvm PATCH] slirp: udp: fix NULL pointer dereference because of uninitialized socket
+Bugzilla: 1144819
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Petr Matousek <pmatouse@redhat.com>
+
+From: Petr Matousek <pmatouse@redhat.com>
+
+When guest sends udp packet with source port and source addr 0,
+uninitialized socket is picked up when looking for matching and already
+created udp sockets, and later passed to sosendto() where NULL pointer
+dereference is hit during so->slirp->vnetwork_mask.s_addr access.
+
+Fix this by checking that the socket is not just a socket stub.
+
+This is CVE-2014-3640.
+
+Signed-off-by: Petr Matousek <pmatouse@redhat.com>
+Reported-by: Xavier Mehrenberger <xavier.mehrenberger@airbus.com>
+Reported-by: Stephane Duverger <stephane.duverger@eads.net>
+Reviewed-by: Jan Kiszka <jan.kiszka@siemens.com>
+Reviewed-by: Michael S. Tsirkin <mst@redhat.com>
+Reviewed-by: Michael Tokarev <mjt@tls.msk.ru>
+Message-id: 20140918063537.GX9321@dhcp-25-225.brq.redhat.com
+Signed-off-by: Peter Maydell <peter.maydell@linaro.org>
+(cherry picked from commit 01f7cecf0037997cb0e58ec0d56bf9b5a6f7cb2a)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ slirp/udp.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/slirp/udp.c b/slirp/udp.c
+index d6c39b9..a67c55d 100644
+--- a/slirp/udp.c
++++ b/slirp/udp.c
+@@ -141,7 +141,7 @@ udp_input(register struct mbuf *m, int iphlen)
+ 	 * Locate pcb for datagram.
+ 	 */
+ 	so = slirp->udp_last_so;
+-	if (so->so_lport != uh->uh_sport ||
++	if (so == &slirp->udb || so->so_lport != uh->uh_sport ||
+ 	    so->so_laddr.s_addr != ip->ip_src.s_addr) {
+ 		struct socket *tmp;
+ 
+-- 
+2.1.0
+

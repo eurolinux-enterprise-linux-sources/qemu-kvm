@@ -1,0 +1,97 @@
+From 3bf3249ad856aed8af9a9b6541965bc357672f5d Mon Sep 17 00:00:00 2001
+Message-Id: <3bf3249ad856aed8af9a9b6541965bc357672f5d.1368111913.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:17:40 +0200
+Subject: [PATCH 06/65] Revert "char: Equip the unix/tcp backend to handle
+ nonblocking writes"
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <658c82caf5ebcdb17334e9325ab23c18fab5d297.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50784
+O-Subject: [RHEL6.5 qemu-kvm PATCH 06/65] Revert "char: Equip the unix/tcp backend to handle nonblocking writes"
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+This reverts commit a162b5509dd20e21179ce091af0534d0320e1454.
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	qemu-char.c
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ qemu-char.c | 34 ----------------------------------
+ 1 file changed, 34 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 34 ----------------------------------
+ 1 file changed, 34 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index d4c3311..df0025d 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -107,19 +107,6 @@
+ static QTAILQ_HEAD(CharDriverStateHead, CharDriverState) chardevs =
+     QTAILQ_HEAD_INITIALIZER(chardevs);
+ 
+-/*
+- * Generic routine that gets called when chardev becomes writable.
+- * Lets chardev user know it's OK to send more data.
+- */
+-static void char_write_unblocked(void *opaque)
+-{
+-    CharDriverState *chr = opaque;
+-
+-    chr->write_blocked = false;
+-    chr->chr_disable_write_fd_handler(chr);
+-    chr->chr_write_unblocked(chr->handler_opaque);
+-}
+-
+ void qemu_chr_event(CharDriverState *s, int event)
+ {
+     /* Keep track if the char device is open */
+@@ -2285,25 +2272,6 @@ static void tcp_chr_close(CharDriverState *chr)
+     qemu_chr_event(chr, CHR_EVENT_CLOSED);
+ }
+ 
+-static void tcp_enable_write_fd_handler(CharDriverState *chr)
+-{
+-    TCPCharDriver *s = chr->opaque;
+-
+-    /*
+-     * This function is called only after tcp_chr_connect() is called
+-     * (either in 'server' mode or client mode.  So we're sure of
+-     * s->fd being initialised.
+-     */
+-    enable_write_fd_handler(s->fd, char_write_unblocked);
+-}
+-
+-static void tcp_disable_write_fd_handler(CharDriverState *chr)
+-{
+-    TCPCharDriver *s = chr->opaque;
+-
+-    disable_write_fd_handler(s->fd);
+-}
+-
+ static CharDriverState *qemu_chr_open_socket(QemuOpts *opts)
+ {
+     CharDriverState *chr = NULL;
+@@ -2356,8 +2324,6 @@ static CharDriverState *qemu_chr_open_socket(QemuOpts *opts)
+     chr->chr_write = tcp_chr_write;
+     chr->chr_close = tcp_chr_close;
+     chr->get_msgfd = tcp_get_msgfd;
+-    chr->chr_enable_write_fd_handler = tcp_enable_write_fd_handler;
+-    chr->chr_disable_write_fd_handler = tcp_disable_write_fd_handler;
+ 
+     if (is_listen) {
+         s->listen_fd = fd;
+-- 
+1.7.11.7
+

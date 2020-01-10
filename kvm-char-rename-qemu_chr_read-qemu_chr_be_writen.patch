@@ -1,0 +1,236 @@
+From fcc43498166cad40b3de900502fe51ce8909fa29 Mon Sep 17 00:00:00 2001
+Message-Id: <fcc43498166cad40b3de900502fe51ce8909fa29.1368111913.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:17:50 +0200
+Subject: [PATCH 16/65] char: rename qemu_chr_read() -> qemu_chr_be_write()
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <118026c4ede5de41bfff416ce2c26263ba8878a1.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50794
+O-Subject: [RHEL6.5 qemu-kvm PATCH 16/65] char: rename qemu_chr_read() -> qemu_chr_be_write()
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit fa5efccb2a063f1dee46ed3ebd9192b318009f65)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	qemu-char.c
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ console.c         |  2 +-
+ gdbstub.c         |  2 +-
+ hw/baum.c         |  8 ++++----
+ hw/msmouse.c      |  2 +-
+ qemu-char.c       | 18 +++++++++---------
+ qemu-char.h       |  2 +-
+ spice-qemu-char.c |  2 +-
+ 7 files changed, 18 insertions(+), 18 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ console.c         |  2 +-
+ gdbstub.c         |  2 +-
+ hw/baum.c         |  8 ++++----
+ hw/msmouse.c      |  2 +-
+ qemu-char.c       | 18 +++++++++---------
+ qemu-char.h       |  2 +-
+ spice-qemu-char.c |  2 +-
+ 7 files changed, 18 insertions(+), 18 deletions(-)
+
+diff --git a/console.c b/console.c
+index 1751cb7..5633f56 100644
+--- a/console.c
++++ b/console.c
+@@ -1127,7 +1127,7 @@ static void kbd_send_chars(void *opaque)
+         if (len > sizeof(buf))
+             len = sizeof(buf);
+         qemu_fifo_read(&s->out_fifo, buf, len);
+-        qemu_chr_read(s->chr, buf, len);
++        qemu_chr_be_write(s->chr, buf, len);
+     }
+     /* characters are pending: we send them a bit later (XXX:
+        horrible, should change char device API) */
+diff --git a/gdbstub.c b/gdbstub.c
+index b36777e..62e7a5d 100644
+--- a/gdbstub.c
++++ b/gdbstub.c
+@@ -2035,7 +2035,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
+             hextomem(mem_buf, p + 5, len);
+             len = len / 2;
+             mem_buf[len++] = 0;
+-            qemu_chr_read(s->mon_chr, mem_buf, len);
++            qemu_chr_be_write(s->mon_chr, mem_buf, len);
+             put_packet(s, "OK");
+             break;
+         }
+diff --git a/hw/baum.c b/hw/baum.c
+index 18633f4..8f722e1 100644
+--- a/hw/baum.c
++++ b/hw/baum.c
+@@ -231,12 +231,12 @@ static void baum_accept_input(struct CharDriverState *chr)
+ 
+     first = BUF_SIZE - baum->out_buf_ptr;
+     if (room > first) {
+-        qemu_chr_read(chr, baum->out_buf + baum->out_buf_ptr, first);
++        qemu_chr_be_write(chr, baum->out_buf + baum->out_buf_ptr, first);
+         baum->out_buf_ptr = 0;
+         baum->out_buf_used -= first;
+         room -= first;
+     }
+-    qemu_chr_read(chr, baum->out_buf + baum->out_buf_ptr, room);
++    qemu_chr_be_write(chr, baum->out_buf + baum->out_buf_ptr, room);
+     baum->out_buf_ptr += room;
+     baum->out_buf_used -= room;
+ }
+@@ -254,12 +254,12 @@ static void baum_write_packet(BaumDriverState *baum, const uint8_t *buf, int len
+     len = cur - io_buf;
+     if (len <= room) {
+         /* Fits */
+-        qemu_chr_read(baum->chr, io_buf, len);
++        qemu_chr_be_write(baum->chr, io_buf, len);
+     } else {
+         int first;
+         uint8_t out;
+         /* Can't fit all, send what can be, and store the rest. */
+-        qemu_chr_read(baum->chr, io_buf, room);
++        qemu_chr_be_write(baum->chr, io_buf, room);
+         len -= room;
+         cur = io_buf + room;
+         if (len > BUF_SIZE - baum->out_buf_used) {
+diff --git a/hw/msmouse.c b/hw/msmouse.c
+index 05f893c..55c613e 100644
+--- a/hw/msmouse.c
++++ b/hw/msmouse.c
+@@ -50,7 +50,7 @@ static void msmouse_event(void *opaque,
+     /* We always send the packet of, so that we do not have to keep track
+        of previous state of the middle button. This can potentially confuse
+        some very old drivers for two button mice though. */
+-    qemu_chr_read(chr, bytes, 4);
++    qemu_chr_be_write(chr, bytes, 4);
+ }
+ 
+ static int msmouse_chr_write (struct CharDriverState *s, const uint8_t *buf, int len)
+diff --git a/qemu-char.c b/qemu-char.c
+index 011ec3a..81d8107 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -159,7 +159,7 @@ int qemu_chr_can_read(CharDriverState *s)
+     return s->chr_can_read(s->handler_opaque);
+ }
+ 
+-void qemu_chr_read(CharDriverState *s, uint8_t *buf, int len)
++void qemu_chr_be_write(CharDriverState *s, uint8_t *buf, int len)
+ {
+     s->chr_read(s->handler_opaque, buf, len);
+ }
+@@ -588,7 +588,7 @@ static void fd_chr_read(void *opaque)
+         return;
+     }
+     if (size > 0) {
+-        qemu_chr_read(chr, buf, size);
++        qemu_chr_be_write(chr, buf, size);
+     }
+ }
+ 
+@@ -693,7 +693,7 @@ static int stdio_read_poll(void *opaque)
+ 
+     /* try to flush the queue if needed */
+     if (term_fifo_size != 0 && qemu_chr_can_read(chr) > 0) {
+-        qemu_chr_read(chr, term_fifo, 1);
++        qemu_chr_be_write(chr, term_fifo, 1);
+         term_fifo_size = 0;
+     }
+     /* see if we can absorb more chars */
+@@ -718,7 +718,7 @@ static void stdio_read(void *opaque)
+     }
+     if (size > 0) {
+         if (qemu_chr_can_read(chr) > 0) {
+-            qemu_chr_read(chr, buf, 1);
++            qemu_chr_be_write(chr, buf, 1);
+         } else if (term_fifo_size == 0) {
+             term_fifo[term_fifo_size++] = buf[0];
+         }
+@@ -904,7 +904,7 @@ static void pty_chr_read(void *opaque)
+     }
+     if (size > 0) {
+         pty_chr_state(chr, 1);
+-        qemu_chr_read(chr, buf, size);
++        qemu_chr_be_write(chr, buf, size);
+     }
+ }
+ 
+@@ -1610,7 +1610,7 @@ static void win_chr_readfile(CharDriverState *chr)
+     }
+ 
+     if (size > 0) {
+-        qemu_chr_read(chr, buf, size);
++        qemu_chr_be_write(chr, buf, size);
+     }
+ }
+ 
+@@ -1826,7 +1826,7 @@ static int udp_chr_read_poll(void *opaque)
+      * first
+      */
+     while (s->max_size > 0 && s->bufptr < s->bufcnt) {
+-        qemu_chr_read(chr, &s->buf[s->bufptr], 1);
++        qemu_chr_be_write(chr, &s->buf[s->bufptr], 1);
+         s->bufptr++;
+         s->max_size = qemu_chr_can_read(chr);
+     }
+@@ -1847,7 +1847,7 @@ static void udp_chr_read(void *opaque)
+ 
+     s->bufptr = 0;
+     while (s->max_size > 0 && s->bufptr < s->bufcnt) {
+-        qemu_chr_read(chr, &s->buf[s->bufptr], 1);
++        qemu_chr_be_write(chr, &s->buf[s->bufptr], 1);
+         s->bufptr++;
+         s->max_size = qemu_chr_can_read(chr);
+     }
+@@ -2086,7 +2086,7 @@ static void tcp_chr_read(void *opaque)
+         if (s->do_telnetopt)
+             tcp_chr_process_IAC_bytes(chr, s, buf, &size);
+         if (size > 0)
+-            qemu_chr_read(chr, buf, size);
++            qemu_chr_be_write(chr, buf, size);
+     }
+ }
+ 
+diff --git a/qemu-char.h b/qemu-char.h
+index 71d248d..b26431c 100644
+--- a/qemu-char.h
++++ b/qemu-char.h
+@@ -96,7 +96,7 @@ void qemu_chr_event(CharDriverState *s, int event);
+ int qemu_chr_ioctl(CharDriverState *s, int cmd, void *arg);
+ void qemu_chr_generic_open(CharDriverState *s);
+ int qemu_chr_can_read(CharDriverState *s);
+-void qemu_chr_read(CharDriverState *s, uint8_t *buf, int len);
++void qemu_chr_be_write(CharDriverState *s, uint8_t *buf, int len);
+ int qemu_chr_get_msgfd(CharDriverState *s);
+ void qemu_chr_accept_input(CharDriverState *s);
+ void qemu_chr_info_print(Monitor *mon, const QObject *ret_data);
+diff --git a/spice-qemu-char.c b/spice-qemu-char.c
+index 6566918..2993943 100644
+--- a/spice-qemu-char.c
++++ b/spice-qemu-char.c
+@@ -38,7 +38,7 @@ static int vmc_write(SpiceCharDeviceInstance *sin, const uint8_t *buf, int len)
+         if (qemu_chr_can_read(scd->chr) < last_out) {
+             break;
+         }
+-        qemu_chr_read(scd->chr, p, last_out);
++        qemu_chr_be_write(scd->chr, p, last_out);
+         out += last_out;
+         len -= last_out;
+         p += last_out;
+-- 
+1.7.11.7
+

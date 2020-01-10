@@ -1,0 +1,237 @@
+From e140e025be682d90c11f8616c59f8f014519e74d Mon Sep 17 00:00:00 2001
+Message-Id: <e140e025be682d90c11f8616c59f8f014519e74d.1374754301.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:19 +0200
+Subject: [PATCH 08/65] qapi: Add Visitor interfaces for uint*_t and int*_t
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-9-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52115
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 08/65] qapi: Add Visitor interfaces for uint*_t and int*_t
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Michael Roth <mdroth@linux.vnet.ibm.com>
+
+This adds visitor interfaces for fixed-width integers types.
+Implementing these in visitors is optional, otherwise we fall back to
+visit_type_int() (int64_t) with some additional bounds checking to avoid
+integer overflows for cases where the value fetched exceeds the bounds
+of our target C type.
+
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+[LE: exclude negative values in uint*_t Visitor interfaces]
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+[AF: Merged fix by Laszlo]
+Signed-off-by: Andreas Färber <afaerber@suse.de>
+(cherry picked from commit 4e27e819bea0ea6c8108dc7e9fa48afd6ec13c46)
+
+Conflicts:
+
+	hw/mc146818rtc.c
+---
+ qapi/qapi-visit-core.c |  139 ++++++++++++++++++++++++++++++++++++++++++++++++
+ qapi/qapi-visit-core.h |   16 ++++++
+ 2 files changed, 155 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi/qapi-visit-core.c | 139 +++++++++++++++++++++++++++++++++++++++++++++++++
+ qapi/qapi-visit-core.h |  16 ++++++
+ 2 files changed, 155 insertions(+)
+
+diff --git a/qapi/qapi-visit-core.c b/qapi/qapi-visit-core.c
+index 9b732ca..1ae6e16 100644
+--- a/qapi/qapi-visit-core.c
++++ b/qapi/qapi-visit-core.c
+@@ -94,6 +94,145 @@ void visit_type_int(Visitor *v, int64_t *obj, const char *name, Error **errp)
+     }
+ }
+ 
++void visit_type_uint8(Visitor *v, uint8_t *obj, const char *name, Error **errp)
++{
++    int64_t value;
++    if (!error_is_set(errp)) {
++        if (v->type_uint8) {
++            v->type_uint8(v, obj, name, errp);
++        } else {
++            value = *obj;
++            v->type_int(v, &value, name, errp);
++            if (value < 0 || value > UINT8_MAX) {
++                error_set(errp, QERR_INVALID_PARAMETER_VALUE, name ? name : "null",
++                          "uint8_t");
++                return;
++            }
++            *obj = value;
++        }
++    }
++}
++
++void visit_type_uint16(Visitor *v, uint16_t *obj, const char *name, Error **errp)
++{
++    int64_t value;
++    if (!error_is_set(errp)) {
++        if (v->type_uint16) {
++            v->type_uint16(v, obj, name, errp);
++        } else {
++            value = *obj;
++            v->type_int(v, &value, name, errp);
++            if (value < 0 || value > UINT16_MAX) {
++                error_set(errp, QERR_INVALID_PARAMETER_VALUE, name ? name : "null",
++                          "uint16_t");
++                return;
++            }
++            *obj = value;
++        }
++    }
++}
++
++void visit_type_uint32(Visitor *v, uint32_t *obj, const char *name, Error **errp)
++{
++    int64_t value;
++    if (!error_is_set(errp)) {
++        if (v->type_uint32) {
++            v->type_uint32(v, obj, name, errp);
++        } else {
++            value = *obj;
++            v->type_int(v, &value, name, errp);
++            if (value < 0 || value > UINT32_MAX) {
++                error_set(errp, QERR_INVALID_PARAMETER_VALUE, name ? name : "null",
++                          "uint32_t");
++                return;
++            }
++            *obj = value;
++        }
++    }
++}
++
++void visit_type_uint64(Visitor *v, uint64_t *obj, const char *name, Error **errp)
++{
++    int64_t value;
++    if (!error_is_set(errp)) {
++        if (v->type_uint64) {
++            v->type_uint64(v, obj, name, errp);
++        } else {
++            value = *obj;
++            v->type_int(v, &value, name, errp);
++            *obj = value;
++        }
++    }
++}
++
++void visit_type_int8(Visitor *v, int8_t *obj, const char *name, Error **errp)
++{
++    int64_t value;
++    if (!error_is_set(errp)) {
++        if (v->type_int8) {
++            v->type_int8(v, obj, name, errp);
++        } else {
++            value = *obj;
++            v->type_int(v, &value, name, errp);
++            if (value < INT8_MIN || value > INT8_MAX) {
++                error_set(errp, QERR_INVALID_PARAMETER_VALUE, name ? name : "null",
++                          "int8_t");
++                return;
++            }
++            *obj = value;
++        }
++    }
++}
++
++void visit_type_int16(Visitor *v, int16_t *obj, const char *name, Error **errp)
++{
++    int64_t value;
++    if (!error_is_set(errp)) {
++        if (v->type_int16) {
++            v->type_int16(v, obj, name, errp);
++        } else {
++            value = *obj;
++            v->type_int(v, &value, name, errp);
++            if (value < INT16_MIN || value > INT16_MAX) {
++                error_set(errp, QERR_INVALID_PARAMETER_VALUE, name ? name : "null",
++                          "int16_t");
++                return;
++            }
++            *obj = value;
++        }
++    }
++}
++
++void visit_type_int32(Visitor *v, int32_t *obj, const char *name, Error **errp)
++{
++    int64_t value;
++    if (!error_is_set(errp)) {
++        if (v->type_int32) {
++            v->type_int32(v, obj, name, errp);
++        } else {
++            value = *obj;
++            v->type_int(v, &value, name, errp);
++            if (value < INT32_MIN || value > INT32_MAX) {
++                error_set(errp, QERR_INVALID_PARAMETER_VALUE, name ? name : "null",
++                          "int32_t");
++                return;
++            }
++            *obj = value;
++        }
++    }
++}
++
++void visit_type_int64(Visitor *v, int64_t *obj, const char *name, Error **errp)
++{
++    if (!error_is_set(errp)) {
++        if (v->type_int64) {
++            v->type_int64(v, obj, name, errp);
++        } else {
++            v->type_int(v, obj, name, errp);
++        }
++    }
++}
++
+ void visit_type_bool(Visitor *v, bool *obj, const char *name, Error **errp)
+ {
+     if (!error_is_set(errp)) {
+diff --git a/qapi/qapi-visit-core.h b/qapi/qapi-visit-core.h
+index e850746..a19d70c 100644
+--- a/qapi/qapi-visit-core.h
++++ b/qapi/qapi-visit-core.h
+@@ -52,6 +52,14 @@ struct Visitor
+     void (*start_handle)(Visitor *v, void **obj, const char *kind,
+                          const char *name, Error **errp);
+     void (*end_handle)(Visitor *v, Error **errp);
++    void (*type_uint8)(Visitor *v, uint8_t *obj, const char *name, Error **errp);
++    void (*type_uint16)(Visitor *v, uint16_t *obj, const char *name, Error **errp);
++    void (*type_uint32)(Visitor *v, uint32_t *obj, const char *name, Error **errp);
++    void (*type_uint64)(Visitor *v, uint64_t *obj, const char *name, Error **errp);
++    void (*type_int8)(Visitor *v, int8_t *obj, const char *name, Error **errp);
++    void (*type_int16)(Visitor *v, int16_t *obj, const char *name, Error **errp);
++    void (*type_int32)(Visitor *v, int32_t *obj, const char *name, Error **errp);
++    void (*type_int64)(Visitor *v, int64_t *obj, const char *name, Error **errp);
+ };
+ 
+ void visit_start_handle(Visitor *v, void **obj, const char *kind,
+@@ -69,6 +77,14 @@ void visit_end_optional(Visitor *v, Error **errp);
+ void visit_type_enum(Visitor *v, int *obj, const char *strings[],
+                      const char *kind, const char *name, Error **errp);
+ void visit_type_int(Visitor *v, int64_t *obj, const char *name, Error **errp);
++void visit_type_uint8(Visitor *v, uint8_t *obj, const char *name, Error **errp);
++void visit_type_uint16(Visitor *v, uint16_t *obj, const char *name, Error **errp);
++void visit_type_uint32(Visitor *v, uint32_t *obj, const char *name, Error **errp);
++void visit_type_uint64(Visitor *v, uint64_t *obj, const char *name, Error **errp);
++void visit_type_int8(Visitor *v, int8_t *obj, const char *name, Error **errp);
++void visit_type_int16(Visitor *v, int16_t *obj, const char *name, Error **errp);
++void visit_type_int32(Visitor *v, int32_t *obj, const char *name, Error **errp);
++void visit_type_int64(Visitor *v, int64_t *obj, const char *name, Error **errp);
+ void visit_type_bool(Visitor *v, bool *obj, const char *name, Error **errp);
+ void visit_type_str(Visitor *v, char **obj, const char *name, Error **errp);
+ void visit_type_number(Visitor *v, double *obj, const char *name, Error **errp);
+-- 
+1.7.11.7
+

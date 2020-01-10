@@ -1,0 +1,50 @@
+From 3371a1bca601d4bf192b4820cec2633fa7c12056 Mon Sep 17 00:00:00 2001
+Message-Id: <3371a1bca601d4bf192b4820cec2633fa7c12056.1376492227.git.minovotn@redhat.com>
+In-Reply-To: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+References: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+From: Asias He <asias@redhat.com>
+Date: Wed, 14 Aug 2013 10:24:23 +0200
+Subject: [PATCH 22/22] gluster: Handle BDRV_O_CACHE_WB in gluster driver
+
+RH-Author: Asias He <asias@redhat.com>
+Message-id: <1376475863-27929-18-git-send-email-asias@redhat.com>
+Patchwork-id: 53404
+O-Subject: [RHEL6.5 qemu-kvm PATCH v4 17/17] gluster: Handle BDRV_O_CACHE_WB in gluster driver
+Bugzilla: 848070
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+Unlike upstream, BDRV_O_CACHE_WB is handled by the individual
+protocol drivers on RHEL6.
+
+This is a RHEL6 downstream only patch.
+
+Signed-off-by: Asias He <asias@redhat.com>
+---
+ block/gluster.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/gluster.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/block/gluster.c b/block/gluster.c
+index 5544c3a..c94d402 100644
+--- a/block/gluster.c
++++ b/block/gluster.c
+@@ -306,6 +306,10 @@ static int qemu_gluster_open(BlockDriverState *bs, const char *filename,
+         open_flags |= O_DIRECT;
+     }
+ 
++    if (!(bdrv_flags & BDRV_O_CACHE_WB)) {
++        open_flags |= O_DSYNC;
++    }
++
+     s->fd = glfs_open(s->glfs, gconf->image, open_flags);
+     if (!s->fd) {
+         ret = -errno;
+-- 
+1.7.11.7
+

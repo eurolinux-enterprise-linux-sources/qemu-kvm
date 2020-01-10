@@ -1,0 +1,93 @@
+From aaedb59eb9230f77c78d0dc93fd573099bb49690 Mon Sep 17 00:00:00 2001
+Message-Id: <aaedb59eb9230f77c78d0dc93fd573099bb49690.1369841886.git.minovotn@redhat.com>
+In-Reply-To: <9db4fbc10d733a88102ef99acaf6eb5d54153495.1369841886.git.minovotn@redhat.com>
+References: <9db4fbc10d733a88102ef99acaf6eb5d54153495.1369841886.git.minovotn@redhat.com>
+From: Marc-Andr Lureau <marcandre.lureau@redhat.com>
+Date: Wed, 29 May 2013 14:34:56 +0200
+Subject: [PATCH 08/14] audio: add VOICE_VOLUME ctl
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Marc-André Lureau <marcandre.lureau@redhat.com>
+Message-id: <1369838102-26064-8-git-send-email-marcandre.lureau@redhat.com>
+Patchwork-id: 51678
+O-Subject: [RHEL-6.5 qemu-kvm PATCHv3 07/13] audio: add VOICE_VOLUME ctl
+Bugzilla: 884253
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Marc-André Lureau <marcandre.lureau@gmail.com>
+
+Add a new PCM control operation to update the stream volume on the
+audio backend.  The argument given is a SWVoiceOut/SWVoiceIn.
+
+v4:
+- verified other backends didn't fail/assert on this new control
+  they randomly return 0 or -1, but we ignore return value.
+
+Signed-off-by: Marc-Andr? Lureau <marcandre.lureau@redhat.com>
+Signed-off-by: malc <av1474@comtv.ru>
+(cherry picked from commit 6c95ab94f9f7e8d3156e4e16ecc7c499e141bb1a)
+---
+ audio/audio.c     |   12 ++++++++++++
+ audio/audio_int.h |    1 +
+ 2 files changed, 13 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ audio/audio.c     | 12 ++++++++++++
+ audio/audio_int.h |  1 +
+ 2 files changed, 13 insertions(+)
+
+diff --git a/audio/audio.c b/audio/audio.c
+index 3946bb9..d32c461 100644
+--- a/audio/audio.c
++++ b/audio/audio.c
+@@ -2045,18 +2045,30 @@ void AUD_del_capture (CaptureVoiceOut *cap, void *cb_opaque)
+ void AUD_set_volume_out (SWVoiceOut *sw, int mute, uint8_t lvol, uint8_t rvol)
+ {
+     if (sw) {
++        HWVoiceOut *hw = sw->hw;
++
+         sw->vol.mute = mute;
+         sw->vol.l = nominal_volume.l * lvol / 255;
+         sw->vol.r = nominal_volume.r * rvol / 255;
++
++        if (hw->pcm_ops->ctl_out) {
++            hw->pcm_ops->ctl_out (hw, VOICE_VOLUME, sw);
++        }
+     }
+ }
+ 
+ void AUD_set_volume_in (SWVoiceIn *sw, int mute, uint8_t lvol, uint8_t rvol)
+ {
+     if (sw) {
++        HWVoiceIn *hw = sw->hw;
++
+         sw->vol.mute = mute;
+         sw->vol.l = nominal_volume.l * lvol / 255;
+         sw->vol.r = nominal_volume.r * rvol / 255;
++
++        if (hw->pcm_ops->ctl_in) {
++            hw->pcm_ops->ctl_in (hw, VOICE_VOLUME, sw);
++        }
+     }
+ }
+ #ifdef CONFIG_MIXEMU
+diff --git a/audio/audio_int.h b/audio/audio_int.h
+index 2003f8b..117f95e 100644
+--- a/audio/audio_int.h
++++ b/audio/audio_int.h
+@@ -231,6 +231,7 @@ void audio_run (const char *msg);
+ 
+ #define VOICE_ENABLE 1
+ #define VOICE_DISABLE 2
++#define VOICE_VOLUME 3
+ 
+ static inline int audio_ring_dist (int dst, int src, int len)
+ {
+-- 
+1.7.11.7
+

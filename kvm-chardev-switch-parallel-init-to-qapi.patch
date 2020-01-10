@@ -1,0 +1,103 @@
+From 3fea3efe460413f31922b1eb59be09393820f679 Mon Sep 17 00:00:00 2001
+Message-Id: <3fea3efe460413f31922b1eb59be09393820f679.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:06:06 +0200
+Subject: [PATCH 55/65] chardev: switch parallel init to qapi
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-56-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52141
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 55/65] chardev: switch parallel init to qapi
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+This patch switches over the parallel chardev initialization
+to the new qapi code path.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit dc3750976914b0900446e6a5434919a0fa2ba028)
+---
+ qemu-char.c |   37 +++++++++++++++++--------------------
+ 1 file changed, 17 insertions(+), 20 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 37 +++++++++++++++++--------------------
+ 1 file changed, 17 insertions(+), 20 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index a5cbd70..43b3f56 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -2754,22 +2754,6 @@ fail:
+     return NULL;
+ }
+ 
+-#ifdef HAVE_CHARDEV_PARPORT
+-
+-static CharDriverState *qemu_chr_open_pp(QemuOpts *opts)
+-{
+-    const char *filename = qemu_opt_get(opts, "path");
+-    int fd;
+-
+-    fd = qemu_open(filename, O_RDWR);
+-    if (fd < 0) {
+-        return NULL;
+-    }
+-    return qemu_chr_open_pp_fd(fd);
+-}
+-
+-#endif
+-
+ static void qemu_chr_parse_file_out(QemuOpts *opts, ChardevBackend *backend,
+                                     Error **errp)
+ {
+@@ -2805,6 +2789,19 @@ static void qemu_chr_parse_serial(QemuOpts *opts, ChardevBackend *backend,
+     backend->serial->device = g_strdup(device);
+ }
+ 
++static void qemu_chr_parse_parallel(QemuOpts *opts, ChardevBackend *backend,
++                                    Error **errp)
++{
++    const char *device = qemu_opt_get(opts, "path");
++
++    if (device == NULL) {
++        error_setg(errp, "chardev: parallel: no device path given");
++        return;
++    }
++    backend->parallel = g_new0(ChardevHostdev, 1);
++    backend->parallel->device = g_strdup(device);
++}
++
+ typedef struct CharDriver {
+     const char *name;
+     /* old, pre qapi */
+@@ -3317,6 +3314,10 @@ static void register_types(void)
+                               qemu_chr_parse_serial);
+     register_char_driver_qapi("tty", CHARDEV_BACKEND_KIND_SERIAL,
+                               qemu_chr_parse_serial);
++    register_char_driver_qapi("parallel", CHARDEV_BACKEND_KIND_PARALLEL,
++                              qemu_chr_parse_parallel);
++    register_char_driver_qapi("parport", CHARDEV_BACKEND_KIND_PARALLEL,
++                              qemu_chr_parse_parallel);
+ #ifdef _WIN32
+     register_char_driver("pipe", qemu_chr_open_win_pipe);
+     register_char_driver("console", qemu_chr_open_win_con);
+@@ -3326,10 +3327,6 @@ static void register_types(void)
+ #ifdef HAVE_CHARDEV_TTY
+     register_char_driver("pty", qemu_chr_open_pty);
+ #endif
+-#ifdef HAVE_CHARDEV_PARPORT
+-    register_char_driver("parallel", qemu_chr_open_pp);
+-    register_char_driver("parport", qemu_chr_open_pp);
+-#endif
+ }
+ 
+ machine_init(register_types);
+-- 
+1.7.11.7
+

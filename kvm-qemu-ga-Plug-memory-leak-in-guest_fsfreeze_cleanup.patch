@@ -1,0 +1,67 @@
+From 9a835a777e5f2f0e0b1f4cc7a6b73abde349883f Mon Sep 17 00:00:00 2001
+Message-Id: <9a835a777e5f2f0e0b1f4cc7a6b73abde349883f.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:28:02 +0200
+Subject: [PATCH 097/114] qemu-ga: Plug memory leak in
+ guest_fsfreeze_cleanup()
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-40-git-send-email-lersek@redhat.com>
+Patchwork-id: 51138
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 39/56] qemu-ga: Plug memory leak in guest_fsfreeze_cleanup()
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Markus Armbruster <armbru@redhat.com>
+
+Neglects to free errors allocated by qmp_guest_fsfreeze_thaw().
+Spotted by Coverity.
+
+While there, drop the test whether return value is negative (it's
+never true), and improve logging.
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Luiz Capitulino <lcapitulino@redhat.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit 6f6867493cc00974de594a509cee5a3be61c64aa)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qga/commands-posix.c |    9 +++++----
+ 1 files changed, 5 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/commands-posix.c | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index 24f045b..a96d7f2 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -612,13 +612,14 @@ int64_t qmp_guest_fsfreeze_thaw(Error **err)
+ 
+ static void guest_fsfreeze_cleanup(void)
+ {
+-    int64_t ret;
+     Error *err = NULL;
+ 
+     if (ga_is_frozen(ga_state) == GUEST_FSFREEZE_STATUS_FROZEN) {
+-        ret = qmp_guest_fsfreeze_thaw(&err);
+-        if (ret < 0 || err) {
+-            slog("failed to clean up frozen filesystems");
++        qmp_guest_fsfreeze_thaw(&err);
++        if (err) {
++            slog("failed to clean up frozen filesystems: %s",
++                 error_get_pretty(err));
++            error_free(err);
+         }
+     }
+ }
+-- 
+1.7.11.7
+

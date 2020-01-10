@@ -1,0 +1,66 @@
+From 54163d537ed24926effb0783707492d2988ecbe8 Mon Sep 17 00:00:00 2001
+Message-Id: <54163d537ed24926effb0783707492d2988ecbe8.1424280081.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Wed, 28 Jan 2015 07:02:19 -0500
+Subject: [CHANGE 1/8] main-loop: Assert that fd doesn't exceed FD_SETSIZE
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1422428539-26571-1-git-send-email-famz@redhat.com>
+Patchwork-id: 63605
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2] main-loop: Assert that fd doesn't exceed FD_SETSIZE
+Bugzilla: 1024684
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+BZ: https://bugzilla.redhat.com/show_bug.cgi?id=1024684
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=8630643 (RHEL)
+      http://brewweb.devel.redhat.com/brew/taskinfo?taskID=8630790 (RHEV)
+Upstream: N/A, the main loop switched to ppoll.
+
+Calling FD_SET on too large fd values results in undefined behavior
+(probably memory corruption) and the following select won't work as
+expected. Currently, we could hang silently, which is very confusing.
+
+We can revert this if we finally pull the new main loop code from upstream to
+relax this limitation, but I think it is good to have this before it happens.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+
+---
+
+v2: "<=" to "<". (Laszlo)
+---
+ vl.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ vl.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/vl.c b/vl.c
+index 6e05abf..fe7e3a7 100644
+--- a/vl.c
++++ b/vl.c
+@@ -3968,6 +3968,7 @@ static void glib_select_fill(int *max_fd, fd_set *rfds, fd_set *wfds,
+     for (i = 0; i < n_poll_fds; i++) {
+         GPollFD *p = &poll_fds[i];
+ 
++        assert(p->fd < FD_SETSIZE);
+         if ((p->events & G_IO_IN)) {
+             FD_SET(p->fd, rfds);
+             *max_fd = MAX(*max_fd, p->fd);
+@@ -4038,6 +4039,7 @@ void main_loop_wait(int timeout)
+     QLIST_FOREACH(ioh, &io_handlers, next) {
+         if (ioh->deleted)
+             continue;
++        assert(ioh->fd < FD_SETSIZE);
+         if (ioh->fd_read &&
+             (!ioh->fd_read_poll ||
+              ioh->fd_read_poll(ioh->opaque) != 0)) {
+-- 
+2.1.0
+

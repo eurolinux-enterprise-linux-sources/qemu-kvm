@@ -1,0 +1,52 @@
+From 6af61ea0f1e881fbc996e27f339a15159cf04b15 Mon Sep 17 00:00:00 2001
+Message-Id: <6af61ea0f1e881fbc996e27f339a15159cf04b15.1375955382.git.minovotn@redhat.com>
+In-Reply-To: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+References: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+From: Alon Levy <alevy@redhat.com>
+Date: Thu, 1 Aug 2013 11:53:48 +0200
+Subject: [PATCH 29/35] usb-ccid: remote wakeup support
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Alon Levy <alevy@redhat.com>
+Message-id: <1375358029-12968-30-git-send-email-alevy@redhat.com>
+Patchwork-id: 52919
+O-Subject: [RHEL-6.5 RHEL-6.4.z qemu-kvm v6 29/30] usb-ccid: remote wakeup support
+Bugzilla: 917860
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+From: Gerd Hoffmann <kraxel@redhat.com>
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 7755260f015dcbb8fa47bcc6f1e2ca317b2205aa)
+
+Conflicts:
+	hw/usb-ccid.c
+    upstream ccid is using desc.h, we don't
+---
+ hw/usb-ccid.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/usb-ccid.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/hw/usb-ccid.c b/hw/usb-ccid.c
+index 0813886..e729919 100644
+--- a/hw/usb-ccid.c
++++ b/hw/usb-ccid.c
+@@ -995,6 +995,7 @@ static void ccid_on_slot_change(USBCCIDState *s, bool full)
+         s->bmSlotICCState |= SLOT_0_CHANGED_MASK;
+     }
+     s->notify_slot_change = true;
++    usb_wakeup(&s->dev);
+ }
+ 
+ static void ccid_write_data_block_error(
+-- 
+1.7.11.7
+

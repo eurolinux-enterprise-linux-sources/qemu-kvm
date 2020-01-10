@@ -1,0 +1,70 @@
+From 3a356c0b3a3b184a82659bd95614ef36be9de12b Mon Sep 17 00:00:00 2001
+From: Luiz Capitulino <lcapitulino@redhat.com>
+Date: Thu, 11 Jul 2013 17:54:32 +0200
+Subject: [PATCH 18/21] qapi: shortcut visits on errors
+
+RH-Author: Luiz Capitulino <lcapitulino@redhat.com>
+Message-id: <1373565275-8756-2-git-send-email-lcapitulino@redhat.com>
+Patchwork-id: 52443
+O-Subject: [RHEL6.5 qemu-kvm PATCH 1/4] qapi: shortcut visits on errors
+Bugzilla: 983635
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+We can exit very soon if we enter a visitor with a preexisting error.
+This simplifies some cases because we will not have to deal with
+obj being non-NULL while *obj is NULL.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Reviewed-by: Anthony Liguori <aliguori@us.ibm.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit b6f0474fc0fe6f81d93d620a5d24bc30b22d561b)
+---
+ scripts/qapi-visit.py | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ scripts/qapi-visit.py |    9 +++++++++
+ 1 files changed, 9 insertions(+), 0 deletions(-)
+
+diff --git a/scripts/qapi-visit.py b/scripts/qapi-visit.py
+index 78c947c..4297621 100644
+--- a/scripts/qapi-visit.py
++++ b/scripts/qapi-visit.py
+@@ -61,6 +61,9 @@ def generate_visit_struct(name, members):
+ 
+ void visit_type_%(name)s(Visitor *m, %(name)s ** obj, const char *name, Error **errp)
+ {
++    if (error_is_set(errp)) {
++        return;
++    }
+     visit_start_struct(m, (void **)obj, "%(name)s", name, sizeof(%(name)s), errp);
+ ''',
+                 name=name)
+@@ -81,6 +84,9 @@ void visit_type_%(name)sList(Visitor *m, %(name)sList ** obj, const char *name,
+ {
+     GenericList *i, **head = (GenericList **)obj;
+ 
++    if (error_is_set(errp)) {
++        return;
++    }
+     visit_start_list(m, name, errp);
+ 
+     for (*head = i = visit_next_list(m, head, errp); i; i = visit_next_list(m, &i, errp)) {
+@@ -112,6 +118,9 @@ void visit_type_%(name)s(Visitor *m, %(name)s ** obj, const char *name, Error **
+ {
+     Error *err = NULL;
+ 
++    if (error_is_set(errp)) {
++        return;
++    }
+     visit_start_struct(m, (void **)obj, "%(name)s", name, sizeof(%(name)s), &err);
+     visit_type_%(name)sKind(m, &(*obj)->kind, "type", &err);
+     if (err) {
+-- 
+1.7.1
+

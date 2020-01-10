@@ -1,0 +1,58 @@
+From 58eed53be13125fe433152f766dbb1cf590c72e3 Mon Sep 17 00:00:00 2001
+Message-Id: <58eed53be13125fe433152f766dbb1cf590c72e3.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:28 -0500
+Subject: [CHANGE 08/29] block: Drop bdrv_em_aiocb_info.cancel
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-9-git-send-email-famz@redhat.com>
+Patchwork-id: 64909
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 08/28] block: Drop bdrv_em_aiocb_info.cancel
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit f600ac19027e67dd73f1adad50a67a2cdb4f3218)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block.c | 10 ----------
+ 1 file changed, 10 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block.c | 10 ----------
+ 1 file changed, 10 deletions(-)
+
+diff --git a/block.c b/block.c
+index ae86611..1f8c1c2 100644
+--- a/block.c
++++ b/block.c
+@@ -3867,18 +3867,8 @@ typedef struct BlockDriverAIOCBSync {
+     int is_write;
+ } BlockDriverAIOCBSync;
+ 
+-static void bdrv_aio_cancel_em(BlockDriverAIOCB *blockacb)
+-{
+-    BlockDriverAIOCBSync *acb =
+-        container_of(blockacb, BlockDriverAIOCBSync, common);
+-    qemu_bh_delete(acb->bh);
+-    acb->bh = NULL;
+-    qemu_aio_release(acb);
+-}
+-
+ static const AIOCBInfo bdrv_em_aiocb_info = {
+     .aiocb_size         = sizeof(BlockDriverAIOCBSync),
+-    .cancel             = bdrv_aio_cancel_em,
+ };
+ 
+ static void bdrv_aio_bh_cb(void *opaque)
+-- 
+2.1.0
+

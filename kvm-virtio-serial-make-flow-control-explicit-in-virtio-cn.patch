@@ -1,0 +1,115 @@
+From 3f81a42e218ec81f95dd388227db8b4771a472ac Mon Sep 17 00:00:00 2001
+Message-Id: <3f81a42e218ec81f95dd388227db8b4771a472ac.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:17 +0200
+Subject: [PATCH 43/65] virtio-serial: make flow control explicit in
+ virtio-console
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <1e0644bbec38554bd94b21ba0c5d9b56484f9d01.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50821
+O-Subject: [RHEL6.5 qemu-kvm PATCH 43/65] virtio-serial: make flow control explicit in virtio-console
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+virtio-console.c used to return a value less than the number of bytes
+asked to be written out to a chardev backend in case the backend is not
+writable.  virtio-serial-bus.c then implicitly enabled flow control for
+that port.
+
+Make this explicit instead.
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Message-id: f5ec50b068c25422256e499cf4adc06d353bf394.1362505276.git.amit.shah@redhat.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit d6258c93a7133bb2bf2ab4e91476bc0b631ba7f1)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	hw/virtio-console.c
+	hw/virtio-serial-bus.c
+---
+ hw/virtio-console.c    | 19 +++++++++++--------
+ hw/virtio-serial-bus.c | 19 +------------------
+ 2 files changed, 12 insertions(+), 26 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/virtio-console.c    | 19 +++++++++++--------
+ hw/virtio-serial-bus.c | 19 +------------------
+ 2 files changed, 12 insertions(+), 26 deletions(-)
+
+diff --git a/hw/virtio-console.c b/hw/virtio-console.c
+index 7cc4b69..06b4303 100644
+--- a/hw/virtio-console.c
++++ b/hw/virtio-console.c
+@@ -43,20 +43,23 @@ static ssize_t flush_buf(VirtIOSerialPort *port, const uint8_t *buf, size_t len)
+         return len;
+     }
+     ret = qemu_chr_fe_write(vcon->chr, buf, len);
+-    if (ret < 0 && ret != -EAGAIN) {
++
++    if (ret <= 0) {
++        VirtIOSerialPortInfo *info = DO_UPCAST(VirtIOSerialPortInfo, qdev,
++                                               vcon->port.dev.info);
++
+         /*
+          * Ideally we'd get a better error code than just -1, but
+          * that's what the chardev interface gives us right now.  If
+          * we had a finer-grained message, like -EPIPE, we could close
+-         * this connection.  Absent such error messages, the most we
+-         * can do is to return 0 here.
+-         *
+-         * This will prevent stray -1 values to go to
+-         * virtio-serial-bus.c and cause abort()s in
+-         * do_flush_queued_data().
++         * this connection.
+          */
+         ret = 0;
+-        qemu_chr_fe_add_watch(vcon->chr, G_IO_OUT, chr_write_unblocked, vcon);
++        if (!info->is_console) {
++            virtio_serial_throttle_port(port, true);
++            qemu_chr_fe_add_watch(vcon->chr, G_IO_OUT, chr_write_unblocked,
++                                  vcon);
++        }
+     }
+     return ret;
+ }
+diff --git a/hw/virtio-serial-bus.c b/hw/virtio-serial-bus.c
+index d598fb5..4c29373 100644
+--- a/hw/virtio-serial-bus.c
++++ b/hw/virtio-serial-bus.c
+@@ -194,24 +194,7 @@ static void do_flush_queued_data(VirtIOSerialPort *port, VirtQueue *vq,
+                                   port->elem.out_sg[i].iov_base
+                                   + port->iov_offset,
+                                   buf_size);
+-            if (ret < 0 && ret != -EAGAIN) {
+-                /* We don't handle any other type of errors here */
+-                abort();
+-            }
+-            if (ret == -EAGAIN || (ret >= 0 && ret < buf_size)) {
+-		/*
+-                 * this is a temporary check until chardevs can signal to
+-                 * frontends that they are writable again. This prevents
+-                 * the console from going into throttled mode (forever)
+-                 * if virtio-console is connected to a pty without a
+-                 * listener. Otherwise the guest spins forever.
+-                 * We can revert this if
+-                 * 1: chardevs can notify frondends
+-                 * 2: the guest driver does not spin in these cases
+-                 */
+-                if (!info->is_console) {
+-                    virtio_serial_throttle_port(port, true);
+-                }
++            if (port->throttled) {
+                 port->iov_idx = i;
+                 if (ret > 0) {
+                     port->iov_offset += ret;
+-- 
+1.7.11.7
+

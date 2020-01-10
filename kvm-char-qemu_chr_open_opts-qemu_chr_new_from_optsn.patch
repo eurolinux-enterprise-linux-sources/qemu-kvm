@@ -1,0 +1,87 @@
+From b14263e65508701f6d80061606d18cf3bf818144 Mon Sep 17 00:00:00 2001
+Message-Id: <b14263e65508701f6d80061606d18cf3bf818144.1368111913.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:17:57 +0200
+Subject: [PATCH 23/65] char: qemu_chr_open_opts() -> qemu_chr_new_from_opts()
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <fa5215d77afbf5cb8fa5aa701e5be7c0c11f6522.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50801
+O-Subject: [RHEL6.5 qemu-kvm PATCH 23/65] char: qemu_chr_open_opts() -> qemu_chr_new_from_opts()
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit f69554b9e859f5672afda827a9f8772ff41d0f59)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ qemu-char.c | 4 ++--
+ qemu-char.h | 2 +-
+ vl.c        | 2 +-
+ 3 files changed, 4 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 4 ++--
+ qemu-char.h | 2 +-
+ vl.c        | 2 +-
+ 3 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index a30e8fd..476be31 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -2500,7 +2500,7 @@ static const struct {
+ #endif
+ };
+ 
+-CharDriverState *qemu_chr_open_opts(QemuOpts *opts,
++CharDriverState *qemu_chr_new_from_opts(QemuOpts *opts,
+                                     void (*init)(struct CharDriverState *s))
+ {
+     CharDriverState *chr;
+@@ -2568,7 +2568,7 @@ CharDriverState *qemu_chr_new(const char *label, const char *filename, void (*in
+     if (!opts)
+         return NULL;
+ 
+-    chr = qemu_chr_open_opts(opts, init);
++    chr = qemu_chr_new_from_opts(opts, init);
+     if (chr && qemu_opt_get_bool(opts, "mux", 0)) {
+         monitor_init(chr, MONITOR_USE_READLINE);
+     }
+diff --git a/qemu-char.h b/qemu-char.h
+index 8f20266..7ca5e14 100644
+--- a/qemu-char.h
++++ b/qemu-char.h
+@@ -77,7 +77,7 @@ struct CharDriverState {
+ };
+ 
+ QemuOpts *qemu_chr_parse_compat(const char *label, const char *filename);
+-CharDriverState *qemu_chr_open_opts(QemuOpts *opts,
++CharDriverState *qemu_chr_new_from_opts(QemuOpts *opts,
+                                     void (*init)(struct CharDriverState *s));
+ CharDriverState *qemu_chr_new(const char *label, const char *filename, void (*init)(struct CharDriverState *s));
+ void qemu_chr_fe_set_echo(struct CharDriverState *chr, bool echo);
+diff --git a/vl.c b/vl.c
+index 3ec4afb..ac8e525 100644
+--- a/vl.c
++++ b/vl.c
+@@ -4685,7 +4685,7 @@ static int chardev_init_func(QemuOpts *opts, void *opaque)
+ {
+     CharDriverState *chr;
+ 
+-    chr = qemu_chr_open_opts(opts, NULL);
++    chr = qemu_chr_new_from_opts(opts, NULL);
+     if (!chr)
+         return -1;
+     return 0;
+-- 
+1.7.11.7
+

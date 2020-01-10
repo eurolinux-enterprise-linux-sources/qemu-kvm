@@ -1,0 +1,66 @@
+From e5dffa685d5110027f6f79a6ddfe4c1ade0a14c8 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Tue, 25 Mar 2014 11:45:25 +0100
+Subject: [PATCH 07/48] qcow2: Fix backing file name length check
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1395744364-16049-7-git-send-email-kwolf@redhat.com>
+Patchwork-id: n/a
+O-Subject: [EMBARGOED RHEL-6.6/6.5.z qemu-kvm PATCH v2 06/45]
+           qcow2: Fix backing file name length check
+Bugzilla: 1079518
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeff Cody <jcody@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1079518
+Upstream status: Series embargoed
+
+len could become negative and would pass the check then. Nothing bad
+happened because bdrv_pread() happens to return an error for negative
+length values, but make variables for sizes unsigned anyway.
+
+This patch also changes the behaviour to error out on invalid lengths
+instead of silently truncating it to 1023.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+
+Conflicts:
+	tests/qemu-iotests/080
+	tests/qemu-iotests/080.out
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/qcow2.c |    9 ++++++---
+ 1 files changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/block/qcow2.c b/block/qcow2.c
+index 4dbc212..0bf582d 100644
+--- a/block/qcow2.c
++++ b/block/qcow2.c
+@@ -196,7 +196,8 @@ static int validate_table_offset(BlockDriverState *bs, uint64_t offset,
+ static int qcow2_open(BlockDriverState *bs, int flags)
+ {
+     BDRVQcowState *s = bs->opaque;
+-    int len, i, ret = 0;
++    unsigned int len, i;
++    int ret = 0;
+     QCowHeader header;
+     uint64_t ext_end;
+     bool writethrough;
+@@ -370,8 +371,10 @@ static int qcow2_open(BlockDriverState *bs, int flags)
+     /* read the backing file name */
+     if (header.backing_file_offset != 0) {
+         len = header.backing_file_size;
+-        if (len > 1023) {
+-            len = 1023;
++        if (len > MIN(1023, s->cluster_size - header.backing_file_offset)) {
++            qerror_report(QERR_GENERIC_ERROR, "Backing file name too long");
++            ret = -EINVAL;
++            goto fail;
+         }
+         ret = bdrv_pread(bs->file, header.backing_file_offset,
+                          bs->backing_file, len);
+-- 
+1.7.1
+

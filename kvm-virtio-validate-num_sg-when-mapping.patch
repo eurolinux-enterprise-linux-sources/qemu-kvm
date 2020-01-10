@@ -1,0 +1,66 @@
+From 61dbb7407999e27c2f3a048d22dc25e835fed6a3 Mon Sep 17 00:00:00 2001
+From: Michael S. Tsirkin <mst@redhat.com>
+Date: Tue, 13 May 2014 08:03:34 -0500
+Subject: [PATCH 16/20] virtio: validate num_sg when mapping
+
+RH-Author: Michael S. Tsirkin <mst@redhat.com>
+Message-id: <1399968167-29364-1-git-send-email-mst@redhat.com>
+Patchwork-id: 58812
+O-Subject: [PATCH qemu-kvm RHEL6.6 v3 1/2] virtio: validate num_sg when mapping
+Bugzilla: 1096124
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Xiao Wang <jasowang@redhat.com>
+
+CVE-2013-4535
+CVE-2013-4536
+
+Both virtio-block and virtio-serial read,
+VirtQueueElements are read in as buffers, and passed to
+virtqueue_map_sg(), where num_sg is taken from the wire and can force
+writes to indicies beyond VIRTQUEUE_MAX_SIZE.
+
+To fix, validate num_sg.
+
+Reported-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+Cc: Amit Shah <amit.shah@redhat.com>
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+(cherry picked from commit 36cf2a37132c7f01fa9adb5f95f5312b27742fd4)
+
+Conflicts:
+	hw/virtio/virtio.c
+
+Bugzilla: 1096124
+Tested: lightly on developer's box
+Brew build: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7440366
+---
+ hw/virtio.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/virtio.c |    6 ++++++
+ 1 files changed, 6 insertions(+), 0 deletions(-)
+
+diff --git a/hw/virtio.c b/hw/virtio.c
+index dc05365..d1f9974 100644
+--- a/hw/virtio.c
++++ b/hw/virtio.c
+@@ -424,6 +424,12 @@ void virtqueue_map_sg(struct iovec *sg, target_phys_addr_t *addr,
+     unsigned int i;
+     target_phys_addr_t len;
+ 
++    if (num_sg >= VIRTQUEUE_MAX_SIZE) {
++        error_report("virtio: map attempt out of bounds: %zd > %d",
++                     num_sg, VIRTQUEUE_MAX_SIZE);
++        exit(1);
++    }
++
+     for (i = 0; i < num_sg; i++) {
+         len = sg[i].iov_len;
+         sg[i].iov_base = cpu_physical_memory_map(addr[i], &len, is_write);
+-- 
+1.7.1
+

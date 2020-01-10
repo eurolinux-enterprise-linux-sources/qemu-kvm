@@ -1,0 +1,88 @@
+From 6f4a5ff3b7ce988d578992302b28d077819866b9 Mon Sep 17 00:00:00 2001
+From: Miroslav Rezanina <mrezanin@redhat.com>
+Date: Fri, 8 May 2015 18:40:31 +0200
+Subject: [PATCH] fdc: force the fifo access to be in bounds of the allocated
+ buffer
+
+Bugzilla: 1219268
+Acked-by: Max Reitz <mreitz@redhat.com>
+Acked-by: Markus Armbruster <armbru@redhat.com>
+Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+
+During processing of certain commands such as FD_CMD_READ_ID and
+FD_CMD_DRIVE_SPECIFICATION_COMMAND the fifo memory access could
+get out of bounds leading to memory corruption with values coming
+from the guest.
+
+Fix this by making sure that the index is always bounded by the
+allocated memory.
+
+This is CVE-2015-3456.
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ hw/fdc.c | 17 +++++++++++------
+ 1 file changed, 11 insertions(+), 6 deletions(-)
+
+diff --git a/hw/fdc.c b/hw/fdc.c
+index 0b39932..431482e 100644
+--- a/hw/fdc.c
++++ b/hw/fdc.c
+@@ -1375,7 +1375,7 @@ static uint32_t fdctrl_read_data (fdctrl_t *fdctrl)
+ {
+     fdrive_t *cur_drv;
+     uint32_t retval = 0;
+-    int pos;
++    uint32_t pos;
+ 
+     cur_drv = get_cur_drv(fdctrl);
+     fdctrl->dsr &= ~FD_DSR_PWRDOWN;
+@@ -1384,8 +1384,8 @@ static uint32_t fdctrl_read_data (fdctrl_t *fdctrl)
+         return 0;
+     }
+     pos = fdctrl->data_pos;
++    pos %= FD_SECTOR_LEN;
+     if (fdctrl->msr & FD_MSR_NONDMA) {
+-        pos %= FD_SECTOR_LEN;
+         if (pos == 0) {
+             if (fdctrl->data_pos != 0)
+                 if (!fdctrl_seek_to_next_sect(fdctrl, cur_drv)) {
+@@ -1731,10 +1731,13 @@ static void fdctrl_handle_option (fdctrl_t *fdctrl, int direction)
+ static void fdctrl_handle_drive_specification_command (fdctrl_t *fdctrl, int direction)
+ {
+     fdrive_t *cur_drv = get_cur_drv(fdctrl);
++    uint32_t pos;
+ 
+-    if (fdctrl->fifo[fdctrl->data_pos - 1] & 0x80) {
++    pos = fdctrl->data_pos - 1;
++    pos %= FD_SECTOR_LEN;
++    if (fdctrl->fifo[pos] & 0x80) {
+         /* Command parameters done */
+-        if (fdctrl->fifo[fdctrl->data_pos - 1] & 0x40) {
++        if (fdctrl->fifo[pos] & 0x40) {
+             fdctrl->fifo[0] = fdctrl->fifo[1];
+             fdctrl->fifo[2] = 0;
+             fdctrl->fifo[3] = 0;
+@@ -1832,7 +1835,7 @@ static uint8_t command_to_handler[256];
+ static void fdctrl_write_data (fdctrl_t *fdctrl, uint32_t value)
+ {
+     fdrive_t *cur_drv;
+-    int pos;
++    uint32_t pos;
+ 
+     /* Reset mode */
+     if (!(fdctrl->dor & FD_DOR_nRESET)) {
+@@ -1878,7 +1881,9 @@ static void fdctrl_write_data (fdctrl_t *fdctrl, uint32_t value)
+     }
+ 
+     FLOPPY_DPRINTF("%s: %02x\n", __func__, value);
+-    fdctrl->fifo[fdctrl->data_pos++] = value;
++    pos = fdctrl->data_pos++;
++    pos %= FD_SECTOR_LEN;
++    fdctrl->fifo[pos] = value;
+     if (fdctrl->data_pos == fdctrl->data_len) {
+         /* We now have all parameters
+          * and will be able to treat the command
+-- 
+1.8.3.1
+

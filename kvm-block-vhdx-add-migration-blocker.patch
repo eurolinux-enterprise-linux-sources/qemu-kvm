@@ -1,0 +1,74 @@
+From ff50d6e32c3605c90ac629451433b4d3e55784b5 Mon Sep 17 00:00:00 2001
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Thu, 10 Jul 2014 23:24:11 +0200
+Subject: [PATCH 11/44] block: vhdx - add migration blocker
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <38289dd45f943a352e34cd5f4dddd47125c34528.1405033137.git.jcody@redhat.com>
+Patchwork-id: 59747
+O-Subject: [RHEL6-6 qemu-kvm PATCH v2 02/24] block: vhdx - add migration blocker
+Bugzilla: 1063559
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+This blocks migration for VHDX image files, until the
+functionality can be supported.
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 5641bf405608cc89578fafed8ec689a19046285a)
+---
+ block/vhdx.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block/vhdx.c |   10 ++++++++++
+ 1 files changed, 10 insertions(+), 0 deletions(-)
+
+diff --git a/block/vhdx.c b/block/vhdx.c
+index 60744f4..72fb113 100644
+--- a/block/vhdx.c
++++ b/block/vhdx.c
+@@ -21,6 +21,7 @@
+ #include "crc32c.h"
+ #include "host-utils.h"
+ #include "block/vhdx.h"
++#include "migration.h"
+ 
+ 
+ /* Several metadata and region table data entries are identified by
+@@ -160,6 +161,7 @@ typedef struct BDRVVHDXState {
+     VHDXParentLocatorHeader parent_header;
+     VHDXParentLocatorEntry *parent_entries;
+ 
++    Error *migration_blocker;
+ } BDRVVHDXState;
+ 
+ uint32_t vhdx_checksum_calc(uint32_t crc, uint8_t *buf, size_t size,
+@@ -821,6 +823,12 @@ static int vhdx_open(BlockDriverState *bs, int flags)
+ 
+     /* TODO: differencing files, write */
+ 
++    /* Disable migration when VHDX images are used */
++    error_set(&s->migration_blocker,
++            QERR_BLOCK_FORMAT_FEATURE_NOT_SUPPORTED,
++            "vhdx", bs->device_name, "live migration");
++    migrate_add_blocker(s->migration_blocker);
++
+     return 0;
+ fail:
+     qemu_vfree(s->headers[0]);
+@@ -967,6 +975,8 @@ static void vhdx_close(BlockDriverState *bs)
+     qemu_vfree(s->headers[1]);
+     qemu_vfree(s->bat);
+     qemu_vfree(s->parent_entries);
++    migrate_del_blocker(s->migration_blocker);
++    error_free(s->migration_blocker);
+ }
+ 
+ static BlockDriver bdrv_vhdx = {
+-- 
+1.7.1
+

@@ -1,0 +1,50 @@
+From 2733524efc1fd1a19529ccb8da713ecba66ed3d0 Mon Sep 17 00:00:00 2001
+Message-Id: <2733524efc1fd1a19529ccb8da713ecba66ed3d0.1374754301.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:20 +0200
+Subject: [PATCH 09/65] qapi: add String
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-10-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52127
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 09/65] qapi: add String
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+Little piece from upstream commit 14aa0c2de045a6c2fcfadf38c04434fd15909455
+---
+ qapi-schema.json |   12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema.json | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/qapi-schema.json b/qapi-schema.json
+index bfcea79..b413400 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -343,3 +343,15 @@
+ { 'command': 'dump-guest-memory',
+   'data': { 'paging': 'bool', 'protocol': 'str', '*begin': 'int',
+             '*length': 'int' } }
++
++##
++# @String
++#
++# A fat type wrapping 'str', to be embedded in lists.
++#
++# Since 1.2
++##
++{ 'type': 'String',
++  'data': {
++    'str': 'str' } }
++
+-- 
+1.7.11.7
+

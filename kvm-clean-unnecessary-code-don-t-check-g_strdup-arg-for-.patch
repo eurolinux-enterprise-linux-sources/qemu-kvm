@@ -1,0 +1,57 @@
+From 69d0e954a4e96a2babe5ceb49d589e3929007d68 Mon Sep 17 00:00:00 2001
+Message-Id: <69d0e954a4e96a2babe5ceb49d589e3929007d68.1430931597.git.jen@redhat.com>
+In-Reply-To: <167537380706cbdedae56a1c6445daa9e414396d.1430931597.git.jen@redhat.com>
+References: <167537380706cbdedae56a1c6445daa9e414396d.1430931597.git.jen@redhat.com>
+From: Markus Armbruster <armbru@redhat.com>
+Date: Wed, 6 May 2015 07:51:04 -0500
+Subject: [CHANGE 2/9] clean unnecessary code: don't check g_strdup arg for
+ NULL
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1430898671-22595-2-git-send-email-armbru@redhat.com>
+Patchwork-id: 65011
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 1/8] clean unnecessary code: don't check g_strdup arg for NULL
+Bugzilla: 1205288
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Dong Xu Wang <wdongxu@linux.vnet.ibm.com>
+
+Signed-off-by: Dong Xu Wang <wdongxu@linux.vnet.ibm.com>
+Signed-off-by: Michael Tokarev <mjt@tls.msk.ru>
+(cherry picked from commit 7f303adc4f0aaa71b196d9f983150f3ec3367b46)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	util/uri.c
+	vl.c
+
+Conflicts are trivial:
+* uri.c has been moved to util/ upstream
+* we still use qemu_strdup(), drop hunk
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ uri.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/uri.c b/uri.c
+index dd922de..f014647 100644
+--- a/uri.c
++++ b/uri.c
+@@ -2162,7 +2162,7 @@ query_params_append (struct QueryParams *ps,
+     }
+ 
+     ps->p[ps->n].name = g_strdup(name);
+-    ps->p[ps->n].value = value ? g_strdup(value) : NULL;
++    ps->p[ps->n].value = g_strdup(value);
+     ps->p[ps->n].ignore = 0;
+     ps->n++;
+ 
+-- 
+2.1.0
+

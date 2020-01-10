@@ -1,0 +1,83 @@
+From 9c3b0e5dcf8987c31d9cd90e928a154427608afa Mon Sep 17 00:00:00 2001
+Message-Id: <9c3b0e5dcf8987c31d9cd90e928a154427608afa.1380205090.git.minovotn@redhat.com>
+In-Reply-To: <17046268bac087f2575a7b9166c1c089d2f1cab7.1380205090.git.minovotn@redhat.com>
+References: <17046268bac087f2575a7b9166c1c089d2f1cab7.1380205090.git.minovotn@redhat.com>
+From: Bandan Das <bsd@redhat.com>
+Date: Thu, 19 Sep 2013 19:14:35 +0200
+Subject: [PATCH 3/3] qemu-kvm: fix reset value of MSR_PAT
+
+RH-Author: Bandan Das <bsd@redhat.com>
+Message-id: <jpgli2s39pg.fsf@redhat.com>
+Patchwork-id: 54455
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] qemu-kvm: fix reset value of MSR_PAT
+Bugzilla: 976706
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Gleb Natapov <gleb@redhat.com>
+
+BZ: https://bugzilla.redhat.com/show_bug.cgi?id=976706
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=6304975
+Upstream-status: Not Applicable
+
+The power-on value of MSR_IA32_CR_PAT is not 0 - that disables cacheing and
+makes everything dog slow.
+
+Fix to reset MSR_IA32_CR_PAT to the correct value
+
+This is a port of qemu-kvm commit c6866cd556fffee5c
+
+RHEL 6 notes
+How is this related to device assignment ?
+
+This bug is a culmination of three conditions :
+1. Device has been assigned which means iommu_domain is not NULL
+2. IOMMU hardware lacks snooping control
+3. PAT MSR has an incorrect value (0)
+
+This is because kernel commit 522c68c4416de3cd added the
+following to vmx_get_mt_mask:
+
++       else if (vcpu->kvm->arch.iommu_domain &&
++               !(vcpu->kvm->arch.iommu_flags & KVM_IOMMU_CACHE_COHERENCY))
++               ret = kvm_get_guest_memory_type(vcpu, gfn) <<
++                     VMX_EPT_MT_EPTE_SHIFT;
+        else
+-               ret = (kvm_get_guest_memory_type(vcpu, gfn) <<
+-                       VMX_EPT_MT_EPTE_SHIFT) | VMX_EPT_IGMT_BIT;
++               ret = (MTRR_TYPE_WRBACK << VMX_EPT_MT_EPTE_SHIFT)
++                       | VMX_EPT_IGMT_BIT;
+
+This change disables caching behavior in the presence of iommu_domain
+and gets that information from the guest (which might have disabled it
+for certain ranges). This is required for things such as DMA but for
+other ranges the correct value in PAT makes sure that memory is not
+set to UC/WC.
+
+Signed-off-by: Bandan Das <bsd@redhat.com>
+---
+ qemu-kvm-x86.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-kvm-x86.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/qemu-kvm-x86.c b/qemu-kvm-x86.c
+index f5f362a..03a75eb 100644
+--- a/qemu-kvm-x86.c
++++ b/qemu-kvm-x86.c
+@@ -1653,6 +1653,10 @@ static int kvm_reset_msrs(CPUState *env)
+     for (n = 0; n < kvm_msr_list->nmsrs; n++) {
+         if (kvm_msr_list->indices[n] == MSR_IA32_TSC)
+             continue;
++        if (kvm_msr_list->indices[n] == MSR_PAT) {
++            set_msr_entry(&msrs[n_msrs++], kvm_msr_list->indices[n], 0x0007040600070406ULL);
++            continue;
++        }
+         set_msr_entry(&msrs[n_msrs++], kvm_msr_list->indices[n], 0);
+     }
+ 
+-- 
+1.7.11.7
+

@@ -1,0 +1,177 @@
+From 657002dabcf0de62f9f455f53ad3cbc5c3c46c1d Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:35 -0500
+Subject: [CHANGE 13/31] block: parse cache mode flags in a single place
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-14-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60372
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 13/29] block: parse cache mode flags in a single place
+Bugzilla: 1122410
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+
+This patch introduces bdrv_parse_cache_flags() which sets open flags
+given a cache mode.  Previously this was duplicated in blockdev.c and
+qemu-img.c.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit c3993cdca39c252d65bbbcc234d8d242dc9bd693)
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	block.c
+
+Conflicts because commit 53fec9d3 was backported before this one.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ block.c    | 25 +++++++++++++++++++++++++
+ block.h    |  1 +
+ blockdev.c | 15 +++------------
+ qemu-img.c | 27 +++------------------------
+ 4 files changed, 32 insertions(+), 36 deletions(-)
+
+diff --git a/block.c b/block.c
+index 2506e52..0405aa2 100644
+--- a/block.c
++++ b/block.c
+@@ -540,6 +540,31 @@ static int refresh_total_sectors(BlockDriverState *bs, int64_t hint)
+     return 0;
+ }
+ 
++/*
++ * Set open flags for a given cache mode
++ *
++ * Return 0 on success, -1 if the cache mode was invalid.
++ */
++int bdrv_parse_cache_flags(const char *mode, int *flags)
++{
++    *flags &= ~BDRV_O_CACHE_MASK;
++
++    if (!strcmp(mode, "off") || !strcmp(mode, "none")) {
++        *flags |= BDRV_O_NOCACHE | BDRV_O_CACHE_WB;
++    } else if (!strcmp(mode, "writeback")) {
++        *flags |= BDRV_O_CACHE_WB;
++    } else if (!strcmp(mode, "unsafe")) {
++        *flags |= BDRV_O_CACHE_WB;
++        *flags |= BDRV_O_NO_FLUSH;
++    } else if (!strcmp(mode, "writethrough")) {
++        /* this is the default */
++    } else {
++        return -1;
++    }
++
++    return 0;
++}
++
+ /**
+  * The copy-on-read flag is actually a reference count so multiple users may
+  * use the feature without worrying about clobbering its previous state.
+diff --git a/block.h b/block.h
+index 84ad858..11fc28c 100644
+--- a/block.h
++++ b/block.h
+@@ -174,6 +174,7 @@ BlockDriverState *bdrv_new(const char *device_name);
+ void bdrv_make_anon(BlockDriverState *bs);
+ void bdrv_append(BlockDriverState *bs_new, BlockDriverState *bs_top);
+ void bdrv_delete(BlockDriverState *bs);
++int bdrv_parse_cache_flags(const char *mode, int *flags);
+ int bdrv_file_open(BlockDriverState **pbs, const char *filename, int flags);
+ int bdrv_open(BlockDriverState *bs, const char *filename, int flags,
+               BlockDriver *drv);
+diff --git a/blockdev.c b/blockdev.c
+index 61d237f..0179599 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -453,18 +453,9 @@ DriveInfo *drive_init(QemuOpts *opts, int default_to_scsi)
+     }
+ 
+     if ((buf = qemu_opt_get(opts, "cache")) != NULL) {
+-        if (!strcmp(buf, "off") || !strcmp(buf, "none")) {
+-            bdrv_flags |= BDRV_O_NOCACHE | BDRV_O_CACHE_WB;
+-        } else if (!strcmp(buf, "writeback")) {
+-            bdrv_flags |= BDRV_O_CACHE_WB;
+-        } else if (!strcmp(buf, "unsafe")) {
+-            bdrv_flags |= BDRV_O_CACHE_WB;
+-            bdrv_flags |= BDRV_O_NO_FLUSH;
+-        } else if (!strcmp(buf, "writethrough")) {
+-            /* this is the default */
+-        } else {
+-           error_report("invalid cache option");
+-           return NULL;
++        if (bdrv_parse_cache_flags(buf, &bdrv_flags) != 0) {
++            error_report("invalid cache option");
++            return NULL;
+         }
+     }
+ 
+diff --git a/qemu-img.c b/qemu-img.c
+index 782f920..31be4bd 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -209,27 +209,6 @@ static int read_password(char *buf, int buf_size)
+ }
+ #endif
+ 
+-static int set_cache_flag(const char *mode, int *flags)
+-{
+-    *flags &= ~BDRV_O_CACHE_MASK;
+-
+-    if (!strcmp(mode, "none") || !strcmp(mode, "off")) {
+-        *flags |= BDRV_O_CACHE_WB;
+-        *flags |= BDRV_O_NOCACHE;
+-    } else if (!strcmp(mode, "writeback")) {
+-        *flags |= BDRV_O_CACHE_WB;
+-    } else if (!strcmp(mode, "unsafe")) {
+-        *flags |= BDRV_O_CACHE_WB;
+-        *flags |= BDRV_O_NO_FLUSH;
+-    } else if (!strcmp(mode, "writethrough")) {
+-        /* this is the default */
+-    } else {
+-        return -1;
+-    }
+-
+-    return 0;
+-}
+-
+ static int print_block_option_help(const char *filename, const char *fmt)
+ {
+     BlockDriver *drv, *proto_drv;
+@@ -662,7 +641,7 @@ static int img_commit(int argc, char **argv)
+     filename = argv[optind++];
+ 
+     flags = BDRV_O_RDWR;
+-    ret = set_cache_flag(cache, &flags);
++    ret = bdrv_parse_cache_flags(cache, &flags);
+     if (ret < 0) {
+         error_report("Invalid cache option: %s\n", cache);
+         return -1;
+@@ -1267,7 +1246,7 @@ static int img_convert(int argc, char **argv)
+     }
+ 
+     flags = BDRV_O_RDWR;
+-    ret = set_cache_flag(cache, &flags);
++    ret = bdrv_parse_cache_flags(cache, &flags);
+     if (ret < 0) {
+         error_report("Invalid cache option: %s\n", cache);
+         return -1;
+@@ -2212,7 +2191,7 @@ static int img_rebase(int argc, char **argv)
+     qemu_progress_print(0, 100);
+ 
+     flags = BDRV_O_RDWR | (unsafe ? BDRV_O_NO_BACKING : 0);
+-    ret = set_cache_flag(cache, &flags);
++    ret = bdrv_parse_cache_flags(cache, &flags);
+     if (ret < 0) {
+         error_report("Invalid cache option: %s\n", cache);
+         return -1;
+-- 
+1.9.3
+

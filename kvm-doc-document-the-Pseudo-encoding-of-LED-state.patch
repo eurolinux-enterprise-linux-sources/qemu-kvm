@@ -1,0 +1,94 @@
+From f87b551d8235ab0a40dd61163d032e901d81329f Mon Sep 17 00:00:00 2001
+Message-Id: <f87b551d8235ab0a40dd61163d032e901d81329f.1369899578.git.minovotn@redhat.com>
+In-Reply-To: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+References: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 14 May 2013 10:13:11 +0200
+Subject: [PATCH 04/15] doc: document the Pseudo-encoding of LED state
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1368526391-6510-5-git-send-email-kraxel@redhat.com>
+Patchwork-id: 51344
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 4/4] doc: document the Pseudo-encoding of LED state
+Bugzilla: 955302
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Lei Li <lilei@linux.vnet.ibm.com>
+
+Signed-off-by: Lei Li <lilei@linux.vnet.ibm.com>
+Reviewed-by: Anthony Liguori <aliguori@us.ibm.com>
+Message-id: 1366867752-11578-5-git-send-email-lilei@linux.vnet.ibm.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 7504ae690c7320f3852890974708795cf5469895)
+---
+ docs/vnc-ledstate-Pseudo-encoding.txt |   50 +++++++++++++++++++++++++++++++++
+ 1 file changed, 50 insertions(+)
+ create mode 100644 docs/vnc-ledstate-Pseudo-encoding.txt
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ docs/vnc-ledstate-Pseudo-encoding.txt | 50 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 50 insertions(+)
+ create mode 100644 docs/vnc-ledstate-Pseudo-encoding.txt
+
+diff --git a/docs/vnc-ledstate-Pseudo-encoding.txt b/docs/vnc-ledstate-Pseudo-encoding.txt
+new file mode 100644
+index 0000000..0f124f6
+--- /dev/null
++++ b/docs/vnc-ledstate-Pseudo-encoding.txt
+@@ -0,0 +1,50 @@
++VNC LED state Pseudo-encoding
++=============================
++
++Introduction
++------------
++
++This document describes the Pseudo-encoding of LED state for RFB which
++is the protocol used in VNC as reference link below:
++
++http://tigervnc.svn.sourceforge.net/viewvc/tigervnc/rfbproto/rfbproto.rst?content-type=text/plain
++
++When accessing a guest by console through VNC, there might be mismatch
++between the lock keys notification LED on the computer running the VNC
++client session and the current status of the lock keys on the guest
++machine.
++
++To solve this problem it attempts to add LED state Pseudo-encoding
++extension to VNC protocol to deal with setting LED state.
++
++Pseudo-encoding
++---------------
++
++This Pseudo-encoding requested by client declares to server that it supports
++LED state extensions to the protocol.
++
++The Pseudo-encoding number for LED state defined as:
++
++======= ===============================================================
++Number  Name
++======= ===============================================================
++-261    'LED state Pseudo-encoding'
++======= ===============================================================
++
++LED state Pseudo-encoding
++--------------------------
++
++The LED state Pseudo-encoding describes the encoding of LED state which
++consists of 3 bits, from left to right each bit represents the Caps, Num,
++and Scroll lock key respectively. '1' indicates that the LED should be
++on and '0' should be off.
++
++Some example encodings for it as following:
++
++======= ===============================================================
++Code    Description
++======= ===============================================================
++100     CapsLock is on, NumLock and ScrollLock are off
++010     NumLock is on, CapsLock and ScrollLock are off
++111     CapsLock, NumLock and ScrollLock are on
++======= ===============================================================
+-- 
+1.7.11.7
+

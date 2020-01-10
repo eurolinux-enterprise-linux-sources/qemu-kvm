@@ -1,0 +1,120 @@
+From 0def2897103a67bd2cf07bf09129fa0af51e4797 Mon Sep 17 00:00:00 2001
+Message-Id: <0def2897103a67bd2cf07bf09129fa0af51e4797.1376492227.git.minovotn@redhat.com>
+In-Reply-To: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+References: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+From: Asias He <asias@redhat.com>
+Date: Wed, 14 Aug 2013 10:24:12 +0200
+Subject: [PATCH 11/22] configure: Add a config option for GlusterFS as block
+ backend
+
+RH-Author: Asias He <asias@redhat.com>
+Message-id: <1376475863-27929-7-git-send-email-asias@redhat.com>
+Patchwork-id: 53393
+O-Subject: [RHEL6.5 qemu-kvm PATCH v4 06/17] configure: Add a config option for GlusterFS as block backend
+Bugzilla: 848070
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: Bharata B Rao <bharata@linux.vnet.ibm.com>
+
+This is the manual backport of: eb100396b9d2658e8bf9cdc14bfcb16a9152f464
+
+GlusterFS support in QEMU depends on libgfapi, libgfrpc and
+libgfxdr provided by GlusterFS.
+
+Signed-off-by: Bharata B Rao <bharata@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ configure | 35 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 35 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ configure | 35 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 35 insertions(+)
+
+diff --git a/configure b/configure
+index dcb9a2b..d9987f9 100755
+--- a/configure
++++ b/configure
+@@ -291,6 +291,7 @@ block_stream="yes"
+ io_throttling="yes"
+ usb_redir=""
+ virtio_blk_data_plane=""
++glusterfs=""
+ 
+ # OS specific
+ if check_define __linux__ ; then
+@@ -718,6 +719,10 @@ for opt do
+   ;;
+   --enable-virtio-blk-data-plane) virtio_blk_data_plane="yes"
+   ;;
++  --disable-glusterfs) glusterfs="no"
++  ;;
++  --enable-glusterfs) glusterfs="yes"
++  ;;
+   *) echo "ERROR: unknown option $opt"; show_help="yes"
+   ;;
+   esac
+@@ -904,6 +909,8 @@ echo "  --disable-usb-redir      disable usb network redirection support"
+ echo "  --enable-usb-redir       enable usb network redirection support"
+ echo "  --disable-rhev-features  disable RHEV-only features"
+ echo "  --enable-rhev-features   enable RHEV-only features"
++echo "  --enable-glusterfs       enable GlusterFS backend"
++echo "  --disable-glusterfs      disable GlusterFS backend"
+ echo ""
+ echo "NOTE: The object files are built at the place where configure is launched"
+ exit 1
+@@ -1802,6 +1809,29 @@ EOF
+   fi
+ fi
+ 
++##########################################
++# glusterfs probe
++if test "$glusterfs" != "no" ; then
++  cat > $TMPC <<EOF
++#include <glusterfs/api/glfs.h>
++int main(void) {
++    (void) glfs_new("volume");
++    return 0;
++}
++EOF
++  glusterfs_libs="-lgfapi -lgfrpc -lgfxdr"
++  if compile_prog "" "$glusterfs_libs" ; then
++    glusterfs=yes
++    libs_tools="$glusterfs_libs $libs_tools"
++    libs_softmmu="$glusterfs_libs $libs_softmmu"
++  else
++    if test "$glusterfs" = "yes" ; then
++      feature_not_found "GlusterFS backend support"
++    fi
++    glusterfs=no
++  fi
++fi
++
+ #
+ # Check for xxxat() functions when we are building linux-user
+ # emulator.  This is done because older glibc versions don't
+@@ -2352,6 +2382,7 @@ echo "IO throttling     $io_throttling"
+ echo "xfsctl support    $xfs"
+ echo "usb net redir     $usb_redir"
+ echo "virtio-blk-data-plane $virtio_blk_data_plane"
++echo "GlusterFS support $glusterfs"
+ 
+ if test $sdl_too_old = "yes"; then
+ echo "-> Your SDL version is too old - please upgrade to have SDL support"
+@@ -2640,6 +2671,10 @@ if test "$has_environ" = "yes" ; then
+   echo "CONFIG_HAS_ENVIRON=y" >> $config_host_mak
+ fi
+ 
++if test "$glusterfs" = "yes" ; then
++  echo "CONFIG_GLUSTERFS=y" >> $config_host_mak
++fi
++
+ # USB host support
+ case "$usb" in
+ linux)
+-- 
+1.7.11.7
+

@@ -1,0 +1,74 @@
+From d01a7d07ac60f5d0a315e767eca8186e776be314 Mon Sep 17 00:00:00 2001
+Message-Id: <d01a7d07ac60f5d0a315e767eca8186e776be314.1428549624.git.jen@redhat.com>
+In-Reply-To: <6f5be4df5e31d585f927f6280d6fd1112ee97a20.1428549624.git.jen@redhat.com>
+References: <6f5be4df5e31d585f927f6280d6fd1112ee97a20.1428549624.git.jen@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Tue, 31 Mar 2015 20:05:01 -0500
+Subject: [CHANGE 7/7] block: update test 088.out to match error output
+ reporting
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <9c47c1adea8d76cc1e1fe432390603e30f625f82.1427831876.git.jcody@redhat.com>
+Patchwork-id: 64655
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 3/3] block: update test 088.out to match error output reporting
+Bugzilla: 1130015
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+Downstream RHEL6 block driver open functions do not have Error
+parameters for error reporting, so the CVE fix in commit 6323261
+is different in its error output from upstream.
+
+Set the test output to match the actual output.
+
+Downstream only.
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ tests/qemu-iotests/088.out | 18 ++++++++++++------
+ 1 file changed, 12 insertions(+), 6 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ tests/qemu-iotests/088.out | 18 ++++++++++++------
+ 1 file changed, 12 insertions(+), 6 deletions(-)
+
+diff --git a/tests/qemu-iotests/088.out b/tests/qemu-iotests/088.out
+index d961609..029500c 100644
+--- a/tests/qemu-iotests/088.out
++++ b/tests/qemu-iotests/088.out
+@@ -2,16 +2,22 @@ QA output created by 088
+ 
+ == Invalid block size ==
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
+-qemu-io: can't open device TEST_DIR/t.vpc: Invalid block size 0
++Invalid block size
++qemu-io: can't open device TEST_DIR/t.vpc
+ no file open, try 'help open'
+-qemu-io: can't open device TEST_DIR/t.vpc: Invalid block size 0
++Invalid block size
++qemu-io: can't open device TEST_DIR/t.vpc
+ no file open, try 'help open'
+-qemu-io: can't open device TEST_DIR/t.vpc: Invalid block size 128
++Invalid block size
++qemu-io: can't open device TEST_DIR/t.vpc
+ no file open, try 'help open'
+-qemu-io: can't open device TEST_DIR/t.vpc: Invalid block size 128
++Invalid block size
++qemu-io: can't open device TEST_DIR/t.vpc
+ no file open, try 'help open'
+-qemu-io: can't open device TEST_DIR/t.vpc: Invalid block size 305419896
++Invalid block size
++qemu-io: can't open device TEST_DIR/t.vpc
+ no file open, try 'help open'
+-qemu-io: can't open device TEST_DIR/t.vpc: Invalid block size 305419896
++Invalid block size
++qemu-io: can't open device TEST_DIR/t.vpc
+ no file open, try 'help open'
+ *** done
+-- 
+2.1.0
+

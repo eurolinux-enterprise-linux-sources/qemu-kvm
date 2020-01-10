@@ -1,0 +1,243 @@
+From 97adc7aa36494ddb48c3e645618e351645369333 Mon Sep 17 00:00:00 2001
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 2 May 2017 13:47:04 +0100
+Subject: [PATCH 1/5] cirrus: avoid write only variables
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <20170502134708.21817-2-kraxel@redhat.com>
+Patchwork-id: 74986
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 1/5] cirrus: avoid write only variables
+Bugzilla: 1444377 1444379
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Thomas Huth <thuth@redhat.com>
+
+From: Blue Swirl <blauwirbel@gmail.com>
+
+Compiling with GCC 4.6.0 20100925 produced a lot of warnings like:
+In file included from /src/qemu/hw/cirrus_vga_rop.h:174:0,
+                 from /src/qemu/hw/cirrus_vga.c:284:
+/src/qemu/hw/cirrus_vga_rop2.h: In function 'cirrus_patternfill_0_8':
+/src/qemu/hw/cirrus_vga_rop2.h:48:18: error: variable 'col' set but not used [-Werror=unused-but-set-variable]
+/src/qemu/hw/cirrus_vga_rop2.h: In function 'cirrus_colorexpand_transp_0_8':
+/src/qemu/hw/cirrus_vga_rop2.h:104:18: error: variable 'col' set but not used [-Werror=unused-but-set-variable]
+
+Fix the warnings by introducing an inline function, which avoids
+exposing write-only variables.
+
+Signed-off-by: Blue Swirl <blauwirbel@gmail.com>
+(cherry picked from commit 8c78881f481401ec3cfbdce2267101cf300cd4b1)
+Signed-off-by: Danilo C. L. de Paula <ddepaula@redhat.com>
+---
+ hw/cirrus_vga.c      | 30 +++++++++++++++---------------
+ hw/cirrus_vga_rop.h  | 38 ++++++++++++++++++++++++++++++--------
+ hw/cirrus_vga_rop2.h | 12 ++++++------
+ 3 files changed, 51 insertions(+), 29 deletions(-)
+
+diff --git a/hw/cirrus_vga.c b/hw/cirrus_vga.c
+index c3df293..2b87c2a 100644
+--- a/hw/cirrus_vga.c
++++ b/hw/cirrus_vga.c
+@@ -316,63 +316,63 @@ static void cirrus_bitblt_fill_nop(CirrusVGAState *s,
+ }
+ 
+ #define ROP_NAME 0
+-#define ROP_OP(d, s) d = 0
++#define ROP_FN(d, s) 0
+ #include "cirrus_vga_rop.h"
+ 
+ #define ROP_NAME src_and_dst
+-#define ROP_OP(d, s) d = (s) & (d)
++#define ROP_FN(d, s) (s) & (d)
+ #include "cirrus_vga_rop.h"
+ 
+ #define ROP_NAME src_and_notdst
+-#define ROP_OP(d, s) d = (s) & (~(d))
++#define ROP_FN(d, s) (s) & (~(d))
+ #include "cirrus_vga_rop.h"
+ 
+ #define ROP_NAME notdst
+-#define ROP_OP(d, s) d = ~(d)
++#define ROP_FN(d, s) ~(d)
+ #include "cirrus_vga_rop.h"
+ 
+ #define ROP_NAME src
+-#define ROP_OP(d, s) d = s
++#define ROP_FN(d, s) s
+ #include "cirrus_vga_rop.h"
+ 
+ #define ROP_NAME 1
+-#define ROP_OP(d, s) d = ~0
++#define ROP_FN(d, s) ~0
+ #include "cirrus_vga_rop.h"
+ 
+ #define ROP_NAME notsrc_and_dst
+-#define ROP_OP(d, s) d = (~(s)) & (d)
++#define ROP_FN(d, s) (~(s)) & (d)
+ #include "cirrus_vga_rop.h"
+ 
+ #define ROP_NAME src_xor_dst
+-#define ROP_OP(d, s) d = (s) ^ (d)
++#define ROP_FN(d, s) (s) ^ (d)
+ #include "cirrus_vga_rop.h"
+ 
+ #define ROP_NAME src_or_dst
+-#define ROP_OP(d, s) d = (s) | (d)
++#define ROP_FN(d, s) (s) | (d)
+ #include "cirrus_vga_rop.h"
+ 
+ #define ROP_NAME notsrc_or_notdst
+-#define ROP_OP(d, s) d = (~(s)) | (~(d))
++#define ROP_FN(d, s) (~(s)) | (~(d))
+ #include "cirrus_vga_rop.h"
+ 
+ #define ROP_NAME src_notxor_dst
+-#define ROP_OP(d, s) d = ~((s) ^ (d))
++#define ROP_FN(d, s) ~((s) ^ (d))
+ #include "cirrus_vga_rop.h"
+ 
+ #define ROP_NAME src_or_notdst
+-#define ROP_OP(d, s) d = (s) | (~(d))
++#define ROP_FN(d, s) (s) | (~(d))
+ #include "cirrus_vga_rop.h"
+ 
+ #define ROP_NAME notsrc
+-#define ROP_OP(d, s) d = (~(s))
++#define ROP_FN(d, s) (~(s))
+ #include "cirrus_vga_rop.h"
+ 
+ #define ROP_NAME notsrc_or_dst
+-#define ROP_OP(d, s) d = (~(s)) | (d)
++#define ROP_FN(d, s) (~(s)) | (d)
+ #include "cirrus_vga_rop.h"
+ 
+ #define ROP_NAME notsrc_and_notdst
+-#define ROP_OP(d, s) d = (~(s)) & (~(d))
++#define ROP_FN(d, s) (~(s)) & (~(d))
+ #include "cirrus_vga_rop.h"
+ 
+ static const cirrus_bitblt_rop_t cirrus_fwd_rop[16] = {
+diff --git a/hw/cirrus_vga_rop.h b/hw/cirrus_vga_rop.h
+index 8388b3e..a4f96c6 100644
+--- a/hw/cirrus_vga_rop.h
++++ b/hw/cirrus_vga_rop.h
+@@ -22,6 +22,26 @@
+  * THE SOFTWARE.
+  */
+ 
++static inline void glue(rop_8_,ROP_NAME)(uint8_t *dst, uint8_t src)
++{
++    *dst = ROP_FN(*dst, src);
++}
++
++static inline void glue(rop_16_,ROP_NAME)(uint16_t *dst, uint16_t src)
++{
++    *dst = ROP_FN(*dst, src);
++}
++
++static inline void glue(rop_32_,ROP_NAME)(uint32_t *dst, uint32_t src)
++{
++    *dst = ROP_FN(*dst, src);
++}
++
++#define ROP_OP(d, s) glue(rop_8_,ROP_NAME)(d, s)
++#define ROP_OP_16(d, s) glue(rop_16_,ROP_NAME)(d, s)
++#define ROP_OP_32(d, s) glue(rop_32_,ROP_NAME)(d, s)
++#undef ROP_FN
++
+ static void
+ glue(cirrus_bitblt_rop_fwd_, ROP_NAME)(CirrusVGAState *s,
+                              uint8_t *dst,const uint8_t *src,
+@@ -39,7 +59,7 @@ glue(cirrus_bitblt_rop_fwd_, ROP_NAME)(CirrusVGAState *s,
+ 
+     for (y = 0; y < bltheight; y++) {
+         for (x = 0; x < bltwidth; x++) {
+-            ROP_OP(*dst, *src);
++            ROP_OP(dst, *src);
+             dst++;
+             src++;
+         }
+@@ -59,7 +79,7 @@ glue(cirrus_bitblt_rop_bkwd_, ROP_NAME)(CirrusVGAState *s,
+     srcpitch += bltwidth;
+     for (y = 0; y < bltheight; y++) {
+         for (x = 0; x < bltwidth; x++) {
+-            ROP_OP(*dst, *src);
++            ROP_OP(dst, *src);
+             dst--;
+             src--;
+         }
+@@ -86,7 +106,7 @@ glue(glue(cirrus_bitblt_rop_fwd_transp_, ROP_NAME),_8)(CirrusVGAState *s,
+     for (y = 0; y < bltheight; y++) {
+         for (x = 0; x < bltwidth; x++) {
+ 	    p = *dst;
+-            ROP_OP(p, *src);
++            ROP_OP(&p, *src);
+ 	    if (p != s->vga.gr[0x34]) *dst = p;
+             dst++;
+             src++;
+@@ -109,7 +129,7 @@ glue(glue(cirrus_bitblt_rop_bkwd_transp_, ROP_NAME),_8)(CirrusVGAState *s,
+     for (y = 0; y < bltheight; y++) {
+         for (x = 0; x < bltwidth; x++) {
+ 	    p = *dst;
+-            ROP_OP(p, *src);
++            ROP_OP(&p, *src);
+ 	    if (p != s->vga.gr[0x34]) *dst = p;
+             dst--;
+             src--;
+@@ -138,8 +158,8 @@ glue(glue(cirrus_bitblt_rop_fwd_transp_, ROP_NAME),_16)(CirrusVGAState *s,
+         for (x = 0; x < bltwidth; x+=2) {
+ 	    p1 = *dst;
+ 	    p2 = *(dst+1);
+-            ROP_OP(p1, *src);
+-            ROP_OP(p2, *(src+1));
++            ROP_OP(&p1, *src);
++            ROP_OP(&p2, *(src + 1));
+ 	    if ((p1 != s->vga.gr[0x34]) || (p2 != s->vga.gr[0x35])) {
+ 		*dst = p1;
+ 		*(dst+1) = p2;
+@@ -166,8 +186,8 @@ glue(glue(cirrus_bitblt_rop_bkwd_transp_, ROP_NAME),_16)(CirrusVGAState *s,
+         for (x = 0; x < bltwidth; x+=2) {
+ 	    p1 = *(dst-1);
+ 	    p2 = *dst;
+-            ROP_OP(p1, *(src-1));
+-            ROP_OP(p2, *src);
++            ROP_OP(&p1, *(src - 1));
++            ROP_OP(&p2, *src);
+ 	    if ((p1 != s->vga.gr[0x34]) || (p2 != s->vga.gr[0x35])) {
+ 		*(dst-1) = p1;
+ 		*dst = p2;
+@@ -194,3 +214,5 @@ glue(glue(cirrus_bitblt_rop_bkwd_transp_, ROP_NAME),_16)(CirrusVGAState *s,
+ 
+ #undef ROP_NAME
+ #undef ROP_OP
++#undef ROP_OP_16
++#undef ROP_OP_32
+diff --git a/hw/cirrus_vga_rop2.h b/hw/cirrus_vga_rop2.h
+index 81a5b39..d28bcc6 100644
+--- a/hw/cirrus_vga_rop2.h
++++ b/hw/cirrus_vga_rop2.h
+@@ -23,15 +23,15 @@
+  */
+ 
+ #if DEPTH == 8
+-#define PUTPIXEL()    ROP_OP(d[0], col)
++#define PUTPIXEL()    ROP_OP(&d[0], col)
+ #elif DEPTH == 16
+-#define PUTPIXEL()    ROP_OP(((uint16_t *)d)[0], col);
++#define PUTPIXEL()    ROP_OP_16((uint16_t *)&d[0], col)
+ #elif DEPTH == 24
+-#define PUTPIXEL()    ROP_OP(d[0], col); \
+-                      ROP_OP(d[1], (col >> 8)); \
+-                      ROP_OP(d[2], (col >> 16))
++#define PUTPIXEL()    ROP_OP(&d[0], col);        \
++                      ROP_OP(&d[1], (col >> 8)); \
++                      ROP_OP(&d[2], (col >> 16))
+ #elif DEPTH == 32
+-#define PUTPIXEL()    ROP_OP(((uint32_t *)d)[0], col)
++#define PUTPIXEL()    ROP_OP_32(((uint32_t *)&d[0]), col)
+ #else
+ #error unsupported DEPTH
+ #endif
+-- 
+1.8.3.1
+

@@ -1,0 +1,129 @@
+From 6827bce812edd36b3626f8400a84f6fb03ddcf7b Mon Sep 17 00:00:00 2001
+Message-Id: <6827bce812edd36b3626f8400a84f6fb03ddcf7b.1368180503.git.minovotn@redhat.com>
+In-Reply-To: <2bb7aa4e3dabbd9cf5693902715f79fedbe869de.1368180503.git.minovotn@redhat.com>
+References: <2bb7aa4e3dabbd9cf5693902715f79fedbe869de.1368180503.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Wed, 17 Apr 2013 12:33:15 +0200
+Subject: [PATCH 2/5] qemu-img rebase: use empty string to rebase without
+ backing file
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1366201995-17212-3-git-send-email-kwolf@redhat.com>
+Patchwork-id: 50611
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 2/2] qemu-img rebase: use empty string to rebase without backing file
+Bugzilla: 670162
+RH-Acked-by: Eric Blake <eblake@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Alex Bligh <alex@alex.org.uk>
+
+Bugzilla: 670162
+
+This patch allows an empty filename to be passed as the new base image name
+for qemu-img rebase to mean base the image on no backing file (i.e.
+independent of any backing file). According to Eric Blake, qemu-img rebase
+already supports this when '-u' is used; this adds support when -u is not
+used.
+
+Signed-off-by: Alex Bligh <alex@alex.org.uk>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit a616673dd1c2e00db5e3458d2ba4b6619b78876a)
+---
+ qemu-img.c    | 29 +++++++++++++++++++----------
+ qemu-img.texi |  4 +++-
+ 2 files changed, 22 insertions(+), 11 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-img.c    | 29 +++++++++++++++++++----------
+ qemu-img.texi |  4 +++-
+ 2 files changed, 22 insertions(+), 11 deletions(-)
+
+diff --git a/qemu-img.c b/qemu-img.c
+index 8d22d70..3bbd1a5 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -1558,13 +1558,15 @@ static int img_rebase(int argc, char **argv)
+             error_report("Could not open old backing file '%s'", backing_name);
+             goto out;
+         }
+-
+-        bs_new_backing = bdrv_new("new_backing");
+-        ret = bdrv_open(bs_new_backing, out_baseimg, BDRV_O_FLAGS,
++        if (out_baseimg[0]) {
++            bs_new_backing = bdrv_new("new_backing");
++            ret = bdrv_open(bs_new_backing, out_baseimg, BDRV_O_FLAGS,
+                         new_backing_drv);
+-        if (ret) {
+-            error_report("Could not open new backing file '%s'", out_baseimg);
+-            goto out;
++            if (ret) {
++                error_report("Could not open new backing file '%s'",
++                             out_baseimg);
++                goto out;
++            }
+         }
+     }
+ 
+@@ -1580,7 +1582,7 @@ static int img_rebase(int argc, char **argv)
+     if (!unsafe) {
+         uint64_t num_sectors;
+         uint64_t old_backing_num_sectors;
+-        uint64_t new_backing_num_sectors;
++        uint64_t new_backing_num_sectors = 0;
+         uint64_t sector;
+         int n;
+         uint8_t * buf_old;
+@@ -1592,7 +1594,9 @@ static int img_rebase(int argc, char **argv)
+ 
+         bdrv_get_geometry(bs, &num_sectors);
+         bdrv_get_geometry(bs_old_backing, &old_backing_num_sectors);
+-        bdrv_get_geometry(bs_new_backing, &new_backing_num_sectors);
++        if (bs_new_backing) {
++            bdrv_get_geometry(bs_new_backing, &new_backing_num_sectors);
++        }
+ 
+         if (num_sectors != 0) {
+             local_progress = (float)100 /
+@@ -1632,7 +1636,7 @@ static int img_rebase(int argc, char **argv)
+                 }
+             }
+ 
+-            if (sector >= new_backing_num_sectors) {
++            if (sector >= new_backing_num_sectors || !bs_new_backing) {
+                 memset(buf_new, 0, n * BDRV_SECTOR_SIZE);
+             } else {
+                 if (sector + n > new_backing_num_sectors) {
+@@ -1678,7 +1682,12 @@ static int img_rebase(int argc, char **argv)
+      * backing file are overwritten in the COW file now, so the visible content
+      * doesn't change when we switch the backing file.
+      */
+-    ret = bdrv_change_backing_file(bs, out_baseimg, out_basefmt);
++    if (out_baseimg && *out_baseimg) {
++        ret = bdrv_change_backing_file(bs, out_baseimg, out_basefmt);
++    } else {
++        ret = bdrv_change_backing_file(bs, NULL, NULL);
++    }
++
+     if (ret == -ENOSPC) {
+         error_report("Could not change the backing file to '%s': No "
+                      "space left in the file header", out_baseimg);
+diff --git a/qemu-img.texi b/qemu-img.texi
+index c9cf198..d2951a6 100644
+--- a/qemu-img.texi
++++ b/qemu-img.texi
+@@ -138,7 +138,9 @@ Changes the backing file of an image. Only the formats @code{qcow2} and
+ 
+ The backing file is changed to @var{backing_file} and (if the image format of
+ @var{filename} supports this) the backing file format is changed to
+-@var{backing_fmt}.
++@var{backing_fmt}. If @var{backing_file} is specified as ``'' (the empty
++string), then the image is rebased onto no backing file (i.e. it will exist
++independently of any backing file).
+ 
+ There are two different modes in which @code{rebase} can operate:
+ @table @option
+-- 
+1.7.11.7
+

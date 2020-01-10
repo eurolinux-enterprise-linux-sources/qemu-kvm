@@ -1,0 +1,56 @@
+From df794bc7d6ca08c965d78691559631127287dc3a Mon Sep 17 00:00:00 2001
+Message-Id: <df794bc7d6ca08c965d78691559631127287dc3a.1376484223.git.minovotn@redhat.com>
+In-Reply-To: <ac0ba67dff2049ff8601fe686b870bba1879b99f.1376484223.git.minovotn@redhat.com>
+References: <ac0ba67dff2049ff8601fe686b870bba1879b99f.1376484223.git.minovotn@redhat.com>
+From: Markus Armbruster <armbru@redhat.com>
+Date: Wed, 31 Jul 2013 14:48:22 +0200
+Subject: [PATCH 2/6] acl: Fix acl_remove not to mess up the ACL
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1375282103-13110-2-git-send-email-armbru@redhat.com>
+Patchwork-id: 52869
+O-Subject: [RHEL-6 PATCH qemu-kvm 1/2] acl: Fix acl_remove not to mess up the ACL
+Bugzilla: 889255
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+It leaks memory and fails to adjust qemu_acl member nentries.  Future
+acl_add become confused: can misreport the position, and can silently
+fail to add.
+
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit c23c15d30b901bb447cdcada96cae64c0046d146)
+
+Conflicts:
+	util/acl.c
+
+Bugzilla: 889255
+---
+ acl.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ acl.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/acl.c b/acl.c
+index 0f6887c..fdd0bbf 100644
+--- a/acl.c
++++ b/acl.c
+@@ -169,6 +169,9 @@ int qemu_acl_remove(qemu_acl *acl,
+         i++;
+         if (strcmp(entry->match, match) == 0) {
+             QTAILQ_REMOVE(&acl->entries, entry, next);
++            acl->nentries--;
++            qemu_free(entry->match);
++            qemu_free(entry);
+             return i;
+         }
+     }
+-- 
+1.7.11.7
+

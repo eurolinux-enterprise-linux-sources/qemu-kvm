@@ -1,0 +1,139 @@
+From 51ea7235039eac4a916f786b03434f38598441b3 Mon Sep 17 00:00:00 2001
+Message-Id: <51ea7235039eac4a916f786b03434f38598441b3.1428549624.git.jen@redhat.com>
+In-Reply-To: <6f5be4df5e31d585f927f6280d6fd1112ee97a20.1428549624.git.jen@redhat.com>
+References: <6f5be4df5e31d585f927f6280d6fd1112ee97a20.1428549624.git.jen@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Tue, 31 Mar 2015 20:04:59 -0500
+Subject: [CHANGE 5/7] iotests: Remove 006
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <04c58a1d9329c31ac4d6bb257e3ad850e2b177f5.1427831876.git.jcody@redhat.com>
+Patchwork-id: 64654
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 1/3] iotests: Remove 006
+Bugzilla: 1130015
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Max Reitz <mreitz@redhat.com>
+
+vpc does support images > 127 GB if done correctly. qemu does it
+correctly. Remove the test pretending otherwise.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 005628bc8a1693c3dcb00ff2dc3a67cf92c61a13)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	tests/qemu-iotests/006.out
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ tests/qemu-iotests/006     | 54 ----------------------------------------------
+ tests/qemu-iotests/006.out |  6 ------
+ tests/qemu-iotests/group   |  2 +-
+ 3 files changed, 1 insertion(+), 61 deletions(-)
+ delete mode 100755 tests/qemu-iotests/006
+ delete mode 100644 tests/qemu-iotests/006.out
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ tests/qemu-iotests/006     | 54 ----------------------------------------------
+ tests/qemu-iotests/006.out |  6 ------
+ tests/qemu-iotests/group   |  2 +-
+ 3 files changed, 1 insertion(+), 61 deletions(-)
+ delete mode 100755 tests/qemu-iotests/006
+ delete mode 100644 tests/qemu-iotests/006.out
+
+diff --git a/tests/qemu-iotests/006 b/tests/qemu-iotests/006
+deleted file mode 100755
+index 0c0cf5d..0000000
+--- a/tests/qemu-iotests/006
++++ /dev/null
+@@ -1,54 +0,0 @@
+-#!/bin/bash
+-#
+-# Make sure qemu-img rejects > 127GB images for the vpc format as the format
+-# doesn't support this.
+-#
+-# Copyright (C) 2009 Red Hat, Inc.
+-#
+-# This program is free software; you can redistribute it and/or modify
+-# it under the terms of the GNU General Public License as published by
+-# the Free Software Foundation; either version 2 of the License, or
+-# (at your option) any later version.
+-#
+-# This program is distributed in the hope that it will be useful,
+-# but WITHOUT ANY WARRANTY; without even the implied warranty of
+-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-# GNU General Public License for more details.
+-#
+-# You should have received a copy of the GNU General Public License
+-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-#
+-
+-# creator
+-owner=hch@lst.de
+-
+-seq=`basename $0`
+-echo "QA output created by $seq"
+-
+-here=`pwd`
+-tmp=/tmp/$$
+-status=1	# failure is the default!
+-
+-_cleanup()
+-{
+-	_cleanup_test_img
+-}
+-trap "_cleanup; exit \$status" 0 1 2 3 15
+-
+-# get standard environment, filters and checks
+-. ./common.rc
+-. ./common.filter
+-
+-_supported_fmt vpc
+-_supported_proto generic
+-_supported_os Linux
+-
+-
+-echo
+-echo "creating 128GB image"
+-_make_test_img 128G
+-
+-# success, all done
+-echo "*** done"
+-rm -f $seq.full
+-status=0
+diff --git a/tests/qemu-iotests/006.out b/tests/qemu-iotests/006.out
+deleted file mode 100644
+index f82fbfb..0000000
+--- a/tests/qemu-iotests/006.out
++++ /dev/null
+@@ -1,6 +0,0 @@
+-QA output created by 006
+-
+-creating 128GB image
+-qemu-img: The image size is too large for file format 'vpc'
+-Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=137438953472 
+-*** done
+diff --git a/tests/qemu-iotests/group b/tests/qemu-iotests/group
+index bf67a07..8d5b891 100644
+--- a/tests/qemu-iotests/group
++++ b/tests/qemu-iotests/group
+@@ -12,7 +12,7 @@
+ 003 rw auto
+ 004 rw auto quick
+ 005 img auto quick
+-006 img auto
++# 006 was removed, do not reuse
+ 007 snapshot auto
+ 008 rw auto quick
+ 009 rw auto quick
+-- 
+2.1.0
+

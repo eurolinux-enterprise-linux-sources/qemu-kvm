@@ -1,0 +1,64 @@
+From 122589cc8b5dc1c282a9ede0dec78c7e7c5f94ff Mon Sep 17 00:00:00 2001
+Message-Id: <122589cc8b5dc1c282a9ede0dec78c7e7c5f94ff.1425415444.git.jen@redhat.com>
+In-Reply-To: <da72b8b5c732457ae115fa00a02569ddb42eff9c.1425415444.git.jen@redhat.com>
+References: <da72b8b5c732457ae115fa00a02569ddb42eff9c.1425415444.git.jen@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Fri, 27 Feb 2015 16:25:47 -0500
+Subject: [CHANGE 4/8] Revert "Build rbd block driver only for qemu-kvm-rhev"
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1425054351-28658-3-git-send-email-kwolf@redhat.com>
+Patchwork-id: 64068
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 2/6] Revert "Build rbd block driver only for qemu-kvm-rhev"
+Bugzilla: 1154876
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Jeff Nelson <jenelson@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+This reverts commit 1100663fee522a48a50b721593f3953a2373eeda.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ Makefile.objs     | 2 +-
+ Makefile.objs.rej | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ Makefile.objs     | 2 +-
+ Makefile.objs.rej | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile.objs b/Makefile.objs
+index e3b5166..b1b58c6 100644
+--- a/Makefile.objs
++++ b/Makefile.objs
+@@ -32,7 +32,7 @@ block-nested-$(CONFIG_WIN32) += raw-win32.o
+ block-nested-$(CONFIG_POSIX) += raw-posix.o
+ block-nested-$(CONFIG_CURL) += curl.o
+ block-nested-$(CONFIG_GLUSTERFS) += gluster.o
+-block-nested-$(CONFIG_LIVE_SNAPSHOTS) += rbd.o
++block-nested-y += rbd.o
+ 
+ block-obj-y +=  $(addprefix block/, $(block-nested-y))
+ 
+diff --git a/Makefile.objs.rej b/Makefile.objs.rej
+index ca6bd0a..deb3269 100644
+--- a/Makefile.objs.rej
++++ b/Makefile.objs.rej
+@@ -4,8 +4,8 @@
+  block-nested-$(CONFIG_WIN32) += raw-win32.o
+  block-nested-$(CONFIG_POSIX) += raw-posix.o
+  block-nested-$(CONFIG_CURL) += curl.o
+--block-nested-y += rbd.o
+-+block-nested-$(CONFIG_LIVE_SNAPSHOTS) += rbd.o
++-block-nested-$(CONFIG_RBD) += rbd.o
+++block-nested-y += rbd.o
+  
+  block-obj-y +=  $(addprefix block/, $(block-nested-y))
+  
+-- 
+2.1.0
+

@@ -1,0 +1,38 @@
+From 6c09279c177c670565bcd5f58268d1dbc3fe039b Mon Sep 17 00:00:00 2001
+Message-Id: <6c09279c177c670565bcd5f58268d1dbc3fe039b.1425657843.git.jen@redhat.com>
+In-Reply-To: <f6cf12f0d166001c7958ddc904eff181f03da5e4.1425657843.git.jen@redhat.com>
+References: <f6cf12f0d166001c7958ddc904eff181f03da5e4.1425657843.git.jen@redhat.com>
+From: Peter Lieven <pl@kamp.de>
+Date: Wed, 27 Nov 2013 11:07:09 +0100
+Subject: [CHANGE 04/11] qemu-img: decrease progress update interval on convert
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+when doing very large jobs updating the progress only every 2%
+is too rare.
+
+Signed-off-by: Peter Lieven <pl@kamp.de>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 405889820bcd5c2abf4eb70598e96f525f862c0f)
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ qemu-img.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/qemu-img.c b/qemu-img.c
+index 98176b9..c12cedb 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -1172,7 +1172,7 @@ static int img_convert(int argc, char **argv)
+     out_filename = argv[argc - 1];
+ 
+     /* Initialize before goto out */
+-    qemu_progress_init(progress, 2.0);
++    qemu_progress_init(progress, 1.0);
+ 
+     if (options && !strcmp(options, "?")) {
+         ret = print_block_option_help(out_filename, out_fmt);
+-- 
+2.1.0
+

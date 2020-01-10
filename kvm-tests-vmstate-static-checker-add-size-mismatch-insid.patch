@@ -1,0 +1,47 @@
+From 6824d7b50134962da38956ef78d34b2b656f47f2 Mon Sep 17 00:00:00 2001
+From: Amit Shah <amit.shah@redhat.com>
+Date: Fri, 11 Jul 2014 10:47:29 -0500
+Subject: [CHANGE 18/18] tests: vmstate static checker: add size mismatch
+ inside substructure
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <00a3d68037e5555b1b5b6a3741f8926b66a94ce9.1405075344.git.amit.shah@redhat.com>
+Patchwork-id: 59818
+O-Subject: [RHEL6.6 qemu-kvm PATCH 18/18] tests: vmstate static checker: add size mismatch inside substructure
+Bugzilla: 1118718
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Reviewed-by: Juan Quintela <quintela@redhat.com>
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+(cherry picked from commit 38ef86b5a68a6553904ee89672417d7a61c5182e)
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ tests/vmstate-static-checker-data/dump2.json | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ tests/vmstate-static-checker-data/dump2.json | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/vmstate-static-checker-data/dump2.json b/tests/vmstate-static-checker-data/dump2.json
+index 45cccaf..75719f5 100644
+--- a/tests/vmstate-static-checker-data/dump2.json
++++ b/tests/vmstate-static-checker-data/dump2.json
+@@ -909,7 +909,7 @@
+                 "field": "kbd.keycodes",
+                 "version_id": 0,
+                 "field_exists": false,
+-                "size": 4
++                "size": 2
+               },
+               {
+                 "field": "head",
+-- 
+1.9.3
+

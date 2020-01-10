@@ -1,0 +1,52 @@
+From 75b1607dbc11611da0d8f5bf61010a882ed5916b Mon Sep 17 00:00:00 2001
+Message-Id: <75b1607dbc11611da0d8f5bf61010a882ed5916b.1378813438.git.minovotn@redhat.com>
+In-Reply-To: <b80f97e724da8388b544413d6a3dcac35d347d9b.1378813438.git.minovotn@redhat.com>
+References: <b80f97e724da8388b544413d6a3dcac35d347d9b.1378813438.git.minovotn@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Wed, 28 Aug 2013 13:14:49 +0200
+Subject: [PATCH 07/13] vpc: Add missing error handling in alloc_block
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <d1f23c4ae1b89cc529bdf29529ee0c7842158cf2.1377694139.git.jcody@redhat.com>
+Patchwork-id: 53842
+O-Subject: [RHEL6.5 qemu-kvm PATCH 07/13] vpc: Add missing error handling in alloc_block
+Bugzilla: 999779
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+(cherry picked from commit 5bb1cbac4fdb1ca28f33c8d68538d03e3db7c160)
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ block/vpc.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vpc.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/block/vpc.c b/block/vpc.c
+index 75a2f23..b82521d 100644
+--- a/block/vpc.c
++++ b/block/vpc.c
+@@ -361,8 +361,11 @@ static int64_t alloc_block(BlockDriverState* bs, int64_t sector_num)
+ 
+     // Initialize the block's bitmap
+     memset(bitmap, 0xff, s->bitmap_size);
+-    bdrv_pwrite_sync(bs->file, s->free_data_block_offset, bitmap,
++    ret = bdrv_pwrite_sync(bs->file, s->free_data_block_offset, bitmap,
+         s->bitmap_size);
++    if (ret < 0) {
++        return ret;
++    }
+ 
+     // Write new footer (the old one will be overwritten)
+     s->free_data_block_offset += s->block_size + s->bitmap_size;
+-- 
+1.7.11.7
+

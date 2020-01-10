@@ -1,0 +1,54 @@
+From a3bd0b704e93ab9927d366d59679cc46a5938fa4 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Tue, 3 Jun 2014 10:01:30 +0200
+Subject: [PATCH 11/26] qcow1: Make padding in the header explicit
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1401789694-14289-3-git-send-email-kwolf@redhat.com>
+Patchwork-id: 59108
+O-Subject: [RHEL-6.6/6.5.z qemu-kvm PATCH 2/6] qcow1: Make padding in the header explicit
+Bugzilla: 1097228
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1097228
+
+We were relying on all compilers inserting the same padding in the
+header struct that is used for the on-disk format. Let's not do that.
+Mark the struct as packed and insert an explicit padding field for
+compatibility.
+
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Benoit Canet <benoit@irqsave.net>
+(cherry picked from commit ea54feff58efedc809641474b25a3130309678e7)
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/qcow.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block/qcow.c |    3 ++-
+ 1 files changed, 2 insertions(+), 1 deletions(-)
+
+diff --git a/block/qcow.c b/block/qcow.c
+index df94080..7f62b3f 100644
+--- a/block/qcow.c
++++ b/block/qcow.c
+@@ -47,9 +47,10 @@ typedef struct QCowHeader {
+     uint64_t size; /* in bytes */
+     uint8_t cluster_bits;
+     uint8_t l2_bits;
++    uint16_t padding;
+     uint32_t crypt_method;
+     uint64_t l1_table_offset;
+-} QCowHeader;
++} QEMU_PACKED QCowHeader;
+ 
+ #define L2_CACHE_SIZE 16
+ 
+-- 
+1.7.1
+

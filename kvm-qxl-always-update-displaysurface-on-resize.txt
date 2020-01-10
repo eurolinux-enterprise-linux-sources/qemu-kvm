@@ -1,0 +1,61 @@
+From 2dc27cd7431664ad990f5a025cea80ba74869f9c Mon Sep 17 00:00:00 2001
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Wed, 2 Jul 2014 10:24:40 -0400
+Subject: [CHANGE 2/2] qxl: always update displaysurface on resize
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1404296680-31398-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 59436
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 1/1] qxl: always update displaysurface on resize
+Bugzilla: 1112078
+RH-Acked-by: Bandan Das <bsd@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Don't try to be clever and skip displaysurface reinitialization in case
+the size hasn't changed.  Other parameters might have changed
+nevertheless, for example depth or stride, resulting in rendering being
+broken then.
+
+Trigger: boot linux guest with vesafb, start X11, make sure both vesafb
+and X11 use the display same resolution.  Then watch X11 screen being
+upside down.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 0ec8df3974d2a4ff95b5fd4785b9bd3def7252f3)
+---
+ hw/qxl-render.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/qxl-render.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/hw/qxl-render.c b/hw/qxl-render.c
+index dadc26b..a8a5413 100644
+--- a/hw/qxl-render.c
++++ b/hw/qxl-render.c
+@@ -97,7 +97,6 @@ static void qxl_render_update_area_unlocked(PCIQXLDevice *qxl)
+ {
+     VGACommonState *vga = &qxl->vga;
+     int i;
+-    DisplaySurface *surface = vga->ds->surface;
+ 
+     if (qxl->guest_primary.resized) {
+         qxl->guest_primary.resized = 0;
+@@ -115,9 +114,6 @@ static void qxl_render_update_area_unlocked(PCIQXLDevice *qxl)
+                qxl->guest_primary.qxl_stride,
+                qxl->guest_primary.bytes_pp,
+                qxl->guest_primary.bits_pp);
+-    }
+-    if (surface->width != qxl->guest_primary.surface.width ||
+-        surface->height != qxl->guest_primary.surface.height) {
+         if (qxl->guest_primary.qxl_stride > 0) {
+             qemu_free_displaysurface(vga->ds);
+             vga->ds->surface = qemu_create_displaysurface_from
+-- 
+1.9.3
+

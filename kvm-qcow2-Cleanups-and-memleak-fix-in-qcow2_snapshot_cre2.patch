@@ -1,0 +1,107 @@
+From 5a538a2a91e29a6931cfff9d005057f608688507 Mon Sep 17 00:00:00 2001
+Message-Id: <5a538a2a91e29a6931cfff9d005057f608688507.1368098699.git.minovotn@redhat.com>
+In-Reply-To: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+References: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Fri, 5 Apr 2013 19:44:44 +0200
+Subject: [PATCH 05/24] qcow2: Cleanups and memleak fix in
+ qcow2_snapshot_create
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1365191091-25631-6-git-send-email-kwolf@redhat.com>
+Patchwork-id: 50166
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 05/12] qcow2: Cleanups and memleak fix in qcow2_snapshot_create
+Bugzilla: 796011
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+Bugzilla: 796011
+
+sn->id_str could be leaked before this. The rest of this patch changes
+comments, fixes coding style or removes checks that are unnecessary with
+g_malloc.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+(cherry picked from commit 03343166f703d5c8f02b8519f8493c56e5541ae7)
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/qcow2-snapshot.c | 26 +++++++++++---------------
+ 1 file changed, 11 insertions(+), 15 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/qcow2-snapshot.c | 26 +++++++++++---------------
+ 1 file changed, 11 insertions(+), 15 deletions(-)
+
+diff --git a/block/qcow2-snapshot.c b/block/qcow2-snapshot.c
+index b2ab0c0..ceeab53 100644
+--- a/block/qcow2-snapshot.c
++++ b/block/qcow2-snapshot.c
+@@ -284,21 +284,20 @@ int qcow2_snapshot_create(BlockDriverState *bs, QEMUSnapshotInfo *sn_info)
+ 
+     memset(sn, 0, sizeof(*sn));
+ 
++    /* Generate an ID if it wasn't passed */
+     if (sn_info->id_str[0] == '\0') {
+-        /* compute a new id */
+         find_new_snapshot_id(bs, sn_info->id_str, sizeof(sn_info->id_str));
+     }
+ 
+-    /* check that the ID is unique */
+-    if (find_snapshot_by_id(bs, sn_info->id_str) >= 0)
++    /* Check that the ID is unique */
++    if (find_snapshot_by_id(bs, sn_info->id_str) >= 0) {
+         return -ENOENT;
++    }
+ 
++    /* Populate sn with passed data */
+     sn->id_str = g_strdup(sn_info->id_str);
+-    if (!sn->id_str)
+-        goto fail;
+     sn->name = g_strdup(sn_info->name);
+-    if (!sn->name)
+-        goto fail;
++
+     sn->vm_state_size = sn_info->vm_state_size;
+     sn->date_sec = sn_info->date_sec;
+     sn->date_nsec = sn_info->date_nsec;
+@@ -308,7 +307,7 @@ int qcow2_snapshot_create(BlockDriverState *bs, QEMUSnapshotInfo *sn_info)
+     if (ret < 0)
+         goto fail;
+ 
+-    /* create the L1 table of the snapshot */
++    /* Allocate the L1 table of the snapshot and copy the current one there. */
+     l1_table_offset = qcow2_alloc_clusters(bs, s->l1_size * sizeof(uint64_t));
+     if (l1_table_offset < 0) {
+         goto fail;
+@@ -318,12 +317,7 @@ int qcow2_snapshot_create(BlockDriverState *bs, QEMUSnapshotInfo *sn_info)
+     sn->l1_table_offset = l1_table_offset;
+     sn->l1_size = s->l1_size;
+ 
+-    if (s->l1_size != 0) {
+-        l1_table = g_malloc(s->l1_size * sizeof(uint64_t));
+-    } else {
+-        l1_table = NULL;
+-    }
+-
++    l1_table = g_malloc(s->l1_size * sizeof(uint64_t));
+     for(i = 0; i < s->l1_size; i++) {
+         l1_table[i] = cpu_to_be64(s->l1_table[i]);
+     }
+@@ -347,7 +341,9 @@ int qcow2_snapshot_create(BlockDriverState *bs, QEMUSnapshotInfo *sn_info)
+     qcow2_check_refcounts(bs);
+ #endif
+     return 0;
+- fail:
++
++fail:
++    g_free(sn->id_str);
+     g_free(sn->name);
+     g_free(l1_table);
+     return -1;
+-- 
+1.7.11.7
+

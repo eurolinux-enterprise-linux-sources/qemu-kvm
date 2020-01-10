@@ -1,0 +1,120 @@
+From 618a4b91ddb04b21f9dc0c1defe7693fb7cc1748 Mon Sep 17 00:00:00 2001
+Message-Id: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Fri, 5 Apr 2013 19:44:40 +0200
+Subject: [PATCH 01/24] qcow2: Return real error code in qcow2_read_snapshots
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1365191091-25631-2-git-send-email-kwolf@redhat.com>
+Patchwork-id: 50161
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 01/12] qcow2: Return real error code in qcow2_read_snapshots
+Bugzilla: 796011
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+Bugzilla: 796011
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+(cherry picked from commit 42deb29fed92577db57c54e844f852481600b756)
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/qcow2-snapshot.c | 25 ++++++++++++++++++++-----
+ block/qcow2.c          |  5 +++--
+ 2 files changed, 23 insertions(+), 7 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/qcow2-snapshot.c | 25 ++++++++++++++++++++-----
+ block/qcow2.c          |  5 +++--
+ 2 files changed, 23 insertions(+), 7 deletions(-)
+
+diff --git a/block/qcow2-snapshot.c b/block/qcow2-snapshot.c
+index 7d1f0e2..15cd00a 100644
+--- a/block/qcow2-snapshot.c
++++ b/block/qcow2-snapshot.c
+@@ -68,6 +68,7 @@ int qcow2_read_snapshots(BlockDriverState *bs)
+     int i, id_str_size, name_size;
+     int64_t offset;
+     uint32_t extra_data_size;
++    int ret;
+ 
+     if (!s->nb_snapshots) {
+         s->snapshots = NULL;
+@@ -77,10 +78,15 @@ int qcow2_read_snapshots(BlockDriverState *bs)
+ 
+     offset = s->snapshots_offset;
+     s->snapshots = g_malloc0(s->nb_snapshots * sizeof(QCowSnapshot));
++
+     for(i = 0; i < s->nb_snapshots; i++) {
++        /* Read statically sized part of the snapshot header */
+         offset = align_offset(offset, 8);
+-        if (bdrv_pread(bs->file, offset, &h, sizeof(h)) != sizeof(h))
++        ret = bdrv_pread(bs->file, offset, &h, sizeof(h));
++        if (ret < 0) {
+             goto fail;
++        }
++
+         offset += sizeof(h);
+         sn = s->snapshots + i;
+         sn->l1_table_offset = be64_to_cpu(h.l1_table_offset);
+@@ -94,25 +100,34 @@ int qcow2_read_snapshots(BlockDriverState *bs)
+         id_str_size = be16_to_cpu(h.id_str_size);
+         name_size = be16_to_cpu(h.name_size);
+ 
++        /* Skip extra data */
+         offset += extra_data_size;
+ 
++        /* Read snapshot ID */
+         sn->id_str = g_malloc(id_str_size + 1);
+-        if (bdrv_pread(bs->file, offset, sn->id_str, id_str_size) != id_str_size)
++        ret = bdrv_pread(bs->file, offset, sn->id_str, id_str_size);
++        if (ret < 0) {
+             goto fail;
++        }
+         offset += id_str_size;
+         sn->id_str[id_str_size] = '\0';
+ 
++        /* Read snapshot name */
+         sn->name = g_malloc(name_size + 1);
+-        if (bdrv_pread(bs->file, offset, sn->name, name_size) != name_size)
++        ret = bdrv_pread(bs->file, offset, sn->name, name_size);
++        if (ret < 0) {
+             goto fail;
++        }
+         offset += name_size;
+         sn->name[name_size] = '\0';
+     }
++
+     s->snapshots_size = offset - s->snapshots_offset;
+     return 0;
+- fail:
++
++fail:
+     qcow2_free_snapshots(bs);
+-    return -1;
++    return ret;
+ }
+ 
+ /* add at the end of the file a new list of snapshots */
+diff --git a/block/qcow2.c b/block/qcow2.c
+index aea80b5..be2d433 100644
+--- a/block/qcow2.c
++++ b/block/qcow2.c
+@@ -300,8 +300,9 @@ static int qcow2_open(BlockDriverState *bs, int flags)
+         }
+         bs->backing_file[len] = '\0';
+     }
+-    if (qcow2_read_snapshots(bs) < 0) {
+-        ret = -EINVAL;
++
++    ret = qcow2_read_snapshots(bs);
++    if (ret < 0) {
+         goto fail;
+     }
+ 
+-- 
+1.7.11.7
+

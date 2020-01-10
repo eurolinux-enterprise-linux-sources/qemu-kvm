@@ -1,0 +1,116 @@
+From e48d7b7c113e87f93f68aee0a939720d6802cf33 Mon Sep 17 00:00:00 2001
+Message-Id: <e48d7b7c113e87f93f68aee0a939720d6802cf33.1375955382.git.minovotn@redhat.com>
+In-Reply-To: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+References: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+From: Alon Levy <alevy@redhat.com>
+Date: Thu, 1 Aug 2013 11:53:26 +0200
+Subject: [PATCH 07/35] libcacard: Fix unchecked strdup() by converting to
+ g_strdup()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Alon Levy <alevy@redhat.com>
+Message-id: <1375358029-12968-8-git-send-email-alevy@redhat.com>
+Patchwork-id: 52897
+O-Subject: [RHEL-6.5 RHEL-6.4.z qemu-kvm v6 07/30] libcacard: Fix unchecked strdup() by converting to g_strdup()
+Bugzilla: 917860
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+From: Markus Armbruster <armbru@redhat.com>
+
+Note that we already free with g_free().
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit be168af860109a1ecc8526c5bbe0ace1536448b8)
+changes from upstream: upstream uses g_free, we use qemu_free, per [1]
+ changed two instances of freeing g_strdup from qemu_free to g_free
+ [1] https://developer.gnome.org/glib/2.30/glib-Memory-Allocation.html
+---
+ libcacard/vcard_emul_nss.c | 6 +++---
+ libcacard/vreader.c        | 4 ++--
+ libcacard/vscclient.c      | 4 ++--
+ 3 files changed, 7 insertions(+), 7 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ libcacard/vcard_emul_nss.c | 6 +++---
+ libcacard/vreader.c        | 4 ++--
+ libcacard/vscclient.c      | 4 ++--
+ 3 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/libcacard/vcard_emul_nss.c b/libcacard/vcard_emul_nss.c
+index 71f2ba3..2b4e9a2 100644
+--- a/libcacard/vcard_emul_nss.c
++++ b/libcacard/vcard_emul_nss.c
+@@ -335,7 +335,7 @@ vreader_emul_new(PK11SlotInfo *slot, VCardEmulType type, const char *params)
+ 
+     new_reader_emul->slot = PK11_ReferenceSlot(slot);
+     new_reader_emul->default_type = type;
+-    new_reader_emul->type_params = strdup(params);
++    new_reader_emul->type_params = g_strdup(params);
+     new_reader_emul->present = PR_FALSE;
+     new_reader_emul->series = 0;
+     new_reader_emul->saved_vcard = NULL;
+@@ -352,7 +352,7 @@ vreader_emul_delete(VReaderEmul *vreader_emul)
+         PK11_FreeSlot(vreader_emul->slot);
+     }
+     if (vreader_emul->type_params) {
+-        qemu_free(vreader_emul->type_params);
++        g_free(vreader_emul->type_params);
+     }
+     qemu_free(vreader_emul);
+ }
+@@ -859,7 +859,7 @@ vcard_emul_init(const VCardEmulOptions *options)
+     /* We should control this with options. For now we mirror out any
+      * removable hardware slot */
+     default_card_type = options->hw_card_type;
+-    default_type_params = strdup(options->hw_type_params);
++    default_type_params = g_strdup(options->hw_type_params);
+ 
+     SECMOD_GetReadLock(module_lock);
+     for (mlp = module_list; mlp; mlp = mlp->next) {
+diff --git a/libcacard/vreader.c b/libcacard/vreader.c
+index 4a0125b..defb4b7 100644
+--- a/libcacard/vreader.c
++++ b/libcacard/vreader.c
+@@ -49,7 +49,7 @@ vreader_new(const char *name, VReaderEmul *private,
+     reader = (VReader *)qemu_malloc(sizeof(VReader));
+     qemu_mutex_init(&reader->lock);
+     reader->reference_count = 1;
+-    reader->name = name ? strdup(name) : NULL;
++    reader->name = g_strdup(name);
+     reader->card = NULL;
+     reader->id = (vreader_id_t)-1;
+     reader->reader_private = private;
+@@ -87,7 +87,7 @@ vreader_free(VReader *reader)
+         vcard_free(reader->card);
+     }
+     if (reader->name) {
+-        qemu_free(reader->name);
++        g_free(reader->name);
+     }
+     if (reader->reader_private_free) {
+         reader->reader_private_free(reader->reader_private);
+diff --git a/libcacard/vscclient.c b/libcacard/vscclient.c
+index 3e49d83..112db27 100644
+--- a/libcacard/vscclient.c
++++ b/libcacard/vscclient.c
+@@ -503,8 +503,8 @@ main(
+         command_line_options = vcard_emul_options(emul_args);
+     }
+ 
+-    qemu_host = strdup(argv[argc - 2]);
+-    qemu_port = strdup(argv[argc - 1]);
++    qemu_host = g_strdup(argv[argc - 2]);
++    qemu_port = g_strdup(argv[argc - 1]);
+     sock = connect_to_qemu(qemu_host, qemu_port);
+     if (sock == -1) {
+         fprintf(stderr, "error opening socket, exiting.\n");
+-- 
+1.7.11.7
+

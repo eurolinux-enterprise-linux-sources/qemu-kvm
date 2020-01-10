@@ -1,0 +1,78 @@
+From c4b1c029f874e5fe50013a3c503e5e7cb924c636 Mon Sep 17 00:00:00 2001
+Message-Id: <c4b1c029f874e5fe50013a3c503e5e7cb924c636.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:22:04 -0500
+Subject: [CHANGE 21/42] qcow2: Calculate refcount block entry count
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-22-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64485
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 21/39] qcow2: Calculate refcount block entry count
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1129892
+
+The size of a refblock entry is (in theory) variable; calculate
+therefore the number of entries per refblock and the according bit shift
+(1 << x == entry count) when opening an image.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 1d13d654666a7fd6d6a85a0ce9285dbf0d0444c2)
+
+Conflict:
+	block/qcow2.c
+
+s->refcount_order does not exist downstream; just use 4 instead.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2.c | 4 ++++
+ block/qcow2.h | 2 ++
+ 2 files changed, 6 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2.c | 4 ++++
+ block/qcow2.h | 2 ++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/block/qcow2.c b/block/qcow2.c
+index b2c175f..321aec2 100644
+--- a/block/qcow2.c
++++ b/block/qcow2.c
+@@ -260,6 +260,10 @@ static int qcow2_open(BlockDriverState *bs, int flags)
+     s->cluster_sectors = 1 << (s->cluster_bits - 9);
+     s->l2_bits = s->cluster_bits - 3; /* L2 is always one cluster */
+     s->l2_size = 1 << s->l2_bits;
++    /* 2^(refcount_order - 3) is the refcount width in bytes
++     * (and refcount_order == 4) */
++    s->refcount_block_bits = s->cluster_bits - (4 - 3);
++    s->refcount_block_size = 1 << s->refcount_block_bits;
+     bs->total_sectors = header.size / 512;
+     s->csize_shift = (62 - (s->cluster_bits - 8));
+     s->csize_mask = (1 << (s->cluster_bits - 8)) - 1;
+diff --git a/block/qcow2.h b/block/qcow2.h
+index 767f373..7564057 100644
+--- a/block/qcow2.h
++++ b/block/qcow2.h
+@@ -133,6 +133,8 @@ typedef struct BDRVQcowState {
+     int l2_size;
+     int l1_size;
+     int l1_vm_state_index;
++    int refcount_block_bits;
++    int refcount_block_size;
+     int csize_shift;
+     int csize_mask;
+     uint64_t cluster_offset_mask;
+-- 
+2.1.0
+

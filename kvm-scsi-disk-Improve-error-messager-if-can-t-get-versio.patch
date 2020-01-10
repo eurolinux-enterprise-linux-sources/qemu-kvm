@@ -1,0 +1,56 @@
+From b9a0b72afcefa3b89353c49d47ba01a5d2ce8b3f Mon Sep 17 00:00:00 2001
+Message-Id: <b9a0b72afcefa3b89353c49d47ba01a5d2ce8b3f.1419012926.git.jen@redhat.com>
+In-Reply-To: <6542ba6203e55ba5fa5a30171f9fa0690468aa33.1419012926.git.jen@redhat.com>
+References: <6542ba6203e55ba5fa5a30171f9fa0690468aa33.1419012926.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Tue, 4 Nov 2014 12:30:41 -0600
+Subject: [CHANGE 4/6] scsi-disk: Improve error messager if can't get version
+ number
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1415104242-22499-2-git-send-email-famz@redhat.com>
+Patchwork-id: 62078
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 1/2] scsi-disk: Improve error messager if can't get version number
+Bugzilla: 1021785
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+More often it is that bdrv_ioctl fails due to not supported by driver or
+whatever reason, in this case we should be specific, because "interface
+too old" is very confusing.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 4bbeb8b173e8116851d5ececb93189ae34c68309)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/scsi-disk.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/hw/scsi-disk.c b/hw/scsi-disk.c
+index 9da1c6a..c7a02bb 100644
+--- a/hw/scsi-disk.c
++++ b/hw/scsi-disk.c
+@@ -1872,8 +1872,13 @@ static int scsi_block_initfn(SCSIDevice *dev)
+     }
+ 
+     /* check we are using a driver managing SG_IO (version 3 and after) */
+-    if (bdrv_ioctl(s->qdev.conf.bs, SG_GET_VERSION_NUM, &sg_version) < 0 ||
+-        sg_version < 30000) {
++    rc =  bdrv_ioctl(s->qdev.conf.bs, SG_GET_VERSION_NUM, &sg_version);
++    if (rc < 0) {
++        error_report("scsi-block: can not get version number: %s",
++                     strerror(-rc));
++        return -1;
++    }
++    if (sg_version < 30000) {
+         error_report("scsi-block: scsi generic interface too old");
+         return -1;
+     }
+-- 
+2.1.0
+

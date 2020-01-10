@@ -1,0 +1,73 @@
+From be7cc66c94d4b6c77f9f1e674d4783c7d1c3efac Mon Sep 17 00:00:00 2001
+Message-Id: <be7cc66c94d4b6c77f9f1e674d4783c7d1c3efac.1481738366.git.ymankad@redhat.com>
+From: Ladi Prosek <lprosek@redhat.com>
+Date: Mon, 5 Dec 2016 13:57:42 -0500
+Subject: [CHANGE 01/10] virtio: introduce virtqueue_unmap_sg()
+To: ymankad@redhat.com
+
+RH-Author: Ladi Prosek <lprosek@redhat.com>
+Message-id: <1480946267-6514-2-git-send-email-lprosek@redhat.com>
+Patchwork-id: 72983
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 1/6] virtio: introduce virtqueue_unmap_sg()
+Bugzilla: 1392520
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Ladi Prosek <lprosek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+
+From: Jason Wang <jasowang@redhat.com>
+
+Factor out sg unmapping logic. This will be reused by the patch that
+can discard descriptor.
+
+Cc: Michael S. Tsirkin <mst@redhat.com>
+Cc: Andrew James <andrew.james@hpe.com>
+Signed-off-by: Jason Wang <jasowang@redhat.com>
+Reviewed-by: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+(cherry picked from commit ce317461573bac12b10d67699b4ddf1f97cf066c)
+Signed-off-by: Ladi Prosek <lprosek@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ hw/virtio.c | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/hw/virtio.c b/hw/virtio.c
+index 4d52086..47637e0 100644
+--- a/hw/virtio.c
++++ b/hw/virtio.c
+@@ -234,14 +234,12 @@ int virtio_queue_empty(VirtQueue *vq)
+     return vring_avail_idx(vq) == vq->last_avail_idx;
+ }
+ 
+-void virtqueue_fill(VirtQueue *vq, const VirtQueueElement *elem,
+-                    unsigned int len, unsigned int idx)
++static void virtqueue_unmap_sg(VirtQueue *vq, const VirtQueueElement *elem,
++                               unsigned int len)
+ {
+     unsigned int offset;
+     int i;
+ 
+-    trace_virtqueue_fill(vq, elem, len, idx);
+-
+     offset = 0;
+     for (i = 0; i < elem->in_num; i++) {
+         size_t size = MIN(len - offset, elem->in_sg[i].iov_len);
+@@ -257,6 +255,14 @@ void virtqueue_fill(VirtQueue *vq, const VirtQueueElement *elem,
+         cpu_physical_memory_unmap(elem->out_sg[i].iov_base,
+                                   elem->out_sg[i].iov_len,
+                                   0, elem->out_sg[i].iov_len);
++}
++
++void virtqueue_fill(VirtQueue *vq, const VirtQueueElement *elem,
++                    unsigned int len, unsigned int idx)
++{
++    trace_virtqueue_fill(vq, elem, len, idx);
++
++    virtqueue_unmap_sg(vq, elem, len);
+ 
+     idx = (idx + vring_used_idx(vq)) % vq->vring.num;
+ 
+-- 
+2.7.4
+

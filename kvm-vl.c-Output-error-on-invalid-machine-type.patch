@@ -1,0 +1,79 @@
+From 9f5f57143f86308817f504d9af017e7dcfd66cfb Mon Sep 17 00:00:00 2001
+From: Miroslav Rezanina <mrezanin@redhat.com>
+Date: Wed, 11 Jun 2014 10:58:25 +0200
+Subject: [PATCH 18/26] vl.c: Output error on invalid machine type
+
+RH-Author: Miroslav Rezanina <mrezanin@redhat.com>
+Message-id: <1402484305-28212-1-git-send-email-mrezanin@redhat.com>
+Patchwork-id: 59195
+O-Subject: [RHEL-6.6 qemu-kvm PATCH] vl.c: Output error on invalid machine type
+Bugzilla: 990254
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Bandan Das <bsd@redhat.com>
+RH-Acked-by: Jeff Nelson <jen@redhat.com>
+
+From: Miroslav Rezanina <mrezanin@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=990254
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7565527
+
+Manual backport of 025172d56e11ba3d86d0937933a23aab3b8606b1:
+
+    vl.c: Output error on invalid machine type
+
+    Output error message using qemu's error_report() function when user
+    provides the invalid machine type on the command line. This also saves
+    time to find what issue is when you downgrade from one version of qemu
+    to another that doesn't support required machine type yet (the version
+    user downgraded to have to have this patch applied too, of course).
+
+    Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+    [Replace printf with error_printf, suggested by Markus Armbruster. - Paolo]
+    Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+
+RHEL 6 version has following differencies:
+ - missing is_help_option function
+ - M ? used instead of -machine help (as RHEL 6 use this way)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ vl.c | 17 +++++++++++------
+ 1 file changed, 11 insertions(+), 6 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ vl.c |   17 +++++++++++------
+ 1 files changed, 11 insertions(+), 6 deletions(-)
+
+diff --git a/vl.c b/vl.c
+index 01e08c0..f9b8d8b 100644
+--- a/vl.c
++++ b/vl.c
+@@ -5029,13 +5029,18 @@ static QEMUMachine *machine_parse(const char *name)
+     if (machine) {
+         return machine;
+     }
+-    printf("Supported machines are:\n");
+-    for (m = first_machine; m != NULL; m = m->next) {
+-        if (m->alias) {
+-            printf("%-10s %s (alias of %s)\n", m->alias, m->desc, m->name);
++    if (name && *name != '?') {
++        error_report("Unsupported machine type");
++        error_printf("Use -M ? to list supported machines!\n");
++    } else {   
++        printf("Supported machines are:\n");
++        for (m = first_machine; m != NULL; m = m->next) {
++            if (m->alias) {
++                printf("%-10s %s (alias of %s)\n", m->alias, m->desc, m->name);
++            }
++            printf("%-10s %s%s\n", m->name, m->desc,
++                   m->is_default ? " (default)" : "");
+         }
+-        printf("%-10s %s%s\n", m->name, m->desc,
+-               m->is_default ? " (default)" : "");
+     }
+     exit(!name || *name != '?');
+ }
+-- 
+1.7.1
+

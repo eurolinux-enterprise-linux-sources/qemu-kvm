@@ -1,0 +1,53 @@
+From 6d393ed11d082874050a5930b04633d9fac7a31f Mon Sep 17 00:00:00 2001
+Message-Id: <6d393ed11d082874050a5930b04633d9fac7a31f.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:28:06 +0200
+Subject: [PATCH 101/114] qemu-ga: fix confusing GAChannelMethod comparison
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-44-git-send-email-lersek@redhat.com>
+Patchwork-id: 51142
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 43/56] qemu-ga: fix confusing GAChannelMethod comparison
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@redhat.com>
+
+In commit 7868e26e5930f49ca942311885776b938dcf3b77
+("qemu-ga: add initial win32 support") support was added for qemu-ga on
+Windows using virtio-serial.  Other channel methods (ISA serial and UNIX
+domain socket) are not supported on Windows.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit 9e7c23db13b23febac4ba2d22419aa8f1884929e)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qga/channel-win32.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/channel-win32.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/qga/channel-win32.c b/qga/channel-win32.c
+index 16bf44a..7ed98d7 100644
+--- a/qga/channel-win32.c
++++ b/qga/channel-win32.c
+@@ -287,7 +287,7 @@ GIOStatus ga_channel_write_all(GAChannel *c, const char *buf, size_t size)
+ static gboolean ga_channel_open(GAChannel *c, GAChannelMethod method,
+                                 const gchar *path)
+ {
+-    if (!method == GA_CHANNEL_VIRTIO_SERIAL) {
++    if (method != GA_CHANNEL_VIRTIO_SERIAL) {
+         g_critical("unsupported communication method");
+         return false;
+     }
+-- 
+1.7.11.7
+

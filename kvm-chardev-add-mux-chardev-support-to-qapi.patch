@@ -1,0 +1,143 @@
+From 70fb2f6a8d18f313803d3a57e0141bb880bdc0a6 Mon Sep 17 00:00:00 2001
+Message-Id: <70fb2f6a8d18f313803d3a57e0141bb880bdc0a6.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:59 +0200
+Subject: [PATCH 48/65] chardev: add mux chardev support to qapi
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-49-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52172
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 48/65] chardev: add mux chardev support to qapi
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+This adds mux chardev support to the qapi and also makes the qapi-based
+chardev creation path handle the "mux=on" option correctly.
+(cherry picked from commit edb2fb3cc8b85ab956f366fc036ac12853984dae)
+---
+ qapi-schema.json |   14 +++++++++++++-
+ qemu-char.c      |   35 ++++++++++++++++++++++++++++++++---
+ 2 files changed, 45 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema.json | 14 +++++++++++++-
+ qemu-char.c      | 35 ++++++++++++++++++++++++++++++++---
+ 2 files changed, 45 insertions(+), 4 deletions(-)
+
+diff --git a/qapi-schema.json b/qapi-schema.json
+index 315b391..682f60f 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -456,6 +456,17 @@
+                                      '*telnet'  : 'bool' } }
+ 
+ ##
++# @ChardevMux:
++#
++# Configuration info for mux chardevs.
++#
++# @chardev: name of the base chardev.
++#
++# Since: 1.5
++##
++{ 'type': 'ChardevMux', 'data': { 'chardev' : 'str' } }
++
++##
+ # @ChardevBackend:
+ #
+ # Configuration info for the new chardev backend.
+@@ -469,7 +480,8 @@
+                                        'parallel': 'ChardevHostdev',
+                                        'socket' : 'ChardevSocket',
+                                        'pty'    : 'ChardevDummy',
+-                                       'null'   : 'ChardevDummy' } }
++                                       'null'   : 'ChardevDummy',
++                                       'mux'    : 'ChardevMux' } }
+ 
+ ##
+ # @ChardevReturn:
+diff --git a/qemu-char.c b/qemu-char.c
+index 56b5f1e..4c24853 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -2879,6 +2879,11 @@ CharDriverState *qemu_chr_new_from_opts(QemuOpts *opts,
+         ChardevBackend *backend = g_new0(ChardevBackend, 1);
+         ChardevReturn *ret = NULL;
+         const char *id = qemu_opts_id(opts);
++        const char *bid = NULL;
++
++        if (qemu_opt_get_bool(opts, "mux", 0)) {
++            bid = g_strdup_printf("%s-base", id);
++        }
+ 
+         chr = NULL;
+         backend->kind = cd->kind;
+@@ -2888,10 +2893,24 @@ CharDriverState *qemu_chr_new_from_opts(QemuOpts *opts,
+                 goto qapi_out;
+             }
+         }
+-        ret = qmp_chardev_add(qemu_opts_id(opts), backend, errp);
++        ret = qmp_chardev_add(bid ? bid : id, backend, errp);
+         if (error_is_set(errp)) {
+             goto qapi_out;
+         }
++
++        if (bid) {
++            qapi_free_ChardevBackend(backend);
++            qapi_free_ChardevReturn(ret);
++            backend = g_new0(ChardevBackend, 1);
++            backend->mux = g_new0(ChardevMux, 1);
++            backend->kind = CHARDEV_BACKEND_KIND_MUX;
++            backend->mux->chardev = g_strdup(bid);
++            ret = qmp_chardev_add(id, backend, errp);
++            if (error_is_set(errp)) {
++                goto qapi_out;
++            }
++        }
++
+         chr = qemu_chr_find(id);
+ 
+     qapi_out:
+@@ -3193,7 +3212,7 @@ ChardevReturn *qmp_chardev_add(const char *id, ChardevBackend *backend,
+                                Error **errp)
+ {
+     ChardevReturn *ret = g_new0(ChardevReturn, 1);
+-    CharDriverState *chr = NULL;
++    CharDriverState *base, *chr = NULL;
+ 
+     chr = qemu_chr_find(id);
+     if (chr) {
+@@ -3231,6 +3250,15 @@ ChardevReturn *qmp_chardev_add(const char *id, ChardevBackend *backend,
+     case CHARDEV_BACKEND_KIND_NULL:
+         chr = qemu_chr_open_null(NULL);
+         break;
++    case CHARDEV_BACKEND_KIND_MUX:
++        base = qemu_chr_find(backend->mux->chardev);
++        if (base == NULL) {
++            error_setg(errp, "mux: base chardev %s not found",
++                       backend->mux->chardev);
++            break;
++        }
++        chr = qemu_chr_open_mux(base);
++        break;
+     default:
+         error_setg(errp, "unknown chardev backend (%d)", backend->kind);
+         break;
+@@ -3241,7 +3269,8 @@ ChardevReturn *qmp_chardev_add(const char *id, ChardevBackend *backend,
+     }
+     if (chr) {
+         chr->label = g_strdup(id);
+-        chr->avail_connections = 1;
++        chr->avail_connections =
++            (backend->kind == CHARDEV_BACKEND_KIND_MUX) ? MAX_MUX : 1;
+         QTAILQ_INSERT_TAIL(&chardevs, chr, next);
+         return ret;
+     } else {
+-- 
+1.7.11.7
+

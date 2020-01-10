@@ -1,0 +1,65 @@
+From 522e07cf4d68cd672bbaad7a4f7759dd447e9614 Mon Sep 17 00:00:00 2001
+Message-Id: <522e07cf4d68cd672bbaad7a4f7759dd447e9614.1379425497.git.minovotn@redhat.com>
+In-Reply-To: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+References: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Fri, 6 Sep 2013 18:12:26 +0200
+Subject: [PATCH 06/25] cow: Use bdrv_(p)write_sync for metadata writes
+
+Use bdrv_(p)write_sync to ensure metadata integrity in case of a crash.
+While at it, correct the wrong usage of errno.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit b0ad5a455d7e5352d4c86ba945112011dbeadfb8)
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/cow.c | 20 +++++++++++---------
+ 1 file changed, 11 insertions(+), 9 deletions(-)
+
+diff --git a/block/cow.c b/block/cow.c
+index 05d6448..8820f84 100644
+--- a/block/cow.c
++++ b/block/cow.c
+@@ -110,17 +110,18 @@ static inline int cow_set_bit(BlockDriverState *bs, int64_t bitnum)
+ {
+     uint64_t offset = sizeof(struct cow_header_v2) + bitnum / 8;
+     uint8_t bitmap;
++    int ret;
+ 
+-    if (bdrv_pread(bs->file, offset, &bitmap, sizeof(bitmap)) !=
+-	    sizeof(bitmap)) {
+-       return -errno;
++    ret = bdrv_pread(bs->file, offset, &bitmap, sizeof(bitmap));
++    if (ret < 0) {
++       return ret;
+     }
+ 
+     bitmap |= (1 << (bitnum % 8));
+ 
+-    if (bdrv_pwrite(bs->file, offset, &bitmap, sizeof(bitmap)) !=
+-	    sizeof(bitmap)) {
+-       return -errno;
++    ret = bdrv_pwrite_sync(bs->file, offset, &bitmap, sizeof(bitmap));
++    if (ret < 0) {
++       return ret;
+     }
+     return 0;
+ }
+@@ -129,10 +130,11 @@ static inline int is_bit_set(BlockDriverState *bs, int64_t bitnum)
+ {
+     uint64_t offset = sizeof(struct cow_header_v2) + bitnum / 8;
+     uint8_t bitmap;
++    int ret;
+ 
+-    if (bdrv_pread(bs->file, offset, &bitmap, sizeof(bitmap)) !=
+-	    sizeof(bitmap)) {
+-       return -errno;
++    ret = bdrv_pread(bs->file, offset, &bitmap, sizeof(bitmap));
++    if (ret < 0) {
++       return ret;
+     }
+ 
+     return !!(bitmap & (1 << (bitnum % 8)));
+-- 
+1.7.11.7
+

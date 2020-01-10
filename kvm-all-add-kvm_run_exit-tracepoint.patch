@@ -1,0 +1,71 @@
+From 430d3232455b40d993e28ab4d87ecaa44b506aec Mon Sep 17 00:00:00 2001
+Message-Id: <430d3232455b40d993e28ab4d87ecaa44b506aec.1376492227.git.minovotn@redhat.com>
+In-Reply-To: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+References: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Tue, 13 Aug 2013 16:49:11 +0200
+Subject: [PATCH 04/22] kvm-all: add kvm_run_exit tracepoint
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1376412551-32226-5-git-send-email-stefanha@redhat.com>
+Patchwork-id: 53275
+O-Subject: [PATCH RHEL6.5 qemu-kvm v2 4/4] kvm-all: add kvm_run_exit tracepoint
+Bugzilla: 903429
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: Kazuya Saito <saito.kazuya@jp.fujitsu.com>
+
+This patch enable us to know exit reason of KVM_RUN. It will help us
+know where the trouble is caused.
+
+Signed-off-by: Kazuya Saito <saito.kazuya@jp.fujitsu.com>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit b76ac80a5ca9f2e19405419172c0dcaf0370d4f5)
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Conflicts:
+  kvm-all.c
+  The exit reason handling is done in qemu-kvm.c in RHEL and the current
+  state is still called 'env' instead of CPUState.
+
+  trace-events
+  Git was confused again but the actual change is identical to upstream.
+---
+ qemu-kvm.c   | 1 +
+ trace-events | 1 +
+ 2 files changed, 2 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-kvm.c   | 1 +
+ trace-events | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/qemu-kvm.c b/qemu-kvm.c
+index 380dd31..21b30f6 100644
+--- a/qemu-kvm.c
++++ b/qemu-kvm.c
+@@ -1030,6 +1030,7 @@ int kvm_run(CPUState *env)
+     }
+ #endif
+     if (1) {
++        trace_kvm_run_exit(env->cpu_index, run->exit_reason);
+         switch (run->exit_reason) {
+         case KVM_EXIT_UNKNOWN:
+             r = handle_unhandled(run->hw.hardware_exit_reason);
+diff --git a/trace-events b/trace-events
+index 9039e72..8bf9d8a 100644
+--- a/trace-events
++++ b/trace-events
+@@ -311,3 +311,4 @@ disable migrate_set_state(int new_state) "new state %d"
+ disable kvm_ioctl(int type, void *arg) "type %d, arg %p"
+ disable kvm_vm_ioctl(int type, void *arg) "type %d, arg %p"
+ disable kvm_vcpu_ioctl(int cpu_index, int type, void *arg) "cpu_index %d, type %d, arg %p"
++disable kvm_run_exit(int cpu_index, uint32_t reason) "cpu_index %d, reason %d"
+-- 
+1.7.11.7
+

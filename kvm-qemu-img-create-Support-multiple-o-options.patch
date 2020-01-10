@@ -1,0 +1,101 @@
+From c736c08b3736f554ba2ac95916641b1d58193ff4 Mon Sep 17 00:00:00 2001
+Message-Id: <c736c08b3736f554ba2ac95916641b1d58193ff4.1425657843.git.jen@redhat.com>
+In-Reply-To: <f6cf12f0d166001c7958ddc904eff181f03da5e4.1425657843.git.jen@redhat.com>
+References: <f6cf12f0d166001c7958ddc904eff181f03da5e4.1425657843.git.jen@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Fri, 21 Feb 2014 16:24:04 +0100
+Subject: [CHANGE 07/11] qemu-img create: Support multiple -o options
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+If you specified multiple -o options for qemu-img create, it would
+silently ignore all but the last one. This patch fixes the problem.
+
+Now multiple -o options has the same meaning as having a single option
+with all settings in the order of their respective -o options.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Jeff Cody <jcody@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+(cherry picked from commit 77386bf6ebe67164a2d102b207fb3bc11af8c1e8)
+
+Conflicts:
+	qemu-img.c
+
+Conflicts because RHEL 6 doesn't have commit c8057f95 ('Support 'help'
+as a synonym for '?' in command line options'), which introduced
+is_help_option().
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ qemu-img.c | 28 ++++++++++++++++++++++------
+ 1 file changed, 22 insertions(+), 6 deletions(-)
+
+diff --git a/qemu-img.c b/qemu-img.c
+index 168cd3e..ffd32b7 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -338,13 +338,23 @@ static int img_create(int argc, char **argv)
+         case 'e':
+             error_report("qemu-img: option -e is deprecated, please use \'-o "
+                   "encryption\' instead!");
+-            return 1;
++            goto fail;
+         case '6':
+             error_report("qemu-img: option -6 is deprecated, please use \'-o "
+                   "compat6\' instead!");
+-            return 1;
++            goto fail;
+         case 'o':
+-            options = optarg;
++            if (!is_valid_option_list(optarg)) {
++                error_report("Invalid option list: %s", optarg);
++                goto fail;
++            }
++            if (!options) {
++                options = g_strdup(optarg);
++            } else {
++                char *old_options = options;
++                options = g_strdup_printf("%s,%s", options, optarg);
++                g_free(old_options);
++            }
+             break;
+         }
+     }
+@@ -368,12 +378,13 @@ static int img_create(int argc, char **argv)
+                       "G or T suffixes for ");
+                 error_report("kilobytes, megabytes, gigabytes and terabytes.");
+             }
+-            return 1;
++            goto fail;
+         }
+         img_size = (uint64_t)sval;
+     }
+ 
+-    if (options && !strcmp(options, "?")) {
++    if (options && has_help_option(options)) {
++        g_free(options);
+         return print_block_option_help(filename, fmt);
+     }
+ 
+@@ -382,10 +393,15 @@ static int img_create(int argc, char **argv)
+     if (error_is_set(&local_err)) {
+         error_report("%s", error_get_pretty(local_err));
+         error_free(local_err);
+-        return 1;
++        goto fail;
+     }
+ 
++    g_free(options);
+     return 0;
++
++fail:
++    g_free(options);
++    return 1;
+ }
+ 
+ static void dump_json_image_check(ImageCheck *check)
+-- 
+2.1.0
+

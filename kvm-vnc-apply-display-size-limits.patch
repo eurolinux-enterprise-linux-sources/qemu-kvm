@@ -1,0 +1,144 @@
+From d02e6a28e26fe35ae45f932d456b24cda30cbd0e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marc-Andr=C3=A9=20Lureau?= <marcandre.lureau@redhat.com>
+Date: Fri, 3 Mar 2017 10:32:06 +0000
+Subject: [PATCH 2/2] vnc: apply display size limits
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Marc-André Lureau <marcandre.lureau@redhat.com>
+Message-id: <20170303103206.17228-1-marcandre.lureau@redhat.com>
+Patchwork-id: 74188
+O-Subject: [RHEL-6.9 qemu-kvm PATCH v3] vnc: apply display size limits
+Bugzilla: 1400438 1425943
+RH-Acked-by: Daniel P. Berrange <berrange@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Laurent Vivier <lvivier@redhat.com>
+
+BZ: https://bugzilla.redhat.com/show_bug.cgi?id=1400438
+Brew: https://brewweb.engineering.redhat.com/brew/taskinfo?taskID=12678248
+Upstream-status: N/A
+
+VNC server has limits VNC_MAX_WIDTH/VNC_MAX_HEIGHT that are not
+respected in various code paths.  This may lead to crash when the guest
+surface is larger than the VNC limits. Apply VNC limits consistantly to
+avoid buffer-overflow, such as this one:
+
+vnc.c:464:33: runtime error: index 2049 out of bounds for type 'uint32_t [2048][5]'
+=================================================================
+==10719==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x62e00000a474 at pc 0x0000007a6854 bp 0x7fffffffccb0 sp 0x7fffffffcca0
+READ of size 4 at 0x62e00000a474 thread T0
+    #0 0x7a6853 in vnc_set_bit /home/elmarco/src/qemu/vnc.c:403
+    #1 0x7a72f1 in vnc_dpy_update /home/elmarco/src/qemu/vnc.c:464
+    #2 0xa58130 in dpy_update /home/elmarco/src/qemu/console.h:242
+    #3 0xa78990 in vga_draw_graphic /home/elmarco/src/qemu/hw/vga.c:1965
+    #4 0xa7939e in vga_update_display /home/elmarco/src/qemu/hw/vga.c:2035
+    #5 0x68cdcc in vga_hw_update /home/elmarco/src/qemu/console.c:167
+    #6 0x7c41a0 in vnc_refresh /home/elmarco/src/qemu/vnc.c:2526
+    #7 0x43a095 in qemu_run_timers /home/elmarco/src/qemu/vl.c:1341
+    #8 0x4447b7 in main_loop_wait /home/elmarco/src/qemu/vl.c:4095
+    #9 0x4e1f66 in kvm_main_loop /home/elmarco/src/qemu/qemu-kvm.c:2258
+    #10 0x4454a4 in main_loop /home/elmarco/src/qemu/vl.c:4273
+    #11 0x44faf6 in main /home/elmarco/src/qemu/vl.c:6731
+    #12 0x7ffff2db3400 in __libc_start_main (/lib64/libc.so.6+0x20400)
+    #13 0x434499 in _start (/home/elmarco/src/qemu/x86_64-softmmu/qemu-system-x86_64+0x434499)
+
+Note: This problem doesn't occur since upstream commit
+9f64916da20eea67121d544698676295bbb105a7.
+I have limited experience with qemu VNC code. Upstream has diverged a
+lot, making backport difficult.  A backport of that commit would also
+add direct pixman dependency to the rhel6 build (currently indirect via
+spice).
+
+Signed-off-by: Marc-André Lureau <marcandre.lureau@redhat.com>
+Signed-off-by: Danilo C. L. de Paula <ddepaula@redhat.com>
+---
+ vnc.c | 37 ++++++++++++++++++++++++++++---------
+ 1 file changed, 28 insertions(+), 9 deletions(-)
+
+diff --git a/vnc.c b/vnc.c
+index 30a4092..2c4fe2c 100644
+--- a/vnc.c
++++ b/vnc.c
+@@ -46,6 +46,19 @@
+     } \
+ }
+ 
++static inline int vnc_ds_get_width(DisplayState *ds)
++{
++    return MIN(ds_get_width(ds), VNC_MAX_WIDTH);
++}
++
++static inline int vnc_ds_get_height(DisplayState *ds)
++{
++    return MIN(ds_get_height(ds), VNC_MAX_HEIGHT);
++}
++
++#define ds_get_width(d) vnc_ds_get_width(d)
++#define ds_get_height(d) vnc_ds_get_height(d)
++
+ static void vnc_release_modifiers(VncState *vs);
+ 
+ static VncDisplay *vnc_display; /* needed for info vnc */
+@@ -441,7 +454,7 @@ static inline int vnc_and_bits(const uint32_t *d1, const uint32_t *d2,
+ 
+ static void vnc_dpy_update(DisplayState *ds, int x, int y, int w, int h)
+ {
+-    int i;
++    int i, ds_width, ds_height;
+     VncDisplay *vd = ds->opaque;
+     struct VncSurface *s = &vd->guest;
+ 
+@@ -454,10 +467,14 @@ static void vnc_dpy_update(DisplayState *ds, int x, int y, int w, int h)
+     w += (x % 16);
+     x -= (x % 16);
+ 
+-    x = MIN(x, s->ds->width);
+-    y = MIN(y, s->ds->height);
+-    w = MIN(x + w, s->ds->width) - x;
+-    h = MIN(h, s->ds->height);
++    ds_width = MIN(s->ds->width, VNC_MAX_WIDTH);
++    ds_height = MIN(s->ds->height, VNC_MAX_HEIGHT);
++
++    x = MIN(x, ds_width);
++    y = MIN(y, ds_height);
++
++    w = MIN(x + w, ds_width) - x;
++    h = MIN(h, ds_height);
+ 
+     for (; y < h; y++)
+         for (i = 0; i < w; i += 16)
+@@ -2474,7 +2491,7 @@ static int vnc_refresh_server_surface(VncDisplay *vd)
+     int y;
+     uint8_t *guest_row;
+     uint8_t *server_row;
+-    int cmp_bytes;
++    int cmp_bytes, guest_width, guest_height;
+     uint32_t width_mask[VNC_DIRTY_WORDS];
+     VncState *vs;
+     int has_dirty = 0;
+@@ -2488,7 +2505,9 @@ static int vnc_refresh_server_surface(VncDisplay *vd)
+     cmp_bytes = 16 * ds_get_bytes_per_pixel(vd->ds);
+     guest_row  = vd->guest.ds->data;
+     server_row = vd->server->data;
+-    for (y = 0; y < vd->guest.ds->height; y++) {
++    guest_height = MIN(vd->guest.ds->height, VNC_MAX_HEIGHT);
++    guest_width = MIN(vd->guest.ds->width, VNC_MAX_WIDTH);
++    for (y = 0; y < guest_height; y++) {
+         if (vnc_and_bits(vd->guest.dirty[y], width_mask, VNC_DIRTY_WORDS)) {
+             int x;
+             uint8_t *guest_ptr;
+@@ -2497,8 +2516,8 @@ static int vnc_refresh_server_surface(VncDisplay *vd)
+             guest_ptr  = guest_row;
+             server_ptr = server_row;
+ 
+-            for (x = 0; x + 15 < vd->guest.ds->width;
+-                    x += 16, guest_ptr += cmp_bytes, server_ptr += cmp_bytes) {
++            for (x = 0; x + 15 < guest_width;
++                 x += 16, guest_ptr += cmp_bytes, server_ptr += cmp_bytes) {
+                 if (!vnc_get_bit(vd->guest.dirty[y], (x / 16)))
+                     continue;
+                 vnc_clear_bit(vd->guest.dirty[y], (x / 16));
+-- 
+1.8.3.1
+

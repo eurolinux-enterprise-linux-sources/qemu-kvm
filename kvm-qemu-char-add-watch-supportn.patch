@@ -1,0 +1,131 @@
+From 818d9f81c84698733c223afbeb91fafd11650d74 Mon Sep 17 00:00:00 2001
+Message-Id: <818d9f81c84698733c223afbeb91fafd11650d74.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:12 +0200
+Subject: [PATCH 38/65] qemu-char: add watch support
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <c3b028cce6c9a421620730c0be158d317d11b3f9.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50816
+O-Subject: [RHEL6.5 qemu-kvm PATCH 38/65] qemu-char: add watch support
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+This allows a front-end to request for a callback when the backend
+is writable again.
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Message-id: 96f93c0f741064604bbb6389ce962191120af8b7.1362505276.git.amit.shah@redhat.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 23673ca740e0eda66901ca801a5a901df378b063)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ qemu-char.c | 32 +++++++++++++++++++++++++++++++-
+ qemu-char.h |  4 ++++
+ 2 files changed, 35 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 32 +++++++++++++++++++++++++++++++-
+ qemu-char.h |  4 ++++
+ 2 files changed, 35 insertions(+), 1 deletion(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 9839084..56d2881 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -684,7 +684,11 @@ static int io_channel_send_all(GIOChannel *fd, const void *_buf, int len1)
+         status = g_io_channel_write_chars(fd, (const gchar *)buf, len,
+                                           &bytes_written, NULL);
+         if (status != G_IO_STATUS_NORMAL) {
+-            if (status != G_IO_STATUS_AGAIN) {
++            if (status == G_IO_STATUS_AGAIN) {
++                errno = EAGAIN;
++                return -1;
++            } else {
++                errno = EINVAL;
+                 return -1;
+             }
+         } else if (status == G_IO_STATUS_EOF) {
+@@ -751,6 +755,12 @@ static int fd_chr_read_poll(void *opaque)
+     return s->max_size;
+ }
+ 
++static GSource *fd_chr_add_watch(CharDriverState *chr, GIOCondition cond)
++{
++    FDCharDriver *s = chr->opaque;
++    return g_io_create_watch(s->fd_out, cond);
++}
++
+ static void fd_chr_update_read_handler(CharDriverState *chr)
+ {
+     FDCharDriver *s = chr->opaque;
+@@ -794,8 +804,10 @@ static CharDriverState *qemu_chr_open_fd(int fd_in, int fd_out)
+     s = g_malloc0(sizeof(FDCharDriver));
+     s->fd_in = io_channel_from_fd(fd_in);
+     s->fd_out = io_channel_from_fd(fd_out);
++    fcntl(fd_out, F_SETFL, O_NONBLOCK);
+     s->chr = chr;
+     chr->opaque = s;
++    chr->chr_add_watch = fd_chr_add_watch;
+     chr->chr_write = fd_chr_write;
+     chr->chr_update_read_handler = fd_chr_update_read_handler;
+     chr->chr_close = fd_chr_close;
+@@ -2771,6 +2783,24 @@ void qemu_chr_fe_close(struct CharDriverState *chr)
+     }
+ }
+ 
++guint qemu_chr_fe_add_watch(CharDriverState *s, GIOCondition cond,
++                            GIOFunc func, void *user_data)
++{
++    GSource *src;
++    guint tag;
++
++    if (s->chr_add_watch == NULL) {
++        return -ENOSYS;
++    }
++
++    src = s->chr_add_watch(s, cond);
++    g_source_set_callback(src, (GSourceFunc)func, user_data, NULL);
++    tag = g_source_attach(src, NULL);
++    g_source_unref(src);
++
++    return tag;
++}
++
+ void qemu_chr_delete(CharDriverState *chr)
+ {
+     QTAILQ_REMOVE(&chardevs, chr, next);
+diff --git a/qemu-char.h b/qemu-char.h
+index db48b35..5bbe0cc 100644
+--- a/qemu-char.h
++++ b/qemu-char.h
+@@ -54,6 +54,7 @@ typedef void IOEventHandler(void *opaque, int event);
+ struct CharDriverState {
+     void (*init)(struct CharDriverState *s);
+     int (*chr_write)(struct CharDriverState *s, const uint8_t *buf, int len);
++    GSource *(*chr_add_watch)(struct CharDriverState *s, GIOCondition cond);
+     void (*chr_update_read_handler)(struct CharDriverState *s);
+     int (*chr_ioctl)(struct CharDriverState *s, int cmd, void *arg);
+     int (*get_msgfd)(struct CharDriverState *s);
+@@ -149,6 +150,9 @@ void qemu_chr_fe_close(struct CharDriverState *chr);
+ void qemu_chr_fe_printf(CharDriverState *s, const char *fmt, ...)
+     GCC_FMT_ATTR(2, 3);
+ 
++guint qemu_chr_fe_add_watch(CharDriverState *s, GIOCondition cond,
++                            GIOFunc func, void *user_data);
++
+ /**
+  * @qemu_chr_fe_write:
+  *
+-- 
+1.7.11.7
+

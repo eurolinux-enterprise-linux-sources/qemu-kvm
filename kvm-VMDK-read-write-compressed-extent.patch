@@ -1,0 +1,196 @@
+From 4cf46617a0311ccdca97e776326d62813960d9e7 Mon Sep 17 00:00:00 2001
+Message-Id: <4cf46617a0311ccdca97e776326d62813960d9e7.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:36 +0200
+Subject: [PATCH 21/47] VMDK: read/write compressed extent
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-22-git-send-email-famz@redhat.com>
+Patchwork-id: 51457
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 21/47] VMDK: read/write compressed extent
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Fam Zheng <famcool@gmail.com>
+
+Add support for reading/writing compressed extent.
+
+Signed-off-by: Fam Zheng <famcool@gmail.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 2b2c8c5dec6ba0834a70ac1533272ff244a0abe1)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 111 +++++++++++++++++++++++++++++++++++++++++++++++++++++------
+ 1 file changed, 100 insertions(+), 11 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 111 +++++++++++++++++++++++++++++++++++++++++++++++++++++------
+ 1 file changed, 100 insertions(+), 11 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 332b556..1262c59 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -778,10 +778,12 @@ static int get_cluster_offset(BlockDriverState *bs,
+ 
+         /* Avoid the L2 tables update for the images that have snapshots. */
+         *cluster_offset = bdrv_getlength(extent->file);
+-        bdrv_truncate(
+-            extent->file,
+-            *cluster_offset + (extent->cluster_sectors << 9)
+-        );
++        if (!extent->compressed) {
++            bdrv_truncate(
++                extent->file,
++                *cluster_offset + (extent->cluster_sectors << 9)
++            );
++        }
+ 
+         *cluster_offset >>= 9;
+         tmp = cpu_to_le32(*cluster_offset);
+@@ -859,9 +861,28 @@ static int vmdk_write_extent(VmdkExtent *extent, int64_t cluster_offset,
+                             int nb_sectors, int64_t sector_num)
+ {
+     int ret;
++    VmdkGrainMarker *data = NULL;
++    uLongf buf_len;
+     const uint8_t *write_buf = buf;
+     int write_len = nb_sectors * 512;
+ 
++    if (extent->compressed) {
++        if (!extent->has_marker) {
++            ret = -EINVAL;
++            goto out;
++        }
++        buf_len = (extent->cluster_sectors << 9) * 2;
++        data = g_malloc(buf_len + sizeof(VmdkGrainMarker));
++        if (compress(data->data, &buf_len, buf, nb_sectors << 9) != Z_OK ||
++                buf_len == 0) {
++            ret = -EINVAL;
++            goto out;
++        }
++        data->lba = sector_num;
++        data->size = buf_len;
++        write_buf = (uint8_t *)data;
++        write_len = buf_len + sizeof(VmdkGrainMarker);
++    }
+     ret = bdrv_pwrite(extent->file,
+                         cluster_offset + offset_in_cluster,
+                         write_buf,
+@@ -872,6 +893,7 @@ static int vmdk_write_extent(VmdkExtent *extent, int64_t cluster_offset,
+     }
+     ret = 0;
+  out:
++    g_free(data);
+     return ret;
+ }
+ 
+@@ -880,15 +902,65 @@ static int vmdk_read_extent(VmdkExtent *extent, int64_t cluster_offset,
+                             int nb_sectors)
+ {
+     int ret;
++    int cluster_bytes, buf_bytes;
++    uint8_t *cluster_buf, *compressed_data;
++    uint8_t *uncomp_buf;
++    uint32_t data_len;
++    VmdkGrainMarker *marker;
++    uLongf buf_len;
+ 
++
++    if (!extent->compressed) {
++        ret = bdrv_pread(extent->file,
++                          cluster_offset + offset_in_cluster,
++                          buf, nb_sectors * 512);
++        if (ret == nb_sectors * 512) {
++            return 0;
++        } else {
++            return -EIO;
++        }
++    }
++    cluster_bytes = extent->cluster_sectors * 512;
++    /* Read two clusters in case GrainMarker + compressed data > one cluster */
++    buf_bytes = cluster_bytes * 2;
++    cluster_buf = g_malloc(buf_bytes);
++    uncomp_buf = g_malloc(cluster_bytes);
+     ret = bdrv_pread(extent->file,
+-                      cluster_offset + offset_in_cluster,
+-                      buf, nb_sectors * 512);
+-    if (ret == nb_sectors * 512) {
+-        return 0;
+-    } else {
+-        return -EIO;
++                cluster_offset,
++                cluster_buf, buf_bytes);
++    if (ret < 0) {
++        goto out;
+     }
++    compressed_data = cluster_buf;
++    buf_len = cluster_bytes;
++    data_len = cluster_bytes;
++    if (extent->has_marker) {
++        marker = (VmdkGrainMarker *)cluster_buf;
++        compressed_data = marker->data;
++        data_len = le32_to_cpu(marker->size);
++    }
++    if (!data_len || data_len > buf_bytes) {
++        ret = -EINVAL;
++        goto out;
++    }
++    ret = uncompress(uncomp_buf, &buf_len, compressed_data, data_len);
++    if (ret != Z_OK) {
++        ret = -EINVAL;
++        goto out;
++
++    }
++    if (offset_in_cluster < 0 ||
++            offset_in_cluster + nb_sectors * 512 > buf_len) {
++        ret = -EINVAL;
++        goto out;
++    }
++    memcpy(buf, uncomp_buf + offset_in_cluster, nb_sectors * 512);
++    ret = 0;
++
++ out:
++    g_free(uncomp_buf);
++    g_free(cluster_buf);
++    return ret;
+ }
+ 
+ static int vmdk_read(BlockDriverState *bs, int64_t sector_num,
+@@ -979,8 +1051,25 @@ static int vmdk_write(BlockDriverState *bs, int64_t sector_num,
+                                 bs,
+                                 extent,
+                                 &m_data,
+-                                sector_num << 9, 1,
++                                sector_num << 9, !extent->compressed,
+                                 &cluster_offset);
++        if (extent->compressed) {
++            if (ret == 0) {
++                /* Refuse write to allocated cluster for streamOptimized */
++                fprintf(stderr,
++                        "VMDK: can't write to allocated cluster"
++                        " for streamOptimized\n");
++                return -EIO;
++            } else {
++                /* allocate */
++                ret = get_cluster_offset(
++                                        bs,
++                                        extent,
++                                        &m_data,
++                                        sector_num << 9, 1,
++                                        &cluster_offset);
++            }
++        }
+         if (ret) {
+             return -EINVAL;
+         }
+-- 
+1.7.11.7
+

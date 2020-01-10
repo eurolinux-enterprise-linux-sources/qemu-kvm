@@ -1,0 +1,131 @@
+From 9ade1429890217e9e1460893250166e73b5f7ab6 Mon Sep 17 00:00:00 2001
+Message-Id: <9ade1429890217e9e1460893250166e73b5f7ab6.1484162498.git.ymankad@redhat.com>
+In-Reply-To: <6da299cbd22aeea340aaabe3e57b8efc46a477f6.1484162498.git.ymankad@redhat.com>
+References: <6da299cbd22aeea340aaabe3e57b8efc46a477f6.1484162498.git.ymankad@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Mon, 9 Jan 2017 20:20:59 -0500
+Subject: [CHANGE 3/7] iotests: Fix 026's reference output
+To: ymankad@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <20170109202103.28932-4-mreitz@redhat.com>
+Patchwork-id: 73226
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 3/7] iotests: Fix 026's reference output
+Bugzilla: 1405882
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+This is a downstream-only patch.
+
+Downstream's metadata caching is a bit different from upstream, so
+instead of receiving error messages when closing the image (see
+3b5e14c76a6bb142bf250ddf99e24a0ac8c7bc12 upstream), we get them
+immediately when updating a cluster's refcount.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ tests/qemu-iotests/026.out | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/tests/qemu-iotests/026.out b/tests/qemu-iotests/026.out
+index f7c78e7..019aed9 100644
+--- a/tests/qemu-iotests/026.out
++++ b/tests/qemu-iotests/026.out
+@@ -14,6 +14,7 @@ No errors were found on the image.
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=1073741824 
+ 
+ Event: l1_update; errno: 5; imm: off; once: off; write 
++qcow2_free_clusters failed: Input/output error
+ write failed: Input/output error
+ 
+ 1 leaked clusters were found on the image.
+@@ -21,6 +22,7 @@ This means waste of disk space, but no harm to data.
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=1073741824 
+ 
+ Event: l1_update; errno: 5; imm: off; once: off; write -b
++qcow2_free_clusters failed: Input/output error
+ write failed: Input/output error
+ 
+ 1 leaked clusters were found on the image.
+@@ -38,6 +40,7 @@ No errors were found on the image.
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=1073741824 
+ 
+ Event: l1_update; errno: 28; imm: off; once: off; write 
++qcow2_free_clusters failed: No space left on device
+ write failed: No space left on device
+ 
+ 1 leaked clusters were found on the image.
+@@ -45,6 +48,7 @@ This means waste of disk space, but no harm to data.
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=1073741824 
+ 
+ Event: l1_update; errno: 28; imm: off; once: off; write -b
++qcow2_free_clusters failed: No space left on device
+ write failed: No space left on device
+ 
+ 1 leaked clusters were found on the image.
+@@ -182,11 +186,13 @@ No errors were found on the image.
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=1073741824 
+ 
+ Event: l2_alloc.write; errno: 5; imm: off; once: off; write 
++qcow2_free_clusters failed: Input/output error
+ write failed: Input/output error
+ No errors were found on the image.
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=1073741824 
+ 
+ Event: l2_alloc.write; errno: 5; imm: off; once: off; write -b
++qcow2_free_clusters failed: Input/output error
+ write failed: Input/output error
+ 
+ 1 leaked clusters were found on the image.
+@@ -204,11 +210,13 @@ No errors were found on the image.
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=1073741824 
+ 
+ Event: l2_alloc.write; errno: 28; imm: off; once: off; write 
++qcow2_free_clusters failed: No space left on device
+ write failed: No space left on device
+ No errors were found on the image.
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=1073741824 
+ 
+ Event: l2_alloc.write; errno: 28; imm: off; once: off; write -b
++qcow2_free_clusters failed: No space left on device
+ write failed: No space left on device
+ 
+ 1 leaked clusters were found on the image.
+@@ -563,6 +571,7 @@ No errors were found on the image.
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=1073741824 
+ 
+ Event: l1_grow.write_table; errno: 5; imm: off; once: off
++qcow2_free_clusters failed: Input/output error
+ write failed: Input/output error
+ No errors were found on the image.
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=1073741824 
+@@ -573,6 +582,7 @@ No errors were found on the image.
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=1073741824 
+ 
+ Event: l1_grow.write_table; errno: 28; imm: off; once: off
++qcow2_free_clusters failed: No space left on device
+ write failed: No space left on device
+ No errors were found on the image.
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=1073741824 
+@@ -583,6 +593,7 @@ No errors were found on the image.
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=1073741824 
+ 
+ Event: l1_grow.activate_table; errno: 5; imm: off; once: off
++qcow2_free_clusters failed: Input/output error
+ write failed: Input/output error
+ 
+ 96 leaked clusters were found on the image.
+@@ -595,6 +606,7 @@ No errors were found on the image.
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=1073741824 
+ 
+ Event: l1_grow.activate_table; errno: 28; imm: off; once: off
++qcow2_free_clusters failed: No space left on device
+ write failed: No space left on device
+ 
+ 96 leaked clusters were found on the image.
+-- 
+2.7.4
+

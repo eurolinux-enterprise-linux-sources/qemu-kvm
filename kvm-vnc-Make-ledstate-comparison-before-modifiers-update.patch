@@ -1,0 +1,59 @@
+From b28c0dccd08b7cfd38511af3ce7c93d10718cabc Mon Sep 17 00:00:00 2001
+Message-Id: <b28c0dccd08b7cfd38511af3ce7c93d10718cabc.1369994527.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Thu, 30 May 2013 09:41:12 +0200
+Subject: [PATCH] vnc: Make ledstate comparison before modifiers updated
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1369906872-10207-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 51690
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] vnc: Make ledstate comparison before modifiers updated
+Bugzilla: 955302
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Lei Li <lilei@linux.vnet.ibm.com>
+
+The ledstate should be compared before modifiers updated,
+otherwise the ledstate would be the same as current_led_state.
+
+Reported-by: Gerd Hoffmann <kraxel@redhat.com>
+Signed-off-by: Lei Li <lilei@linux.vnet.ibm.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Message-id: 1368606040-11950-1-git-send-email-lilei@linux.vnet.ibm.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 1483adcf6ac978656718d4383d909c96dce395a6)
+---
+ vnc.c |    3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ vnc.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/vnc.c b/vnc.c
+index 11c26e5..61aff19 100644
+--- a/vnc.c
++++ b/vnc.c
+@@ -1554,6 +1554,7 @@ static void kbd_leds(void *opaque, int ledstate)
+ {
+     VncState *vs = opaque;
+     int caps, num, scr;
++    bool has_changed = (ledstate != current_led_state(vs));
+ 
+     caps = ledstate & QEMU_CAPS_LOCK_LED ? 1 : 0;
+     num  = ledstate & QEMU_NUM_LOCK_LED  ? 1 : 0;
+@@ -1570,7 +1571,7 @@ static void kbd_leds(void *opaque, int ledstate)
+     }
+ 
+     /* Sending the current led state message to the client */
+-    if (ledstate != current_led_state(vs)) {
++    if (has_changed) {
+         vnc_led_state_change(vs);
+     }
+ }
+-- 
+1.7.11.7
+

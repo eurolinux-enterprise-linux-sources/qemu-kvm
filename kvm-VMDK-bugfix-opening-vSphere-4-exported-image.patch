@@ -1,0 +1,85 @@
+From df44a7e018cc18c7b77961abf1d362c64800da54 Mon Sep 17 00:00:00 2001
+Message-Id: <df44a7e018cc18c7b77961abf1d362c64800da54.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:39 +0200
+Subject: [PATCH 24/47] VMDK: bugfix, opening vSphere 4 exported image
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-25-git-send-email-famz@redhat.com>
+Patchwork-id: 51460
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 24/47] VMDK: bugfix, opening vSphere 4 exported image
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Fam Zheng <famcool@gmail.com>
+
+The vSphere 4 exported image is streamOptimized extent, which is not
+quite correctly handled. Ignore rdgOffset when RGD flag bit not set.
+
+Signed-off-by: Fam Zheng <famcool@gmail.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit bb45ded93115ad4303471c9a492579dc36716547)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 2cc051a..c532bb4 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -31,6 +31,7 @@
+ #define VMDK3_MAGIC (('C' << 24) | ('O' << 16) | ('W' << 8) | 'D')
+ #define VMDK4_MAGIC (('K' << 24) | ('D' << 16) | ('M' << 8) | 'V')
+ #define VMDK4_COMPRESSION_DEFLATE 1
++#define VMDK4_FLAG_RGD (1 << 1)
+ #define VMDK4_FLAG_COMPRESS (1 << 16)
+ #define VMDK4_FLAG_MARKER (1 << 17)
+ 
+@@ -55,8 +56,8 @@ typedef struct {
+     int64_t desc_offset;
+     int64_t desc_size;
+     int32_t num_gtes_per_gte;
+-    int64_t rgd_offset;
+     int64_t gd_offset;
++    int64_t rgd_offset;
+     int64_t grain_offset;
+     char filler[1];
+     char check_bytes[4];
+@@ -421,6 +422,7 @@ static int vmdk_open_vmdk4(BlockDriverState *bs,
+     uint32_t l1_size, l1_entry_sectors;
+     VMDK4Header header;
+     VmdkExtent *extent;
++    int64_t l1_backup_offset = 0;
+ 
+     ret = bdrv_pread(file, sizeof(magic), &header, sizeof(header));
+     if (ret < 0) {
+@@ -436,10 +438,13 @@ static int vmdk_open_vmdk4(BlockDriverState *bs,
+     }
+     l1_size = (le64_to_cpu(header.capacity) + l1_entry_sectors - 1)
+                 / l1_entry_sectors;
++    if (le32_to_cpu(header.flags) & VMDK4_FLAG_RGD) {
++        l1_backup_offset = le64_to_cpu(header.rgd_offset) << 9;
++    }
+     extent = vmdk_add_extent(bs, file, false,
+                           le64_to_cpu(header.capacity),
+                           le64_to_cpu(header.gd_offset) << 9,
+-                          le64_to_cpu(header.rgd_offset) << 9,
++                          l1_backup_offset,
+                           l1_size,
+                           le32_to_cpu(header.num_gtes_per_gte),
+                           le64_to_cpu(header.granularity));
+-- 
+1.7.11.7
+

@@ -1,0 +1,57 @@
+From 40fde76db219a34c82708e724f56790e505e9420 Mon Sep 17 00:00:00 2001
+Message-Id: <40fde76db219a34c82708e724f56790e505e9420.1429739396.git.jen@redhat.com>
+In-Reply-To: <933ebfcd0e18f4ed2c68553cf4bc257652872678.1429739396.git.jen@redhat.com>
+References: <933ebfcd0e18f4ed2c68553cf4bc257652872678.1429739396.git.jen@redhat.com>
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Thu, 16 Apr 2015 13:55:49 -0500
+Subject: [CHANGE 08/11] block-migration: Flush requests in blk_mig_cleanup
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: <1429192549-6223-1-git-send-email-pbonzini@redhat.com>
+Patchwork-id: 64820
+O-Subject: [RHEL6.7 qemu-kvm PATCH] block-migration: Flush requests in blk_mig_cleanup
+Bugzilla: 916067
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+Bugzilla: 916067
+
+Brew build: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=8989596
+
+When cancelling block migration, all in-flight requests of the block
+migration must be completed before the data can be freed. This was
+visible as failing assertions and segfaults.
+
+Reported-by: Peter Lieven <pl@dlhnet.de>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 946d58be1533bf843b499df12e1d9f97b28245c8)
+---
+ block-migration.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block-migration.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/block-migration.c b/block-migration.c
+index 1d1ed94..fb634e6 100644
+--- a/block-migration.c
++++ b/block-migration.c
+@@ -389,6 +389,8 @@ static void blk_mig_cleanup(Monitor *mon)
+     BlkMigDevState *bmds;
+     BlkMigBlock *blk;
+ 
++    bdrv_drain_all();
++
+     set_dirty_tracking(0);
+ 
+     while ((bmds = QSIMPLEQ_FIRST(&block_mig_state.bmds_list)) != NULL) {
+-- 
+2.1.0
+

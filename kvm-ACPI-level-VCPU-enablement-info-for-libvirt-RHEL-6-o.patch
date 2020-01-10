@@ -1,0 +1,219 @@
+From 97c168a5a514ec700f4a2937f41d0c6434e4b793 Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Tue, 4 Mar 2014 11:45:51 +0100
+Subject: [PATCH 1/2] ACPI-level VCPU enablement info for libvirt (RHEL-6 only)
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1393933551-1325-1-git-send-email-lersek@redhat.com>
+Patchwork-id: 57994
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v4] ACPI-level VCPU enablement info for libvirt (RHEL-6 only)
+Bugzilla: 1017858
+RH-Acked-by: Peter Krempa <pkrempa@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Igor Mammedov <imammedo@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1017858
+Brew:     http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7135711
+
+In RHEL-6 qemu we currently support live VCPU hotplug / hot-unplug on two
+and half "levels":
+(a) the ACPI level,
+(b) the guest Linux sysfs (online/offline) level.
+
+max_alloc >= VCPU thread count >= ACPI online count >= guest online count
+             [half]               (a)                  (b)
+
+(b) corresponds to "virsh setvcpus --guest", and although it works in
+general, it requires the guest agent. It also enables the guest admin to
+re-online a VCPU that has been offlined by the guest agent.
+
+(a) corresponds to "virsh setvcpus". This libvirt facility breaks as soon
+as one VCPU is hot-unplugged with it. This is rooted in the following
+three facts:
+
+- For enabling or disabling a VCPU, libvirt uses the "cpu_set" HMP
+  command. When this command plugs in a completely new VCPU, the following
+  call chain is exerted in qemu:
+
+  do_cpu_set_nr()
+    qemu_system_cpu_hot_add()
+      pc_new_cpu()
+        qemu_init_vcpu()
+          kvm_init_vcpu()
+            pthread_create()
+      enable_processor()
+
+  In other words, in addition to setting the respective bit in the ACPI PM
+  GPE register block (enable_processor()), a new VCPU thread is created.
+
+- When a VCPU is unplugged with "cpu_set", the following call chain runs:
+
+  do_cpu_set_nr()
+    qemu_system_cpu_hot_add()
+      disable_processor()
+
+  The number of VCPU threads is not affected, only the respective bit in
+  the GPE register block is cleared.
+
+- Libvirt tries to retrieve the number of enabled VCPUs with the
+  "query-cpus" monitor command. As of now this monitor command doesn't
+  convey the ACPI state of VCPUs.
+
+  Consequently, as long as only new VCPUs are introduced (ie.
+  qemu_system_cpu_hot_add() keeps bumping the number of VCPU threads as
+  well), "query-cpus" happens to work, because "number of VCPU threads"
+  and "number of VCPUs that are active on the ACPI level" are equivalent.
+
+  However as soon as one VCPU is unplugged, these two concepts diverge,
+  and libvirt witnesses the non-decrease reported by "query-cpus" as an
+  error. Further attempts to hotplug or hot-unplug are doomed.
+
+This problem should be remedied by allowing libvirt to ask qemu what it
+actually cares about -- number of VCPUs that are active on the ACPI level.
+The number of VCPU threads is irrelevant (in RHEL-6 anyway).
+
+The new "enabled-in-acpi" return field being introduced for "query-cpus"
+serves this purpose.
+
+The underlying "CPUX86State.cpuid_apic_id field" defaults to zero (see
+cpu_x86_init()), which corresponds to "BSP" (see cpu_is_bsp()). The field
+is set to nonzero values in qemu_system_cpu_hot_add() (hotplug) and in
+pc_init1() --> pc_new_cpu() (startup).
+
+Why RHEL-6 only: qemu has been undergoing a VCPU revolution for a very
+long time now. Igor targets the level where unplug affects the VCPU thread
+count too. There's nothing to port, forward or backward.
+
+More closely, the last RHEL-6 commit in this area is Eduardo's: 3685bf4b
+("CPU hotplug: use apic_id_for_cpu()"), for bug 733720. The commit message
+says:
+
+    Upstream status: not applicable
+     (upstream doesn't support CPU hotplug yet)
+
+This patch sticks with the same world.
+
+Testing: please see comment 29 in the BZ.
+
+Thanks!
+Laszlo
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ sysemu.h        |  1 +
+ hw/acpi.c       | 18 ++++++++++++++++++
+ monitor.c       |  7 +++++++
+ qemu-monitor.hx | 11 +++++++++--
+ 4 files changed, 35 insertions(+), 2 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ hw/acpi.c       |   18 ++++++++++++++++++
+ monitor.c       |    7 +++++++
+ qemu-monitor.hx |   11 +++++++++--
+ sysemu.h        |    1 +
+ 4 files changed, 35 insertions(+), 2 deletions(-)
+
+diff --git a/hw/acpi.c b/hw/acpi.c
+index c1c14e2..97adc12 100644
+--- a/hw/acpi.c
++++ b/hw/acpi.c
+@@ -1002,6 +1002,24 @@ void qemu_system_cpu_hot_add(int cpu, int state, Monitor *mon)
+ }
+ #endif
+ 
++/* Query the ACPI enabled/disabled state of a VCPU, based on the VCPU's APIC
++ * ID. If the information is unavailable, @enabled is indeterminate on output
++ * and -1 is returned. Otherwise, @enabled is set to the VCPU's ACPI state, and
++ * 0 is returned.
++ */
++int acpi_query_processor(bool *enabled, uint32_t apic_id)
++{
++    const struct gpe_regs *g;
++
++    if (!acpi_enabled || apic_id >= sizeof g->cpus_sts * 8) {
++        return -1;
++    }
++
++    g = &pm_state->gpe;
++    *enabled = !!(g->cpus_sts[apic_id / 8] & (1 << (apic_id % 8)));
++    return 0;
++}
++
+ static void enable_device(PIIX4PMState *s, int slot)
+ {
+     s->gpe.sts |= PIIX4_PCI_HOTPLUG_STATUS;
+diff --git a/monitor.c b/monitor.c
+index 72ac865..2d78c2d 100644
+--- a/monitor.c
++++ b/monitor.c
+@@ -1136,6 +1136,9 @@ static void do_info_cpus(Monitor *mon, QObject **ret_data)
+     for(env = first_cpu; env != NULL; env = env->next_cpu) {
+         QDict *cpu;
+         QObject *obj;
++#if defined(TARGET_I386)
++        bool enabled;
++#endif
+ 
+         cpu_synchronize_state(env);
+ 
+@@ -1147,6 +1150,10 @@ static void do_info_cpus(Monitor *mon, QObject **ret_data)
+ 
+ #if defined(TARGET_I386)
+         qdict_put(cpu, "pc", qint_from_int(env->eip + env->segs[R_CS].base));
++
++        if (acpi_query_processor(&enabled, env->cpuid_apic_id) == 0) {
++            qdict_put(cpu, "enabled-in-acpi", qbool_from_int(enabled));
++        }
+ #elif defined(TARGET_PPC)
+         qdict_put(cpu, "nip", qint_from_int(env->nip));
+ #elif defined(TARGET_SPARC)
+diff --git a/qemu-monitor.hx b/qemu-monitor.hx
+index a4c5dd6..f843eba 100644
+--- a/qemu-monitor.hx
++++ b/qemu-monitor.hx
+@@ -2840,6 +2840,11 @@ Return a json-array. Each CPU is represented by a json-object, which contains:
+      "nip": PPC (json-int)
+      "pc" and "npc": sparc (json-int)
+      "PC": mips (json-int)
++- "enabled-in-acpi": ACPI enabled/disabled state (json-bool, i386/x86_64 only).
++                     True if the VCPU is known to be enabled in the ACPI PM GPE
++                     register block. False if the VCPU is known to be disabled
++                     in the same. The field is missing if the information is
++                     unavailable.
+ 
+ Example:
+ 
+@@ -2850,13 +2855,15 @@ Example:
+             "CPU":0,
+             "current":true,
+             "halted":false,
+-            "pc":3227107138
++            "pc":3227107138,
++            "enabled-in-acpi":true
+          },
+          {
+             "CPU":1,
+             "current":false,
+             "halted":true,
+-            "pc":7108165
++            "pc":7108165,
++            "enabled-in-acpi":true
+          }
+       ]
+    }
+diff --git a/sysemu.h b/sysemu.h
+index 9b9e623..41075e9 100644
+--- a/sysemu.h
++++ b/sysemu.h
+@@ -203,6 +203,7 @@ extern unsigned int nb_prom_envs;
+ 
+ /* acpi */
+ void qemu_system_cpu_hot_add(int cpu, int state, Monitor *mon);
++int acpi_query_processor(bool *enabled, uint32_t apic_id);
+ 
+ /* pci-hotplug */
+ void pci_device_hot_add(Monitor *mon, const QDict *qdict);
+-- 
+1.7.1
+

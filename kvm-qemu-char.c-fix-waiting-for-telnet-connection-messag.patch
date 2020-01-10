@@ -1,0 +1,54 @@
+From 322a083f75e5a95f9ebe5f510bb36e7c63c28c30 Mon Sep 17 00:00:00 2001
+Message-Id: <322a083f75e5a95f9ebe5f510bb36e7c63c28c30.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:57 +0200
+Subject: [PATCH 46/65] qemu-char.c: fix waiting for telnet connection message
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-47-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52161
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 46/65] qemu-char.c: fix waiting for telnet connection message
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Igor Mitsyanko <i.mitsyanko@gmail.com>
+
+Current colon position in "waiting for telnet connection" message template
+produces messages like:
+QEMU waiting for connection on: telnet::127.0.0.16666,server
+
+After moving a colon to the right, we will get a correct messages like:
+QEMU waiting for connection on: telnet:127.0.0.1:6666,server
+
+Signed-off-by: Igor Mitsyanko <i.mitsyanko@gmail.com>
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit e5545854dd1e2e3507b210ac0c1cbfca69ff0fcb)
+---
+ qemu-char.c |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 5763a43..722267b 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -2505,7 +2505,7 @@ static CharDriverState *qemu_chr_open_socket_fd(int fd, bool do_nodelay,
+         s->do_nodelay = do_nodelay;
+         getnameinfo((struct sockaddr *) &ss, ss_len, host, sizeof(host),
+                     serv, sizeof(serv), NI_NUMERICHOST | NI_NUMERICSERV);
+-        snprintf(chr->filename, 256, "%s:%s:%s%s%s%s",
++        snprintf(chr->filename, 256, "%s:%s%s%s:%s%s",
+                  is_telnet ? "telnet" : "tcp",
+                  left, host, right, serv,
+                  is_listen ? ",server" : "");
+-- 
+1.7.11.7
+

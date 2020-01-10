@@ -1,0 +1,76 @@
+From 3113d92536fd9c394156ca2ab6a3efc59700e6f2 Mon Sep 17 00:00:00 2001
+Message-Id: <3113d92536fd9c394156ca2ab6a3efc59700e6f2.1366117835.git.minovotn@redhat.com>
+In-Reply-To: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+References: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+From: Amos Kong <akong@redhat.com>
+Date: Wed, 23 Jan 2013 13:00:03 +0100
+Subject: [PATCH 04/19] net: clean up network at qemu process termination
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1358946003-12378-1-git-send-email-akong@redhat.com>
+Patchwork-id: 47660
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] net: clean up network at qemu process termination
+Bugzilla: 884590
+RH-Acked-by: Xiao Wang <jasowang@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Vlad Yasevich <vyasevic@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=884590
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=5309654
+Upstream: applied
+Test: tested in localhost
+
+We don't clean up network if fails to parse "-device" parameters without
+calling net_cleanup(). I touch a problem, the tap device which is
+created by qemu-ifup script could not be removed by qemu-ifdown script.
+Some similar problems also exist in vl.c
+
+In this patch, if network initialization successes, a cleanup function
+will be registered to be called at qemu process termination.
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+Acked-by: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(manually backport upstream commit f30dbae63a46f23116715dff8d130c7d01ff02be)
+
+Conflicts:
+    vl.c
+
+Cherry-pick caused many changes of vl.c and a small conflict,
+this patch is an independence fix, so manual backport patch to
+internal.
+---
+ vl.c |    4 +++-
+ 1 files changed, 3 insertions(+), 1 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ vl.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/vl.c b/vl.c
+index 163298d..45fd410 100644
+--- a/vl.c
++++ b/vl.c
+@@ -6203,6 +6203,9 @@ int main(int argc, char **argv, char **envp)
+     socket_init();
+ #endif
+ 
++    /* clean up network at qemu process termination */
++    atexit(&net_cleanup);
++
+     if (net_init_clients() < 0) {
+         exit(1);
+     }
+@@ -6526,7 +6529,6 @@ int main(int argc, char **argv, char **envp)
+ 
+     main_loop();
+     quit_timers();
+-    net_cleanup();
+ 
+     return 0;
+ }
+-- 
+1.7.11.7
+

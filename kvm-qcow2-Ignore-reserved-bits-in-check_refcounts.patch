@@ -1,0 +1,150 @@
+From bcc787f7bba0e7e5bee76e7f44e48ab3f85ccf3f Mon Sep 17 00:00:00 2001
+Message-Id: <bcc787f7bba0e7e5bee76e7f44e48ab3f85ccf3f.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:21:50 -0500
+Subject: [CHANGE 07/42] qcow2: Ignore reserved bits in check_refcounts
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-8-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64472
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 07/39] qcow2: Ignore reserved bits in check_refcounts
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+BZ: 1129892
+
+Also don't infer the cluster type directly from the L2 entries, but use
+qcow2_get_cluster_type() to keep everything in a single place.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit afdf0abe779f4b11712eb306ab2d4299820457b8)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	block/qcow2-refcount.c
+
+Conflicts because of the out-of-order backport of
+4f6ed88c03c4026e31ce152ea760a0da839f0dda.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-refcount.c | 75 +++++++++++++++++++++++++++++---------------------
+ 1 file changed, 44 insertions(+), 31 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-refcount.c | 73 +++++++++++++++++++++++++++++---------------------
+ 1 file changed, 43 insertions(+), 30 deletions(-)
+
+diff --git a/block/qcow2-refcount.c b/block/qcow2-refcount.c
+index 4edb736..cc7907b 100644
+--- a/block/qcow2-refcount.c
++++ b/block/qcow2-refcount.c
+@@ -936,7 +936,7 @@ static int check_refcounts_l2(BlockDriverState *bs, BdrvCheckResult *res,
+     uint16_t *refcount_table, int refcount_table_size, int64_t l2_offset)
+ {
+     BDRVQcowState *s = bs->opaque;
+-    uint64_t *l2_table, offset;
++    uint64_t *l2_table, l2_entry;
+     int i, l2_size, nb_csectors;
+ 
+     /* Read L2 table from disk */
+@@ -948,37 +948,50 @@ static int check_refcounts_l2(BlockDriverState *bs, BdrvCheckResult *res,
+ 
+     /* Do the actual checks */
+     for(i = 0; i < s->l2_size; i++) {
+-        offset = be64_to_cpu(l2_table[i]);
+-        if (offset != 0) {
+-            if (offset & QCOW_OFLAG_COMPRESSED) {
+-                /* Compressed clusters don't have QCOW_OFLAG_COPIED */
+-                if (offset & QCOW_OFLAG_COPIED) {
+-                    fprintf(stderr, "ERROR: cluster %" PRId64 ": "
+-                        "copied flag must never be set for compressed "
+-                        "clusters\n", offset >> s->cluster_bits);
+-                    offset &= ~QCOW_OFLAG_COPIED;
+-                    res->corruptions++;
+-                }
++        l2_entry = be64_to_cpu(l2_table[i]);
+ 
+-                /* Mark cluster as used */
+-                nb_csectors = ((offset >> s->csize_shift) &
+-                               s->csize_mask) + 1;
+-                offset &= s->cluster_offset_mask;
+-                inc_refcounts(bs, res, refcount_table, refcount_table_size,
+-                    offset & ~511, nb_csectors * 512);
+-            } else {
+-                /* Mark cluster as used */
+-                offset &= ~QCOW_OFLAG_COPIED;
+-                inc_refcounts(bs, res, refcount_table,refcount_table_size,
+-                    offset, s->cluster_size);
++        switch (qcow2_get_cluster_type(l2_entry)) {
++        case QCOW2_CLUSTER_COMPRESSED:
++            /* Compressed clusters don't have QCOW_OFLAG_COPIED */
++            if (l2_entry & QCOW_OFLAG_COPIED) {
++                fprintf(stderr, "ERROR: cluster %" PRId64 ": "
++                    "copied flag must never be set for compressed "
++                    "clusters\n", l2_entry >> s->cluster_bits);
++                l2_entry &= ~QCOW_OFLAG_COPIED;
++                res->corruptions++;
++            }
++
++            /* Mark cluster as used */
++            nb_csectors = ((l2_entry >> s->csize_shift) &
++                           s->csize_mask) + 1;
++            l2_entry &= s->cluster_offset_mask;
++            inc_refcounts(bs, res, refcount_table, refcount_table_size,
++                l2_entry & ~511, nb_csectors * 512);
++            break;
++
++        case QCOW2_CLUSTER_NORMAL:
++        {
++            /* QCOW_OFLAG_COPIED must be set iff refcount == 1 */
++            uint64_t offset = l2_entry & L2E_OFFSET_MASK;
+ 
+-                /* Correct offsets are cluster aligned */
+-                if (offset & (s->cluster_size - 1)) {
+-                    fprintf(stderr, "ERROR offset=%" PRIx64 ": Cluster is not "
+-                        "properly aligned; L2 entry corrupted.\n", offset);
+-                    res->corruptions++;
+-                }
++            /* Mark cluster as used */
++            inc_refcounts(bs, res, refcount_table,refcount_table_size,
++                offset, s->cluster_size);
++
++            /* Correct offsets are cluster aligned */
++            if (offset & (s->cluster_size - 1)) {
++                fprintf(stderr, "ERROR offset=%" PRIx64 ": Cluster is not "
++                    "properly aligned; L2 entry corrupted.\n", offset);
++                res->corruptions++;
+             }
++            break;
++        }
++
++        case QCOW2_CLUSTER_UNALLOCATED:
++            break;
++
++        default:
++            abort();
+         }
+     }
+ 
+@@ -1032,7 +1045,7 @@ static int check_refcounts_l1(BlockDriverState *bs,
+         l2_offset = l1_table[i];
+         if (l2_offset) {
+             /* Mark L2 table as used */
+-            l2_offset &= ~QCOW_OFLAG_COPIED;
++            l2_offset &= L1E_OFFSET_MASK;
+             inc_refcounts(bs, res, refcount_table, refcount_table_size,
+                 l2_offset, s->cluster_size);
+ 
+-- 
+2.1.0
+

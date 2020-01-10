@@ -1,0 +1,101 @@
+From b85147f7b5d6625582886cafcb51849dcd5dbb3b Mon Sep 17 00:00:00 2001
+Message-Id: <b85147f7b5d6625582886cafcb51849dcd5dbb3b.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:28:03 +0200
+Subject: [PATCH 098/114] qemu-ga: Plug leaks on
+ qmp_guest_network_get_interfaces() error paths
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-41-git-send-email-lersek@redhat.com>
+Patchwork-id: 51139
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 40/56] qemu-ga: Plug leaks on qmp_guest_network_get_interfaces() error paths
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Spotted by Coverity.
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Luiz Capitulino <lcapitulino@redhat.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit 10a2158f52796e5b2b7ce7991bde09a3c985a37b)
+
+Conflicts:
+
+	qga/commands-posix.c
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+
+---
+ v2: adapted to g_malloc()/g_free() conversion
+
+ qga/commands-posix.c |   11 ++++++-----
+ 1 files changed, 6 insertions(+), 5 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/commands-posix.c | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index a96d7f2..84afd52 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -936,9 +936,11 @@ GuestNetworkInterfaceList *qmp_guest_network_get_interfaces(Error **errp)
+                 error_setg_errno(errp, errno,
+                                  "failed to get MAC address of %s",
+                                  ifa->ifa_name);
++                close(sock);
+                 goto error;
+             }
+ 
++            close(sock);
+             mac_addr = (unsigned char *) &ifr.ifr_hwaddr.sa_data;
+ 
+             info->value->hardware_address =
+@@ -948,20 +950,19 @@ GuestNetworkInterfaceList *qmp_guest_network_get_interfaces(Error **errp)
+                                 (int) mac_addr[4], (int) mac_addr[5]);
+ 
+             info->value->has_hardware_address = true;
+-            close(sock);
+         }
+ 
+         if (ifa->ifa_addr &&
+             ifa->ifa_addr->sa_family == AF_INET) {
+             /* interface with IPv4 address */
+-            address_item = g_malloc0(sizeof(*address_item));
+-            address_item->value = g_malloc0(sizeof(*address_item->value));
+             p = &((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
+             if (!inet_ntop(AF_INET, p, addr4, sizeof(addr4))) {
+                 error_setg_errno(errp, errno, "inet_ntop failed");
+                 goto error;
+             }
+ 
++            address_item = g_malloc0(sizeof(*address_item));
++            address_item->value = g_malloc0(sizeof(*address_item->value));
+             address_item->value->ip_address = g_strdup(addr4);
+             address_item->value->ip_address_type = GUEST_IP_ADDRESS_TYPE_IPV4;
+ 
+@@ -974,14 +975,14 @@ GuestNetworkInterfaceList *qmp_guest_network_get_interfaces(Error **errp)
+         } else if (ifa->ifa_addr &&
+                    ifa->ifa_addr->sa_family == AF_INET6) {
+             /* interface with IPv6 address */
+-            address_item = g_malloc0(sizeof(*address_item));
+-            address_item->value = g_malloc0(sizeof(*address_item->value));
+             p = &((struct sockaddr_in6 *)ifa->ifa_addr)->sin6_addr;
+             if (!inet_ntop(AF_INET6, p, addr6, sizeof(addr6))) {
+                 error_setg_errno(errp, errno, "inet_ntop failed");
+                 goto error;
+             }
+ 
++            address_item = g_malloc0(sizeof(*address_item));
++            address_item->value = g_malloc0(sizeof(*address_item->value));
+             address_item->value->ip_address = g_strdup(addr6);
+             address_item->value->ip_address_type = GUEST_IP_ADDRESS_TYPE_IPV6;
+ 
+-- 
+1.7.11.7
+

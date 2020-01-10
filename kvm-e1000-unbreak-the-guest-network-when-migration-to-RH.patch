@@ -1,0 +1,87 @@
+From da4452ca69b9af3dfb4b48d6c7207dbe9744184e Mon Sep 17 00:00:00 2001
+Message-Id: <da4452ca69b9af3dfb4b48d6c7207dbe9744184e.1365434988.git.minovotn@redhat.com>
+In-Reply-To: <6cb2b7828ab4ecfe8c1b7a3dab02ca0547344193.1365434988.git.minovotn@redhat.com>
+References: <6cb2b7828ab4ecfe8c1b7a3dab02ca0547344193.1365434988.git.minovotn@redhat.com>
+From: Xiao Wang <jasowang@redhat.com>
+Date: Thu, 7 Feb 2013 05:23:31 +0100
+Subject: [PATCH 2/2] e1000: unbreak the guest network when migration to
+ RHEL6.3
+
+RH-Author: Xiao Wang <jasowang@redhat.com>
+Message-id: <1360214611-11202-2-git-send-email-jasowang@redhat.com>
+Patchwork-id: 48250
+O-Subject: [RHEL6.4z/RHEL6.5 PATCH V2 2/2] e1000: unbreak the guest network when migration to RHEL6.3
+Bugzilla: 907716
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=907716
+Brew Build: https://brewweb.devel.redhat.com/taskinfo?taskID=5367557
+Upstream: RHEL Specific
+Test Status: tested by me
+
+RHEL 6.3 does not emulate the link auto negotiation, so if migrate to a 6.3.0
+machine during link auto negotiation, the guest link will be set to down. Fix
+this by just disabling auto negotiation for RHEL6.3.
+
+Signed-off-by: Jason Wang <jasowang@redhat.com>
+---
+Changes from V1:
+
+- Check the compat flags and return early to minimize the difference with upstream.
+
+---
+ hw/e1000.c |   17 +++++++++++++++++
+ 1 files changed, 17 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/e1000.c | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/hw/e1000.c b/hw/e1000.c
+index 32f63d9..25caef8 100644
+--- a/hw/e1000.c
++++ b/hw/e1000.c
+@@ -166,6 +166,13 @@ e1000_link_up(E1000State *s)
+ static void
+ set_phy_ctrl(E1000State *s, int index, uint16_t val)
+ {
++    /* RHEL 6.3 does not support link auto-negotiation emulation, so if we
++     * migrate during auto negotiation, after migration the link will be
++     * down. */
++    if (s->compat_flags & E1000_FLAG_RHEL630) {
++        return;
++    }
++
+     if ((val & MII_CR_AUTO_NEG_EN) && (val & MII_CR_RESTART_AUTO_NEG)) {
+         e1000_link_down(s);
+         s->phy_reg[PHY_STATUS] &= ~MII_SR_AUTONEG_COMPLETE;
+@@ -1071,6 +1078,11 @@ static bool is_version_1(void *opaque, int version_id)
+ static void e1000_pre_save(void *opaque)
+ {
+     E1000State *s = opaque;
++
++    if (s->compat_flags & E1000_FLAG_RHEL630) {
++        return;
++    }
++
+     /*
+      * If link is down and auto-negotiation is ongoing, complete
+      * auto-negotiation immediately.  This allows is to look at
+@@ -1091,6 +1103,11 @@ static int e1000_post_load(void *opaque, int version_id)
+      * to link status bit in mac_reg[STATUS].
+      * Alternatively, restart link negotiation if it was in progress. */
+     s->nic->nc.link_down = (s->mac_reg[STATUS] & E1000_STATUS_LU) == 0;
++
++    if (s->compat_flags & E1000_FLAG_RHEL630) {
++        return 0;
++    }
++
+     if (s->phy_reg[PHY_CTRL] & MII_CR_AUTO_NEG_EN &&
+         s->phy_reg[PHY_CTRL] & MII_CR_RESTART_AUTO_NEG &&
+         !(s->phy_reg[PHY_STATUS] & MII_SR_AUTONEG_COMPLETE)) {
+-- 
+1.7.11.7
+

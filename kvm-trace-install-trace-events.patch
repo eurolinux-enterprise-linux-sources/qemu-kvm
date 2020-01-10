@@ -1,0 +1,45 @@
+From 3057ec79a1122f74a02c96bb21fc699d3ddabc60 Mon Sep 17 00:00:00 2001
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Fri, 11 Jul 2014 17:18:26 +0200
+Subject: [PATCH 38/44] trace: install trace-events
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1405099110-10975-4-git-send-email-stefanha@redhat.com>
+Patchwork-id: 59863
+O-Subject: [RHEL6.6 qemu-kvm PATCH 3/7] trace: install trace-events
+Bugzilla: 905761
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+The trace-events file is the list of the tracepoints which are built
+into the QEMU binary.  This file is needed by the simpletrace.py
+analysis script, so install it alongside other data files.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+---
+ Makefile                      | 1 +
+ redhat/qemu-kvm.spec.template | 1 +
+ 2 files changed, 2 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ Makefile                      |    1 +
+ redhat/qemu-kvm.spec.template |    1 +
+ 2 files changed, 2 insertions(+), 0 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 3d29d85..414a26b 100644
+--- a/Makefile
++++ b/Makefile
+@@ -410,6 +410,7 @@ endif
+ 	set -e; for x in $(KEYMAPS); do \
+ 		$(INSTALL_DATA) $(SRC_PATH)/pc-bios/keymaps/$$x "$(DESTDIR)$(datadir)/keymaps"; \
+ 	done
++	$(INSTALL_DATA) $(SRC_PATH)/trace-events "$(DESTDIR)$(datadir)"
+ 	for d in $(TARGET_DIRS); do \
+ 	$(MAKE) -C $$d $@ || exit 1 ; \
+         done
+-- 
+1.7.1
+

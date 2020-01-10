@@ -1,0 +1,121 @@
+From 24977988cb53a0f50e2996977c2221c5a358a4b8 Mon Sep 17 00:00:00 2001
+Message-Id: <24977988cb53a0f50e2996977c2221c5a358a4b8.1372244120.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Fri, 7 Jun 2013 12:23:53 +0200
+Subject: [PATCH 01/12] osdep: add qemu_get_local_state_pathname()
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1370607840-30295-2-git-send-email-lersek@redhat.com>
+Patchwork-id: 51773
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 1/8] osdep: add qemu_get_local_state_pathname()
+Bugzilla: 962669
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Gal Hammer <ghammer@redhat.com>
+RH-Acked-by: Michal Novotny <minovotn@redhat.com>
+
+This function returns ${prefix}/var/RELATIVE_PATHNAME on POSIX-y systems,
+and <CSIDL_COMMON_APPDATA>/RELATIVE_PATHNAME on Win32.
+
+http://msdn.microsoft.com/en-us/library/bb762494.aspx
+
+  [...] This folder is used for application data that is not user
+  specific. For example, an application can store a spell-check
+  dictionary, a database of clip art, or a log file in the
+  CSIDL_COMMON_APPDATA folder. [...]
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+
+RHEL-6 notes:
+- manual port of e2ea3515a9d2d747f91dadf361afcbeb57a71500,
+- our osdep.c hasn't been split yet across several files and subdirs,
+- removed CONFIG_BSD-dependent superfluous inclusion of "stdlib.h" since
+  we include it in any case.
+---
+ osdep.h |   11 +++++++++++
+ osdep.c |   30 ++++++++++++++++++++++++++++--
+ 2 files changed, 39 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ osdep.c | 30 ++++++++++++++++++++++++++++--
+ osdep.h | 11 +++++++++++
+ 2 files changed, 39 insertions(+), 2 deletions(-)
+
+diff --git a/osdep.c b/osdep.c
+index 8d16dbb..2a446ed 100644
+--- a/osdep.c
++++ b/osdep.c
+@@ -39,10 +39,10 @@
+ 
+ #ifdef _WIN32
+ #include <windows.h>
+-#elif defined(CONFIG_BSD)
+-#include <stdlib.h>
++#include <glib.h>
+ #else
+ #include <malloc.h>
++#include <glib/gprintf.h>
+ #endif
+ 
+ #include "qemu-common.h"
+@@ -50,6 +50,11 @@
+ #include "sysemu.h"
+ #include "qemu_socket.h"
+ 
++#ifdef _WIN32
++/* this must come after including "trace.h" */
++#include <shlobj.h>
++#endif
++
+ static bool fips_enabled = false;
+ 
+ #if !defined(_POSIX_C_SOURCE) || defined(_WIN32) || defined(__sun__)
+@@ -411,3 +416,24 @@ bool fips_get_state(void)
+     return fips_enabled;
+ }
+ 
++char *
++qemu_get_local_state_pathname(const char *relative_pathname)
++{
++#ifdef _WIN32
++    HRESULT result;
++    char base_path[MAX_PATH+1] = "";
++
++    result = SHGetFolderPath(NULL, CSIDL_COMMON_APPDATA, NULL,
++                             /* SHGFP_TYPE_CURRENT */ 0, base_path);
++    if (result != S_OK) {
++        /* misconfigured environment */
++        g_critical("CSIDL_COMMON_APPDATA unavailable: %ld", (long)result);
++        abort();
++    }
++    return g_strdup_printf("%s" G_DIR_SEPARATOR_S "%s", base_path,
++                           relative_pathname);
++#else
++    return g_strdup_printf("%s/%s", CONFIG_QEMU_LOCALSTATEDIR,
++                           relative_pathname);
++#endif
++}
+diff --git a/osdep.h b/osdep.h
+index e1b108c..ba9229b 100644
+--- a/osdep.h
++++ b/osdep.h
+@@ -117,4 +117,15 @@ typedef struct timeval qemu_timeval;
+ void fips_set_state(bool requested);
+ bool fips_get_state(void);
+ 
++/* Return a dynamically allocated pathname denoting a file or directory that is
++ * appropriate for storing local state.
++ *
++ * @relative_pathname need not start with a directory separator; one will be
++ * added automatically.
++ *
++ * The caller is responsible for releasing the value returned with g_free()
++ * after use.
++ */
++char *qemu_get_local_state_pathname(const char *relative_pathname);
++
+ #endif
+-- 
+1.7.11.7
+

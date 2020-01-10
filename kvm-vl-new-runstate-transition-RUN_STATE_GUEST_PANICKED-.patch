@@ -1,0 +1,59 @@
+From 0a5e2cec0cadd424aae29b46087e619ec6fc4cfc Mon Sep 17 00:00:00 2001
+Message-Id: <0a5e2cec0cadd424aae29b46087e619ec6fc4cfc.1369899578.git.minovotn@redhat.com>
+In-Reply-To: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+References: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Wed, 22 May 2013 11:31:13 +0200
+Subject: [PATCH 14/15] vl: new runstate transition: RUN_STATE_GUEST_PANICKED
+ -> RUN_STATE_FINISH_MIGRATE
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1369222273-3298-10-git-send-email-lersek@redhat.com>
+Patchwork-id: 51528
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 9/9] vl: new runstate transition: RUN_STATE_GUEST_PANICKED -> RUN_STATE_FINISH_MIGRATE
+Bugzilla: 833530
+RH-Acked-by: Andrew Jones <drjones@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+From: Hu Tao <hutao@cn.fujitsu.com>
+
+This fixes a problem that after guest panic happens, virsh dump without
+--memory-only fails:
+
+ERROR: invalid runstate transition: 'guest-panicked' -> 'finish-migrate'
+
+Reported-by: Christian Borntraeger <borntraeger@de.ibm.com>
+Signed-off-by: Hu Tao <hutao@cn.fujitsu.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: 1369046780-17498-1-git-send-email-pbonzini@redhat.com
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Hu Tao <hutao@cn.fujitsu.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit fd2a2e1c552cb47ca196552457e175c889b58478)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ vl.c |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ vl.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/vl.c b/vl.c
+index e20f112..95a46fa 100644
+--- a/vl.c
++++ b/vl.c
+@@ -422,6 +422,7 @@ static const RunStateTransition runstate_transitions_def[] = {
+     { RUN_STATE_WATCHDOG, RUN_STATE_FINISH_MIGRATE },
+ 
+     { RUN_STATE_GUEST_PANICKED, RUN_STATE_PAUSED },
++    { RUN_STATE_GUEST_PANICKED, RUN_STATE_FINISH_MIGRATE },
+ 
+     { RUN_STATE_MAX, RUN_STATE_MAX },
+ };
+-- 
+1.7.11.7
+

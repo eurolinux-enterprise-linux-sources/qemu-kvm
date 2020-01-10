@@ -1,0 +1,67 @@
+From 7d51dc660d54084f63f66c76c99d0cbb3f137c4c Mon Sep 17 00:00:00 2001
+Message-Id: <7d51dc660d54084f63f66c76c99d0cbb3f137c4c.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:31 +0200
+Subject: [PATCH 16/47] Use new macro QEMU_PACKED for packed structures
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-17-git-send-email-famz@redhat.com>
+Patchwork-id: 51452
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 16/47] Use new macro QEMU_PACKED for packed structures
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Stefan Weil <weil@mail.berlios.de>
+
+Most changes were made using these commands:
+
+git grep -la '__attribute__((packed))'|xargs perl -pi -e 's/__attribute__\(\(packed\)\)/QEMU_PACKED/'
+git grep -la '__attribute__ ((packed))'|xargs perl -pi -e 's/__attribute__ \(\(packed\)\)/QEMU_PACKED/'
+git grep -la '__attribute__((__packed__))'|xargs perl -pi -e 's/__attribute__\(\(__packed__\)\)/QEMU_PACKED/'
+git grep -la '__attribute__ ((__packed__))'|xargs perl -pi -e 's/__attribute__ \(\(__packed__\)\)/QEMU_PACKED/'
+git grep -la '__attribute((packed))'|xargs perl -pi -e 's/__attribute\(\(packed\)\)/QEMU_PACKED/'
+
+Whitespace in linux-user/syscall_defs.h was fixed manually
+to avoid warnings from scripts/checkpatch.pl.
+
+Manual changes were also applied to hw/pc.c.
+
+I did not fix indentation with tabs in block/vvfat.c.
+The patch will show 4 errors with scripts/checkpatch.pl.
+
+Signed-off-by: Stefan Weil <weil@mail.berlios.de>
+Signed-off-by: Blue Swirl <blauwirbel@gmail.com>
+(cherry picked from commit 541dc0d47f10973c241e9955afc2aefc96adec51)
+
+Picked vmdk only.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 8f86c81..5029cd3 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -56,7 +56,7 @@ typedef struct {
+     int64_t grain_offset;
+     char filler[1];
+     char check_bytes[4];
+-} __attribute__((packed)) VMDK4Header;
++} QEMU_PACKED VMDK4Header;
+ 
+ #define L2_CACHE_SIZE 16
+ 
+-- 
+1.7.11.7
+

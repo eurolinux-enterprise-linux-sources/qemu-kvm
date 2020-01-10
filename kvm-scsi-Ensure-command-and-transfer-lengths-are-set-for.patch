@@ -1,0 +1,122 @@
+From 5d8acbde8892cbf8a3b6652092fd473ab439f7a8 Mon Sep 17 00:00:00 2001
+From: Fam Zheng <famz@redhat.com>
+Date: Thu, 7 Aug 2014 11:52:09 -0500
+Subject: [CHANGE 3/4] scsi: Ensure command and transfer lengths are set for
+ all SCSI devices
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1407412329-29980-1-git-send-email-famz@redhat.com>
+Patchwork-id: 60473
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v2] scsi: Ensure command and transfer lengths are set for all SCSI devices
+Bugzilla: 1113068
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1113068
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7802048 (RHEL)
+      http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7802062 (RHEV)
+
+scsi-generic relies on those values to be correct, so it is important that
+those values are initialized properly for all device types.
+
+Reported-by: Christian Hoff <christian.hoff@de.ibm.com>
+Reported-by: Christian Borntraeger <borntraeger@de.ibm.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 28b70c9dbdce0d517ade9c04c7d7ae05c8b76d2f)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	hw/scsi-bus.c
+Instances of removed assignments to cmd->len in scsi_req_length and
+scsi_req_stream_length are different.
+
+---
+v2: Rebase to current head. (Only contextual change. Thanks to Markus
+    for spotting the conflict).
+    Updated brew ID's.
+---
+ hw/scsi-bus.c | 24 ++++++++++++++++++------
+ 1 file changed, 18 insertions(+), 6 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/scsi-bus.c | 24 ++++++++++++++++++------
+ 1 file changed, 18 insertions(+), 6 deletions(-)
+
+diff --git a/hw/scsi-bus.c b/hw/scsi-bus.c
+index 27874a7..b60281a 100644
+--- a/hw/scsi-bus.c
++++ b/hw/scsi-bus.c
+@@ -763,22 +763,18 @@ static int scsi_req_length(SCSICommand *cmd, SCSIDevice *dev, uint8_t *buf)
+     switch (buf[0] >> 5) {
+     case 0:
+         cmd->xfer = (uint64_t) buf[4];
+-        cmd->len = 6;
+         break;
+     case 1:
+     case 2:
+         cmd->xfer = (uint64_t) buf[8] | ((uint64_t) buf[7] << 8);
+-        cmd->len = 10;
+         break;
+     case 4:
+         cmd->xfer = (uint64_t) buf[13] | ((uint64_t) buf[12] << 8) |
+ 		    ((uint64_t) buf[11] << 16) | ((uint64_t) buf[10] << 24);
+-        cmd->len = 16;
+         break;
+     case 5:
+         cmd->xfer = (uint64_t) buf[9] | ((uint64_t) buf[8] << 8) |
+ 		    ((uint64_t) buf[7] << 16) | ((uint64_t) buf[6] << 24);
+-        cmd->len = 12;
+         break;
+     default:
+         return -1;
+@@ -917,7 +913,6 @@ static int scsi_req_stream_length(SCSICommand *cmd, SCSIDevice *dev, uint8_t *bu
+     case READ_REVERSE:
+     case RECOVER_BUFFERED_DATA:
+     case WRITE_6:
+-        cmd->len = 6;
+         cmd->xfer = buf[4] | (buf[3] << 8) | (buf[2] << 16);
+         if (buf[1] & 0x01) { /* fixed */
+             cmd->xfer *= dev->blocksize;
+@@ -925,7 +920,6 @@ static int scsi_req_stream_length(SCSICommand *cmd, SCSIDevice *dev, uint8_t *bu
+         break;
+     case REWIND:
+     case START_STOP:
+-        cmd->len = 6;
+         cmd->xfer = 0;
+         break;
+     case SPACE_16:
+@@ -1031,6 +1025,24 @@ int scsi_req_parse_cdb(SCSIDevice *dev, SCSICommand *cmd, uint8_t *buf)
+     int rc;
+ 
+     cmd->lba = -1;
++    switch (buf[0] >> 5) {
++    case 0:
++        cmd->len = 6;
++        break;
++    case 1:
++    case 2:
++        cmd->len = 10;
++        break;
++    case 4:
++        cmd->len = 16;
++        break;
++    case 5:
++        cmd->len = 12;
++        break;
++    default:
++        return -1;
++    }
++
+     if (dev->type == TYPE_TAPE) {
+         rc = scsi_req_stream_length(cmd, dev, buf);
+     } else {
+-- 
+1.9.3
+

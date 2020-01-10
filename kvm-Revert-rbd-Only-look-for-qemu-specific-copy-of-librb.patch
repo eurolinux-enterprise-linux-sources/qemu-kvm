@@ -1,0 +1,48 @@
+From 6395259a8c3186a0044ae6d79a510f306a121708 Mon Sep 17 00:00:00 2001
+Message-Id: <6395259a8c3186a0044ae6d79a510f306a121708.1425415444.git.jen@redhat.com>
+In-Reply-To: <da72b8b5c732457ae115fa00a02569ddb42eff9c.1425415444.git.jen@redhat.com>
+References: <da72b8b5c732457ae115fa00a02569ddb42eff9c.1425415444.git.jen@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Fri, 27 Feb 2015 16:25:48 -0500
+Subject: [CHANGE 5/8] Revert "rbd: Only look for qemu-specific copy of
+ librbd.so.1"
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1425054351-28658-4-git-send-email-kwolf@redhat.com>
+Patchwork-id: 64069
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 3/6] Revert "rbd: Only look for qemu-specific copy of librbd.so.1"
+Bugzilla: 1154876
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Jeff Nelson <jenelson@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+This reverts commit 8be4038a29f4729e846b3797a7344d22ad3adc28.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/rbd.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/rbd.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/block/rbd.c b/block/rbd.c
+index eb8707a..ea2cd6b 100644
+--- a/block/rbd.c
++++ b/block/rbd.c
+@@ -1098,7 +1098,7 @@ static int qemu_rbd_load_libs(void)
+         return -1;
+     }
+ 
+-    librbd_handle = g_module_open("/usr/lib64/qemu/librbd.so.1", 0);
++    librbd_handle = g_module_open("librbd.so.1", 0);
+     if (!librbd_handle) {
+         error_report("error loading librbd: %s", g_module_error());
+         return -1;
+-- 
+2.1.0
+

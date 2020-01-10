@@ -1,0 +1,55 @@
+From 48db6d741ea36a2488a864c63e1a8348d26725e6 Mon Sep 17 00:00:00 2001
+From: Max Reitz <mreitz@redhat.com>
+Date: Fri, 2 May 2014 16:58:34 -0500
+Subject: [PATCH 02/26] qcow2: fix typo in documentation for qcow2_get_cluster_offset()
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1399049936-13496-3-git-send-email-mreitz@redhat.com>
+Patchwork-id: 58648
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 02/24] qcow2: fix typo in documentation for qcow2_get_cluster_offset()
+Bugzilla: 1004420
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Devin Nakamura <devin122@gmail.com>
+
+BZ: 1004420
+
+Documentation states the num is measured in clusters, but its
+actually measured in sectors
+
+Signed-off-by: Devin Nakamura <devin122@gmail.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit d57237f29127c8c488453e327221c7b3dcdbfd01)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-cluster.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-cluster.c |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/block/qcow2-cluster.c b/block/qcow2-cluster.c
+index 1b0230c..9a9faa8 100644
+--- a/block/qcow2-cluster.c
++++ b/block/qcow2-cluster.c
+@@ -380,10 +380,10 @@ static int copy_sectors(BlockDriverState *bs, uint64_t start_sect,
+  * For a given offset of the disk image, find the cluster offset in
+  * qcow2 file. The offset is stored in *cluster_offset.
+  *
+- * on entry, *num is the number of contiguous clusters we'd like to
++ * on entry, *num is the number of contiguous sectors we'd like to
+  * access following offset.
+  *
+- * on exit, *num is the number of contiguous clusters we can read.
++ * on exit, *num is the number of contiguous sectors we can read.
+  *
+  * Return 0, if the offset is found
+  * Return -errno, otherwise.
+-- 
+1.7.1
+

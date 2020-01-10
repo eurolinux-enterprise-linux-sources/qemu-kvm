@@ -1,0 +1,53 @@
+From 9f2474048aed6daf85fae59e8c04053dc5d31f38 Mon Sep 17 00:00:00 2001
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 21 Jun 2013 06:20:08 +0200
+Subject: [PATCH 12/21] block: drop duplicated slice extension code
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1371795611-7208-13-git-send-email-famz@redhat.com>
+Patchwork-id: 52086
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 12/15] block: drop duplicated slice extension code
+Bugzilla: 956825
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@redhat.com>
+
+The current slice is extended when an I/O request exceeds the limit.
+There is no need to extend the slice every time we check a request.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Tested-By: Benoit Canet <benoit@irqsave.net>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit e660fb8b3ccc94652774d5895d122c0f13aecb89)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block.c | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block.c |    5 +----
+ 1 files changed, 1 insertions(+), 4 deletions(-)
+
+diff --git a/block.c b/block.c
+index 6e56ae9..ff4b682 100644
+--- a/block.c
++++ b/block.c
+@@ -3720,10 +3720,7 @@ static bool bdrv_exceed_io_limits(BlockDriverState *bs, int nb_sectors,
+     int      bps_ret, iops_ret;
+ 
+     now = qemu_get_clock(vm_clock);
+-    if ((bs->slice_start < now)
+-        && (bs->slice_end > now)) {
+-        bs->slice_end = now + BLOCK_IO_SLICE_TIME;
+-    } else {
++    if (now > bs->slice_end) {
+         bs->slice_start = now;
+         bs->slice_end   = now + BLOCK_IO_SLICE_TIME;
+         memset(&bs->slice_submitted, 0, sizeof(bs->slice_submitted));
+-- 
+1.7.1
+

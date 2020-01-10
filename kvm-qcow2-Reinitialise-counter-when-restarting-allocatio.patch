@@ -1,0 +1,63 @@
+From f4dfd3f3a2a6d8d779252df8703cf83294afb5a6 Mon Sep 17 00:00:00 2001
+Message-Id: <f4dfd3f3a2a6d8d779252df8703cf83294afb5a6.1371733794.git.minovotn@redhat.com>
+In-Reply-To: <c4dd58cee9e41e408664060ffa819156649c7cb3.1371733794.git.minovotn@redhat.com>
+References: <c4dd58cee9e41e408664060ffa819156649c7cb3.1371733794.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Fri, 14 Jun 2013 16:08:08 +0200
+Subject: [PATCH 5/6] qcow2: Reinitialise counter when restarting allocation
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1371226088-9945-1-git-send-email-kwolf@redhat.com>
+Patchwork-id: 51973
+O-Subject: [RHEL-6.5/6.4.z qemu-kvm PATCH] qcow2: Reinitialise counter when restarting allocation
+Bugzilla: 974617
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Bugzilla: 974617
+Upstream status: n/a (accidentally fixed in a later commit)
+
+When an allocating request is restarted after waiting for a dependency
+(it's the 'goto again' case), i wasn't reset to zero, potentially leading
+to an incorrect number of clusters to be COWed.
+
+This bug wasn't reported against upstream, where later code changes
+fixed the bug as a side effect, but against Ubuntu Precise:
+https://bugs.launchpad.net/ubuntu/precise/+source/qemu-kvm/+bug/1189926
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/qcow2-cluster.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/qcow2-cluster.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/block/qcow2-cluster.c b/block/qcow2-cluster.c
+index 22dd928..0bea2c5 100644
+--- a/block/qcow2-cluster.c
++++ b/block/qcow2-cluster.c
+@@ -708,7 +708,7 @@ int qcow2_alloc_cluster_offset(BlockDriverState *bs, uint64_t offset,
+     int l2_index, ret;
+     uint64_t l2_offset, *l2_table;
+     int64_t cluster_offset;
+-    unsigned int nb_clusters, i = 0;
++    unsigned int nb_clusters, i;
+     QCowL2Meta *old_alloc;
+ 
+ again:
+@@ -747,7 +747,7 @@ again:
+         nb_clusters = 1;
+ 
+     /* how many available clusters ? */
+-
++    i = 0;
+     while (i < nb_clusters) {
+         i += count_contiguous_clusters(nb_clusters - i, s->cluster_size,
+                 &l2_table[l2_index], i, 0);
+-- 
+1.7.11.7
+

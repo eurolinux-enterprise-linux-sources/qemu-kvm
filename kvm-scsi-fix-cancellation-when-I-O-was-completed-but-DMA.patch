@@ -1,0 +1,67 @@
+From b353314d439095d948cdf257c07f25f640850032 Mon Sep 17 00:00:00 2001
+Message-Id: <b353314d439095d948cdf257c07f25f640850032.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:47 -0500
+Subject: [CHANGE 27/29] scsi: fix cancellation when I/O was completed but DMA
+ was not.
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-28-git-send-email-famz@redhat.com>
+Patchwork-id: 64928
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 27/28] scsi: fix cancellation when I/O was completed but DMA was not.
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Commit d577646 (scsi: Introduce scsi_req_cancel_complete, 2014-09-25)
+was supposed to have no semantic change, but it missed a case.  When
+r->aiocb has already been NULLed, but DMA was not complete and the
+SCSI layer was waiting for scsi_req_continue, after the patch the
+SCSI layer will not call the .cancel callback of SCSIBusInfo.
+
+Fixes: d5776465ee9a55815792efa34d79de240f4ffd99
+Cc: qemu-stable@nongnu.org
+Reported-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+Tested-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+Reviewed-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 488eef2f1d16c97cf7f9ebf644ecafa1ea1e9acc)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	hw/scsi-bus.c
+Context conflict. Upstream the block device interface is now changed to
+"blk_aio_cancel", whereas we still use bdrv_aio_cancel in downstream.
+---
+ hw/scsi-bus.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/scsi-bus.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/hw/scsi-bus.c b/hw/scsi-bus.c
+index 762d71f..b53764c 100644
+--- a/hw/scsi-bus.c
++++ b/hw/scsi-bus.c
+@@ -1521,6 +1521,8 @@ void scsi_req_cancel(SCSIRequest *req)
+     req->io_canceled = true;
+     if (req->aiocb) {
+         bdrv_aio_cancel(req->aiocb);
++    } else {
++        scsi_req_cancel_complete(req);
+     }
+ }
+ 
+-- 
+2.1.0
+

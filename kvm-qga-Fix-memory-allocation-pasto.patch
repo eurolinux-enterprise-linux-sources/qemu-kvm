@@ -1,0 +1,39 @@
+From 098841f69c0c1be025fbf02076f19ecc78818d15 Mon Sep 17 00:00:00 2001
+Message-Id: <098841f69c0c1be025fbf02076f19ecc78818d15.1453151886.git.jen@redhat.com>
+In-Reply-To: <e445c6fbfa4c35276b2869057fdcd8e546d63a4c.1453151886.git.jen@redhat.com>
+References: <e445c6fbfa4c35276b2869057fdcd8e546d63a4c.1453151886.git.jen@redhat.com>
+From: Markus Armbruster <armbru@redhat.com>
+Date: Mon, 18 Jan 2016 15:55:56 -0500
+Subject: [CHANGE 7/8] qga: Fix memory allocation pasto
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+qmp_guest_file_seek() allocates memory for a GuestFileRead object
+instead of the GuestFileSeek object it actually uses.  Harmless,
+because the GuestFileRead is slightly larger.
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit 10b7c5dd0da1a92182e87f5fc1887d779ad1a9e8)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ qga/commands-posix.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index 632e43a..e4a8aad 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -569,7 +569,7 @@ struct GuestFileSeek *qmp_guest_file_seek(int64_t handle, int64_t offset,
+             gfh->state = RW_STATE_NEW;
+         }
+     } else {
+-        seek_data = g_malloc0(sizeof(GuestFileRead));
++        seek_data = g_new0(GuestFileSeek, 1);
+         seek_data->position = ftell(fh);
+         seek_data->eof = feof(fh);
+         gfh->state = RW_STATE_NEW;
+-- 
+2.1.0
+

@@ -1,0 +1,57 @@
+From 9e95ab47cbd46b6d21f493fb51a7c080c49bc47a Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:31 -0500
+Subject: [CHANGE 09/31] qmp: Check for returned data from __json_read in
+ get_events
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-10-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60366
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 09/29] qmp: Check for returned data from __json_read in get_events
+Bugzilla: 1122410
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+From: Fam Zheng <famz@redhat.com>
+
+When QEMU process aborts and socket is closed, qmp client will not
+detect it. When this happens, some qemu-iotests scripts will enter an
+endless loop waiting for qmp events.
+
+It's better we raise an exception in qmp.py to catch this and make the
+test script stop.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 4864512389b06389501e60d965edb8defb66a0fc)
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ QMP/qmp.py | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/QMP/qmp.py b/QMP/qmp.py
+index 2565508..722ac83 100644
+--- a/QMP/qmp.py
++++ b/QMP/qmp.py
+@@ -122,7 +122,12 @@ class QEMUMonitorProtocol:
+                 pass
+         self.__sock.setblocking(1)
+         if not self.__events and wait:
+-            self.__json_read(only_event=True)
++            ret = self.__json_read(only_event=True)
++            if ret == None:
++                # We are in blocking mode, if don't get anything, something
++                # went wrong
++                raise QMPConnectError("Error while reading from socket")
++
+         return self.__events
+ 
+     def clear_events(self):
+-- 
+1.9.3
+

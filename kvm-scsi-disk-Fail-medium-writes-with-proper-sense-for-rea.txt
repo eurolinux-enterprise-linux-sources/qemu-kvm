@@ -1,0 +1,66 @@
+From b0bbe62c075732846b938758372c52d31628a788 Mon Sep 17 00:00:00 2001
+From: Markus Armbruster <armbru@redhat.com>
+Date: Tue, 22 Jul 2014 09:15:57 -0500
+Subject: [CHANGE 08/17] scsi-disk: Fail medium writes with proper sense for
+ readonly LUNs
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1406020565-25364-4-git-send-email-armbru@redhat.com>
+Patchwork-id: 59996
+O-Subject: [PATCH 6.6 qemu-kvm v2 03/11] scsi-disk: Fail medium writes with proper sense for readonly LUNs
+Bugzilla: 1064643
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Ronnie Sahlberg <ronniesahlberg@gmail.com>
+
+Add sense code for DATA_PROTECT/WRITE_PROTECTED and return this error
+for any WRITE*/WRITE_VERIFY* calls if the device is readonly=on,
+i.e. write-protected
+
+Signed-off-by: Ronnie Sahlberg <ronniesahlberg@gmail.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 6a8a685c4d022d4edee57b0fb78c0ae1b4876478)
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	hw/scsi-disk.c
+
+This upstream commit has been picked already (commit a4f37c5), but
+with one hunk dropped because (quoting its review) "we do not support
+the discard_granularity property so a well-behaved guest should never
+reach this code".  I disagree with that choice.  Having the hunk
+doesn't hurt, and not having it produces confusion.  So I'm picking
+the commit again, for its missing hunk.
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+---
+ hw/scsi-disk.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/scsi-disk.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/hw/scsi-disk.c b/hw/scsi-disk.c
+index 6667b1c..5bab20b 100644
+--- a/hw/scsi-disk.c
++++ b/hw/scsi-disk.c
+@@ -1559,6 +1559,10 @@ static int32_t scsi_send_command(SCSIRequest *req, uint8_t *buf)
+         DPRINTF("WRITE SAME(16) (sector %" PRId64 ", count %d)\n",
+                 r->req.cmd.lba, len);
+ 
++        if (bdrv_is_read_only(s->qdev.conf.bs)) {
++            scsi_check_condition(r, SENSE_CODE(WRITE_PROTECTED));
++            return 0;
++        }
+         if (r->req.cmd.lba > s->qdev.max_lba) {
+             goto illegal_lba;
+         }
+-- 
+1.9.3
+

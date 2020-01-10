@@ -1,0 +1,104 @@
+From e058601b52409cf165be9f2f507edbfc1f205550 Mon Sep 17 00:00:00 2001
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 21 Jun 2013 06:20:03 +0200
+Subject: [PATCH 07/21] block: Factor bdrv_read_unthrottled() out of guess_disk_lchs()
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1371795611-7208-8-git-send-email-famz@redhat.com>
+Patchwork-id: 52081
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 07/15] block: Factor bdrv_read_unthrottled() out of guess_disk_lchs()
+Bugzilla: 956825
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Markus Armbruster <armbru@redhat.com>
+
+To prepare move of guess_disk_lchs() into hw/, where it poking
+BlockDriverState member io_limits_enabled directly would be unclean.
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 07d27a442e01870ea6fc2d6ffbe1df61dccaafc4)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block.c | 24 +++++++++++++++++-------
+ block.h |  2 ++
+ 2 files changed, 19 insertions(+), 7 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block.c |   24 +++++++++++++++++-------
+ block.h |    2 ++
+ 2 files changed, 19 insertions(+), 7 deletions(-)
+
+diff --git a/block.c b/block.c
+index 800896f..ae0b347 100644
+--- a/block.c
++++ b/block.c
+@@ -1892,6 +1892,20 @@ int bdrv_read(BlockDriverState *bs, int64_t sector_num,
+     return bdrv_rw_co(bs, sector_num, buf, nb_sectors, false);
+ }
+ 
++/* Just like bdrv_read(), but with I/O throttling temporarily disabled */
++int bdrv_read_unthrottled(BlockDriverState *bs, int64_t sector_num,
++                          uint8_t *buf, int nb_sectors)
++{
++    bool enabled;
++    int ret;
++
++    enabled = bs->io_limits_enabled;
++    bs->io_limits_enabled = false;
++    ret = bdrv_read(bs, 0, buf, 1);
++    bs->io_limits_enabled = enabled;
++    return ret;
++}
++
+ /* Return < 0 if error. Important errors are:
+   -EIO         generic I/O error (may happen for all errors)
+   -ENOMEDIUM   No media inserted.
+@@ -2346,11 +2360,10 @@ static int guess_disk_lchs(BlockDriverState *bs,
+                            int *pcylinders, int *pheads, int *psectors)
+ {
+     uint8_t buf[BDRV_SECTOR_SIZE];
+-    int ret, i, heads, sectors, cylinders;
++    int i, heads, sectors, cylinders;
+     struct partition *p;
+     uint32_t nr_sects;
+     uint64_t nb_sectors;
+-    bool enabled;
+ 
+     bdrv_get_geometry(bs, &nb_sectors);
+ 
+@@ -2359,12 +2372,9 @@ static int guess_disk_lchs(BlockDriverState *bs,
+      * but also in async I/O mode. So the I/O throttling function has to
+      * be disabled temporarily here, not permanently.
+      */
+-    enabled = bs->io_limits_enabled;
+-    bs->io_limits_enabled = false;
+-    ret = bdrv_read(bs, 0, buf, 1);
+-    bs->io_limits_enabled = enabled;
+-    if (ret < 0)
++    if (bdrv_read_unthrottled(bs, 0, buf, 1) < 0) {
+         return -1;
++    }
+     /* test msdos magic */
+     if (buf[510] != 0x55 || buf[511] != 0xaa)
+         return -1;
+diff --git a/block.h b/block.h
+index 9fbd072..088d397 100644
+--- a/block.h
++++ b/block.h
+@@ -168,6 +168,8 @@ bool bdrv_dev_is_tray_open(BlockDriverState *bs);
+ bool bdrv_dev_is_medium_locked(BlockDriverState *bs);
+ int bdrv_read(BlockDriverState *bs, int64_t sector_num,
+               uint8_t *buf, int nb_sectors);
++int bdrv_read_unthrottled(BlockDriverState *bs, int64_t sector_num,
++                          uint8_t *buf, int nb_sectors);
+ int bdrv_write(BlockDriverState *bs, int64_t sector_num,
+                const uint8_t *buf, int nb_sectors);
+ int bdrv_pread(BlockDriverState *bs, int64_t offset,
+-- 
+1.7.1
+

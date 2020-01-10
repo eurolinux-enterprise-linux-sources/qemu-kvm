@@ -1,0 +1,63 @@
+From 0179b660e05f2c8d4abf8569e5a1554d4b42a25c Mon Sep 17 00:00:00 2001
+Message-Id: <0179b660e05f2c8d4abf8569e5a1554d4b42a25c.1368098699.git.minovotn@redhat.com>
+In-Reply-To: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+References: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Fri, 5 Apr 2013 19:44:42 +0200
+Subject: [PATCH 03/24] Add new macro QEMU_PACKED for packed C structures
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1365191091-25631-4-git-send-email-kwolf@redhat.com>
+Patchwork-id: 50163
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 03/12] Add new macro QEMU_PACKED for packed C structures
+Bugzilla: 796011
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Stefan Weil <weil@mail.berlios.de>
+
+Bugzilla: 796011
+
+A packed struct needs different gcc attributes for compilations
+with MinGW compilers because glib-2.0 adds compiler flag
+-mms-bitfields which modifies the packing algorithm.
+
+Attribute gcc_struct reverses the negative effects of -mms-bitfields.
+QEMU_PACKED sets this attribute and must be used for any packed
+struct which is affected by -mms-bitfields.
+
+Signed-off-by: Stefan Weil <weil@mail.berlios.de>
+Signed-off-by: Blue Swirl <blauwirbel@gmail.com>
+(cherry picked from commit 0f7fdd347514ea97b24f5f658f3ae31f9b078397)
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ compiler.h | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ compiler.h | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/compiler.h b/compiler.h
+index 9af5dc6..a2d5959 100644
+--- a/compiler.h
++++ b/compiler.h
+@@ -12,6 +12,12 @@
+ #define QEMU_WARN_UNUSED_RESULT
+ #endif
+ 
++#if defined(_WIN32)
++# define QEMU_PACKED __attribute__((gcc_struct, packed))
++#else
++# define QEMU_PACKED __attribute__((packed))
++#endif
++
+ #define QEMU_BUILD_BUG_ON(x) \
+     typedef char qemu_build_bug_on__##__LINE__[(x)?-1:1];
+ 
+-- 
+1.7.11.7
+

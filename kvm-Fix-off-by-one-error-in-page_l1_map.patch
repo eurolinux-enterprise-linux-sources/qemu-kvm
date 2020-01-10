@@ -1,0 +1,68 @@
+From 65394ad98b2da40f50fb3d379187754dfa549daa Mon Sep 17 00:00:00 2001
+Message-Id: <65394ad98b2da40f50fb3d379187754dfa549daa.1378124219.git.minovotn@redhat.com>
+In-Reply-To: <a0308ac2c5e4658f994145b94cc5c51eae25bff8.1378124219.git.minovotn@redhat.com>
+References: <a0308ac2c5e4658f994145b94cc5c51eae25bff8.1378124219.git.minovotn@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Tue, 27 Aug 2013 14:44:35 +0200
+Subject: [PATCH 3/3] Fix off-by-one error in page_l1_map()
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1377614675-20743-1-git-send-email-stefanha@redhat.com>
+Patchwork-id: 53801
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] Fix off-by-one error in page_l1_map()
+Bugzilla: 996791
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Bugzilla: 996791
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=6215029
+Upstream-status: RHEL-only
+
+From: David Gibson <dgibson@redhat.com>
+Fix off-by-one error in page_l1_map()
+
+page_l1_map() is supposed to return NULL for addresses beyond those
+covered by the l1_map[] array (2^20 pages / 4G of memory).  However,
+the test for this uses > instead of >= meaning that for an address
+exactly on the boundary of the covered area, instead of returning NULL
+it will return a bogus value from beyond the end of the l1_map[]
+array.  This patch fixes it.
+
+Signed-off-by: David Gibson <dgibson@redhat.com>
+
+David Gibson <dgibson@redhat.com> debugged a qemu-kvm crash where a
+virtio buffer at 0x100000000 (4 GB) is being unmapped.  The problem is
+that cpu_physical_memory_unmap() calls tb_invalidate_phys_page_range()
+where page_l1_map() returns a pointer one beyond the end of l1_map[].
+page_l1_map() should return NULL when the address is outside l1_map[].
+
+Upstream the memory API reimplemented the code correctly.  Therefore
+this patch is RHEL-only.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+---
+ exec.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ exec.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/exec.c b/exec.c
+index d8544aa..df5a98b 100644
+--- a/exec.c
++++ b/exec.c
+@@ -294,7 +294,7 @@ static inline PageDesc **page_l1_map(target_ulong index)
+ #if TARGET_LONG_BITS > 32
+     /* Host memory outside guest VM.  For 32-bit targets we have already
+        excluded high addresses.  */
+-    if (index > ((target_ulong)L2_SIZE * L1_SIZE))
++    if (index >= ((target_ulong)L2_SIZE * L1_SIZE))
+         return NULL;
+ #endif
+     return &l1_map[index >> L2_BITS];
+-- 
+1.7.11.7
+

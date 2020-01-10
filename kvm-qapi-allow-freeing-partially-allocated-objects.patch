@@ -1,0 +1,68 @@
+From 1b7c9acae311ca83d6af01d8e9284946573c0d02 Mon Sep 17 00:00:00 2001
+From: Luiz Capitulino <lcapitulino@redhat.com>
+Date: Thu, 11 Jul 2013 17:54:33 +0200
+Subject: [PATCH 19/21] qapi: allow freeing partially-allocated objects
+
+RH-Author: Luiz Capitulino <lcapitulino@redhat.com>
+Message-id: <1373565275-8756-3-git-send-email-lcapitulino@redhat.com>
+Patchwork-id: 52444
+O-Subject: [RHEL6.5 qemu-kvm PATCH 2/4] qapi: allow freeing partially-allocated objects
+Bugzilla: 983635
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Objects going through the dealloc visitor can be only partially allocated.
+Detect the situation and avoid a segfault.  This also helps with the
+input visitor, when there are errors.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Reviewed-by: Anthony Liguori <aliguori@us.ibm.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 69b50071d8dc1b4e06724bb73cda8e2f10fe30c7)
+---
+ scripts/qapi-visit.py | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ scripts/qapi-visit.py |    7 +++++++
+ 1 files changed, 7 insertions(+), 0 deletions(-)
+
+diff --git a/scripts/qapi-visit.py b/scripts/qapi-visit.py
+index 4297621..31d50a6 100644
+--- a/scripts/qapi-visit.py
++++ b/scripts/qapi-visit.py
+@@ -65,6 +65,9 @@ void visit_type_%(name)s(Visitor *m, %(name)s ** obj, const char *name, Error **
+         return;
+     }
+     visit_start_struct(m, (void **)obj, "%(name)s", name, sizeof(%(name)s), errp);
++    if (obj && !*obj) {
++        goto end;
++    }
+ ''',
+                 name=name)
+     push_indent()
+@@ -72,6 +75,7 @@ void visit_type_%(name)s(Visitor *m, %(name)s ** obj, const char *name, Error **
+     pop_indent()
+ 
+     ret += mcgen('''
++end:
+     visit_end_struct(m, errp);
+ }
+ ''')
+@@ -122,6 +126,9 @@ void visit_type_%(name)s(Visitor *m, %(name)s ** obj, const char *name, Error **
+         return;
+     }
+     visit_start_struct(m, (void **)obj, "%(name)s", name, sizeof(%(name)s), &err);
++    if (obj && !*obj) {
++        goto end;
++    }
+     visit_type_%(name)sKind(m, &(*obj)->kind, "type", &err);
+     if (err) {
+         error_propagate(errp, err);
+-- 
+1.7.1
+

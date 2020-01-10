@@ -1,0 +1,115 @@
+From fc635a0c4948a15e9a002e38f18da85d1d1f487b Mon Sep 17 00:00:00 2001
+Message-Id: <fc635a0c4948a15e9a002e38f18da85d1d1f487b.1374754301.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:28 +0200
+Subject: [PATCH 17/65] qemu-sockets: add error propagation to
+ inet_connect_addr
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-18-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52144
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 17/65] qemu-sockets: add error propagation to inet_connect_addr
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+perror and fprintf can be removed because all clients can now consume
+Errors properly.  However, we'll need to change the non-blocking connect
+handlers to take an Error, in order to improve error handling for
+migration with the TCP protocol.
+
+This is a minor degradation in error reporting for outgoing migration.
+However, until 1.2 this case just failed without even attempting to
+connect, so it is still an improvement as far as overall QoI is
+concerned.
+
+Reviewed-by: Luiz Capitulino <lcapitulino@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 11663b553b0815b266b6a9060ab9702cf7a5334c)
+
+[ rhel6: use error_setg_errno instead of error_set_errno ]
+---
+ qemu-sockets.c |   15 ++++++---------
+ 1 file changed, 6 insertions(+), 9 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-sockets.c | 15 ++++++---------
+ 1 file changed, 6 insertions(+), 9 deletions(-)
+
+diff --git a/qemu-sockets.c b/qemu-sockets.c
+index 2201b3f..d068b57 100644
+--- a/qemu-sockets.c
++++ b/qemu-sockets.c
+@@ -213,7 +213,7 @@ typedef struct ConnectState {
+ } ConnectState;
+ 
+ static int inet_connect_addr(struct addrinfo *addr, bool *in_progress,
+-                             ConnectState *connect_state);
++                             ConnectState *connect_state, Error **errp);
+ 
+ static void wait_for_connect(void *opaque)
+ {
+@@ -243,7 +243,7 @@ static void wait_for_connect(void *opaque)
+     if (s->current_addr) {
+         while (s->current_addr->ai_next != NULL && s->fd < 0) {
+             s->current_addr = s->current_addr->ai_next;
+-            s->fd = inet_connect_addr(s->current_addr, &in_progress, s);
++            s->fd = inet_connect_addr(s->current_addr, &in_progress, s, NULL);
+             /* connect in progress */
+             if (in_progress) {
+                 return;
+@@ -261,7 +261,7 @@ static void wait_for_connect(void *opaque)
+ }
+ 
+ static int inet_connect_addr(struct addrinfo *addr, bool *in_progress,
+-                             ConnectState *connect_state)
++                             ConnectState *connect_state, Error **errp)
+ {
+     int sock, rc;
+ 
+@@ -269,8 +269,7 @@ static int inet_connect_addr(struct addrinfo *addr, bool *in_progress,
+ 
+     sock = qemu_socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
+     if (sock < 0) {
+-        fprintf(stderr, "%s: socket(%s): %s\n", __func__,
+-                inet_strfamily(addr->ai_family), strerror(errno));
++        error_setg_errno(errp, errno, "socket create failed");
+         return -1;
+     }
+     setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+@@ -291,6 +290,7 @@ static int inet_connect_addr(struct addrinfo *addr, bool *in_progress,
+                              connect_state);
+         *in_progress = true;
+     } else if (rc < 0) {
++        error_setg_errno(errp, errno, "socket connect failed");
+         closesocket(sock);
+         return -1;
+     }
+@@ -377,7 +377,7 @@ int inet_connect_opts(QemuOpts *opts, Error **errp,
+         if (connect_state != NULL) {
+             connect_state->current_addr = e;
+         }
+-        sock = inet_connect_addr(e, &in_progress, connect_state);
++        sock = inet_connect_addr(e, &in_progress, connect_state, errp);
+         if (in_progress) {
+             return sock;
+         } else if (sock >= 0) {
+@@ -388,9 +388,6 @@ int inet_connect_opts(QemuOpts *opts, Error **errp,
+             break;
+         }
+     }
+-    if (sock < 0) {
+-        error_set(errp, QERR_SOCKET_CONNECT_FAILED);
+-    }
+     g_free(connect_state);
+     freeaddrinfo(res);
+     return sock;
+-- 
+1.7.11.7
+

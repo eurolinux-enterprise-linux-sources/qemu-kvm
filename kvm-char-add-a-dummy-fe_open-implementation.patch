@@ -1,0 +1,53 @@
+From 537e5f452ff0da5aae6c89a381ab439864e6072a Mon Sep 17 00:00:00 2001
+From: Amit Shah <amit.shah@redhat.com>
+Date: Thu, 28 Aug 2014 17:36:29 +0200
+Subject: [PATCH 1/2] char: add a dummy fe_open implementation
+
+Message-id: <52be87de4ed9b378ca88b5f4269cee0de96d7e1c.1409246448.git.amit.shah@redhat.com>
+Patchwork-id: 60747
+O-Subject: [RHEL6.6 qemu-kvm PATCH v2 1/2] char: add a dummy fe_open implementation
+Bugzilla: 1027181
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Upstream added frontend open tracking in commit c0c4bd2cfae0.  In order
+to not backport all related commits which will make the backport of the
+next patch easier, this patch adds a dummy fe_open implementation in
+qemu_chr_add_handlers(), which makes the next patch relatively
+conflict-free.
+
+The spirit of the original fe_open patchset is maintained by this
+patch, so if it's required in the future to backport the upstream
+version, it'll be easier to do so without introducing additional
+conflicts, and the revert of this patch will be quite easy as well.
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ qemu-char.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ qemu-char.c |    4 ++++
+ 1 files changed, 4 insertions(+), 0 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index fe7708c..16f2a17 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -221,7 +221,11 @@ void qemu_chr_add_handlers(CharDriverState *s,
+                            IOEventHandler *fd_event,
+                            void *opaque)
+ {
++    int fe_open;
++
++    fe_open = 1;
+     if (!opaque && !fd_can_read && !fd_read && !fd_event) {
++        fe_open = 0;
+         /* chr driver being released. */
+         ++s->avail_connections;
+         remove_fd_in_watch(s);
+-- 
+1.7.1
+

@@ -1,0 +1,46 @@
+From d40fce64e8999d8cb3eff0e5a255e78b6ccc3347 Mon Sep 17 00:00:00 2001
+Message-Id: <d40fce64e8999d8cb3eff0e5a255e78b6ccc3347.1484342411.git.ymankad@redhat.com>
+In-Reply-To: <df26b13347392089e5699a6be872de7806a36a8c.1484342411.git.ymankad@redhat.com>
+References: <df26b13347392089e5699a6be872de7806a36a8c.1484342411.git.ymankad@redhat.com>
+From: Yash Mankad <ymankad@redhat.com>
+Date: Fri, 13 Jan 2017 15:55:24 -0500
+Subject: [CHANGE 4/8] Revert "iotests: Fix 049's reference output"
+To: ymankad@redhat.com
+
+This reverts commit 0d809c5cc520038b99caf1e2354431164eb69afc.
+
+This is to revert Max's patch series that fix BZ#1405882 as
+they did not have the 6.9 release flag set and could not be
+justified as exceptions / blockers. Will be moved to 6.10.
+
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ tests/qemu-iotests/049.out | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/tests/qemu-iotests/049.out b/tests/qemu-iotests/049.out
+index 5b28795..c679afb 100644
+--- a/tests/qemu-iotests/049.out
++++ b/tests/qemu-iotests/049.out
+@@ -92,14 +92,16 @@ Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=1649267441664 encryption=off clust
+ == 3. Invalid sizes ==
+ 
+ qemu-img create -f qcow2 TEST_DIR/t.qcow2 -- -1024
+-Image size must be less than 8 EiB!
++Invalid image size specified! You may use k, M, G or T suffixes for 
++kilobytes, megabytes, gigabytes and terabytes.
+ 
+ qemu-img create -f qcow2 -o size=-1024 TEST_DIR/t.qcow2
+ Formatting or formatting option not supported for file format 'qcow2'
+ Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=-1024 encryption=off cluster_size=65536 
+ 
+ qemu-img create -f qcow2 TEST_DIR/t.qcow2 -- -1k
+-Image size must be less than 8 EiB!
++Invalid image size specified! You may use k, M, G or T suffixes for 
++kilobytes, megabytes, gigabytes and terabytes.
+ 
+ qemu-img create -f qcow2 -o size=-1k TEST_DIR/t.qcow2
+ Formatting or formatting option not supported for file format 'qcow2'
+-- 
+2.7.4
+

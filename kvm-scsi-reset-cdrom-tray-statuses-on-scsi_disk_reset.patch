@@ -1,0 +1,67 @@
+From fd37ceedc13ec229686db2440e3ed17ff0c617f9 Mon Sep 17 00:00:00 2001
+Message-Id: <fd37ceedc13ec229686db2440e3ed17ff0c617f9.1371733794.git.minovotn@redhat.com>
+In-Reply-To: <c4dd58cee9e41e408664060ffa819156649c7cb3.1371733794.git.minovotn@redhat.com>
+References: <c4dd58cee9e41e408664060ffa819156649c7cb3.1371733794.git.minovotn@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Wed, 19 Jun 2013 11:34:51 +0200
+Subject: [PATCH 6/6] scsi: reset cdrom tray statuses on scsi_disk_reset
+
+RH-Author: Pavel Hrdina <phrdina@redhat.com>
+Message-id: <549e0a453cd5ca85b2ad26d0020bbe008e4ca4ee.1371641519.git.phrdina@redhat.com>
+Patchwork-id: 52001
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 1/1] scsi: reset cdrom tray statuses on scsi_disk_reset
+Bugzilla: 963773
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+Tray statuses should be also reset. Some guests may lock the tray and
+right after resetting the guest it should be unlocked and closed. This
+is done on power-on, reset and resume from suspend/hibernate on bare-metal.
+
+This fix is already committed for IDE CD.
+Check the commit a7f3d65b65b8c86a5ff0c0abcfefb45e2ec6fe4c.
+
+Test results on bare-metal:
+  - on reset/power-on the CD-ROM tray is closed even before the monitor
+    is turned on
+  - on resume from suspend/hibernate the tray is also closed before
+    the monitor is turned on
+
+>From test results it seems that this behavior is OS and probably BIOS
+independent.
+
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 7721c7f7c272fd2ed9d58500b7e99c33ab8a1af1)
+
+Bugzilla: 963773
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=5921743
+Upstream-status: committed
+---
+ hw/scsi-disk.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/scsi-disk.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/hw/scsi-disk.c b/hw/scsi-disk.c
+index edf7198..e13141c 100644
+--- a/hw/scsi-disk.c
++++ b/hw/scsi-disk.c
+@@ -1606,6 +1606,9 @@ static void scsi_disk_reset(DeviceState *dev)
+         nb_sectors--;
+     }
+     s->qdev.max_lba = nb_sectors;
++    /* reset tray statuses */
++    s->tray_locked = 0;
++    s->tray_open = 0;
+ }
+ 
+ static void scsi_destroy(SCSIDevice *dev)
+-- 
+1.7.11.7
+

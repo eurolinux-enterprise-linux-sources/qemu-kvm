@@ -1,0 +1,144 @@
+From 522bdf34eb8f917b8c5af2901fd993ec5744b789 Mon Sep 17 00:00:00 2001
+Message-Id: <522bdf34eb8f917b8c5af2901fd993ec5744b789.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:31 +0200
+Subject: [PATCH 57/65] spice-qemu-char: Remove dead debugging code
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <cba82c418f97b9f7c9d148508f6455241f4655dd.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50835
+O-Subject: [RHEL6.5 qemu-kvm PATCH 57/65] spice-qemu-char: Remove dead debugging code
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Hans de Goede <hdegoede@redhat.com>
+
+Since commit d62e5f7036a018b2ad09f17ebd481bd28953d783
+"chardev: add spice support to qapi"
+
+It is impossible to set the debug parameter, so all the dprintf calls
+are essentially nops. Since we've not needed the debug parameter in ages this
+is not a problem, if it later turns out we do need some more debugging options
+we can add more trace-points.
+
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 344bf1e935163d8a4c3cce3ec4c636e1ebd035ce)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	spice-qemu-char.c
+
+RHEL6: the reference to qapi from upstream doesn't really apply to
+RHEL6, but the debug printfs were annoying, and indeed trace events can
+be added if needed.  Moreover, the types of the variables being printed
+change in subsequent patches, causing format warnings/errors during
+compile.  Just get rid of these.
+---
+ spice-qemu-char.c | 17 -----------------
+ 1 file changed, 17 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ spice-qemu-char.c | 17 -----------------
+ 1 file changed, 17 deletions(-)
+
+diff --git a/spice-qemu-char.c b/spice-qemu-char.c
+index 9f7ae32..ff79c98 100644
+--- a/spice-qemu-char.c
++++ b/spice-qemu-char.c
+@@ -5,14 +5,6 @@
+ 
+ #include "osdep.h"
+ 
+-#define dprintf(_scd, _level, _fmt, ...)                                \
+-    do {                                                                \
+-        static unsigned __dprintf_counter = 0;                          \
+-        if (_scd->debug >= _level) {                                    \
+-            fprintf(stderr, "scd: %3d: " _fmt, ++__dprintf_counter, ## __VA_ARGS__);\
+-        }                                                               \
+-    } while (0)
+-
+ #define VMC_MAX_HOST_WRITE    2048
+ 
+ typedef struct SpiceCharDriver {
+@@ -23,7 +15,6 @@ typedef struct SpiceCharDriver {
+     uint8_t               *buffer;
+     uint8_t               *datapos;
+     ssize_t               bufsize, datalen;
+-    uint32_t              debug;
+ } SpiceCharDriver;
+ 
+ static int vmc_write(SpiceCharDeviceInstance *sin, const uint8_t *buf, int len)
+@@ -44,7 +35,6 @@ static int vmc_write(SpiceCharDeviceInstance *sin, const uint8_t *buf, int len)
+         p += last_out;
+     }
+ 
+-    dprintf(scd, 3, "%s: %lu/%zd\n", __func__, out, len + out);
+     return out;
+ }
+ 
+@@ -53,7 +43,6 @@ static int vmc_read(SpiceCharDeviceInstance *sin, uint8_t *buf, int len)
+     SpiceCharDriver *scd = container_of(sin, SpiceCharDriver, sin);
+     int bytes = MIN(len, scd->datalen);
+ 
+-    dprintf(scd, 2, "%s: %p %d/%d/%zd\n", __func__, scd->datapos, len, bytes, scd->datalen);
+     if (bytes > 0) {
+         memcpy(buf, scd->datapos, bytes);
+         scd->datapos += bytes;
+@@ -110,7 +99,6 @@ static void vmc_register_interface(SpiceCharDriver *scd)
+     if (scd->active) {
+         return;
+     }
+-    dprintf(scd, 1, "%s\n", __func__);
+     scd->sin.base.sif = &vmc_interface.base;
+     qemu_spice_add_interface(&scd->sin.base);
+     scd->active = true;
+@@ -121,7 +109,6 @@ static void vmc_unregister_interface(SpiceCharDriver *scd)
+     if (!scd->active) {
+         return;
+     }
+-    dprintf(scd, 1, "%s\n", __func__);
+     spice_server_remove_interface(&scd->sin.base);
+     scd->active = false;
+ }
+@@ -131,7 +118,6 @@ static int spice_chr_write(CharDriverState *chr, const uint8_t *buf, int len)
+ {
+     SpiceCharDriver *s = chr->opaque;
+ 
+-    dprintf(s, 2, "%s: %d\n", __func__, len);
+     vmc_register_interface(s);
+     assert(s->datalen == 0);
+     if (s->bufsize < len) {
+@@ -149,7 +135,6 @@ static void spice_chr_close(struct CharDriverState *chr)
+ {
+     SpiceCharDriver *s = chr->opaque;
+ 
+-    printf("%s\n", __func__);
+     vmc_unregister_interface(s);
+     qemu_free(s);
+ }
+@@ -188,7 +173,6 @@ CharDriverState *qemu_chr_open_spice(QemuOpts *opts)
+     CharDriverState *chr;
+     SpiceCharDriver *s;
+     const char* name = qemu_opt_get(opts, "name");
+-    uint32_t debug = qemu_opt_get_number(opts, "debug", 0);
+     const char** psubtype = spice_server_char_device_recognized_subtypes();
+     const char *subtype = NULL;
+ 
+@@ -212,7 +196,6 @@ CharDriverState *qemu_chr_open_spice(QemuOpts *opts)
+     chr = qemu_mallocz(sizeof(CharDriverState));
+     s = qemu_mallocz(sizeof(SpiceCharDriver));
+     s->chr = chr;
+-    s->debug = debug;
+     s->active = false;
+     s->sin.subtype = subtype;
+     chr->opaque = s;
+-- 
+1.7.11.7
+

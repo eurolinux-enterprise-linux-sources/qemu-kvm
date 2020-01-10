@@ -1,0 +1,79 @@
+From 9b77b150880803e32e0202d228bebf333cb549bb Mon Sep 17 00:00:00 2001
+Message-Id: <9b77b150880803e32e0202d228bebf333cb549bb.1378813438.git.minovotn@redhat.com>
+In-Reply-To: <b80f97e724da8388b544413d6a3dcac35d347d9b.1378813438.git.minovotn@redhat.com>
+References: <b80f97e724da8388b544413d6a3dcac35d347d9b.1378813438.git.minovotn@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Wed, 28 Aug 2013 13:14:51 +0200
+Subject: [PATCH 09/13] vpc: Round up image size during fixed image creation
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <d587f2650550cc46546780bf372dbedf825cd7e7.1377694139.git.jcody@redhat.com>
+Patchwork-id: 53844
+O-Subject: [RHEL6.5 qemu-kvm PATCH 09/13] vpc: Round up image size during fixed image creation
+Bugzilla: 999779
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+The geometry calculation algorithm from the VHD spec rounds the image
+size down if it doesn't exactly match a geometry. During image
+conversion, this causes the image to be truncated. For dynamic images,
+we already have code in place to round up instead, let's do the same for
+fixed images.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit ecd880d9eeb59a0148d4761698448245ec4306e0)
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ block/vpc.c | 23 ++++++++++-------------
+ 1 file changed, 10 insertions(+), 13 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vpc.c | 23 ++++++++++-------------
+ 1 file changed, 10 insertions(+), 13 deletions(-)
+
+diff --git a/block/vpc.c b/block/vpc.c
+index 1ab9eaf..e01364d 100644
+--- a/block/vpc.c
++++ b/block/vpc.c
+@@ -684,24 +684,21 @@ static int vpc_create(const char *filename, QEMUOptionParameter *options)
+         return -EIO;
+     }
+ 
++    /*
++     * Calculate matching total_size and geometry. Increase the number of
++     * sectors requested until we get enough (or fail). This ensures that
++     * qemu-img convert doesn't truncate images, but rather rounds up.
++     */
+     total_sectors = total_size / BDRV_SECTOR_SIZE;
+-    if (disk_type == VHD_DYNAMIC) {
+-        /* Calculate matching total_size and geometry. Increase the number of
+-           sectors requested until we get enough (or fail). */
+-        for (i = 0; total_sectors > (int64_t)cyls * heads * secs_per_cyl;
+-             i++) {
+-            if (calculate_geometry(total_sectors + i,
+-                                   &cyls, &heads, &secs_per_cyl)) {
+-                ret = -EFBIG;
+-                goto fail;
+-            }
+-        }
+-    } else {
+-        if (calculate_geometry(total_sectors, &cyls, &heads, &secs_per_cyl)) {
++    for (i = 0; total_sectors > (int64_t)cyls * heads * secs_per_cyl; i++) {
++        if (calculate_geometry(total_sectors + i, &cyls, &heads,
++                               &secs_per_cyl))
++        {
+             ret = -EFBIG;
+             goto fail;
+         }
+     }
++
+     total_sectors = (int64_t) cyls * heads * secs_per_cyl;
+ 
+     /* Prepare the Hard Disk Footer */
+-- 
+1.7.11.7
+

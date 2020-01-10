@@ -1,0 +1,59 @@
+From fb322368dcfac95ba47b7299025f859564db3f74 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Tue, 29 Oct 2013 12:31:38 +0100
+Subject: [PATCH 27/39] qemu-options.hx: Document missing -drive options
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1383049898-26131-1-git-send-email-kwolf@redhat.com>
+Patchwork-id: 55096
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] qemu-options.hx: Document missing -drive options
+Bugzilla: 1024335
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Vlad Yasevich <vyasevic@redhat.com>
+
+From: Luiz Capitulino <lcapitulino@redhat.com>
+
+Bugzilla: 1024335
+
+They are 'werror', 'rerror' and 'readonly'.
+
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit ae73e5919a75622d2c029d5a0e240115990fb735)
+
+Conflicts:
+	qemu-options.hx
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ qemu-options.hx | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ qemu-options.hx |    8 ++++++++
+ 1 files changed, 8 insertions(+), 0 deletions(-)
+
+diff --git a/qemu-options.hx b/qemu-options.hx
+index 4a4244d..7815f59 100644
+--- a/qemu-options.hx
++++ b/qemu-options.hx
+@@ -144,6 +144,14 @@ an untrusted format header.
+ This option specifies the serial number to assign to the device.
+ @item addr=@var{addr}
+ Specify the controller's PCI address (if=virtio only).
++@item werror=@var{action},rerror=@var{action}
++Specify which @var{action} to take on write and read errors. Valid actions are:
++"ignore" (ignore the error and try to continue), "stop" (pause QEMU),
++"report" (report the error to the guest), "enospc" (pause QEMU only if the
++host disk is full; report the error to the guest otherwise).
++The default setting is @option{werror=enospc} and @option{rerror=report}.
++@item readonly
++Open drive @option{file} as read-only. Guest write attempts will fail.
+ @item copy-on-read=@var{copy-on-read}
+ @var{copy-on-read} is "on" or "off" and enables whether to copy read backing
+ file sectors into the image file.
+-- 
+1.7.1
+

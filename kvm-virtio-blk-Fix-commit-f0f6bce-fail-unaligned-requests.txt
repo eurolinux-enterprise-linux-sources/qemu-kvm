@@ -1,0 +1,60 @@
+From c4157dfb0fa047623302a5015f9cf358e5384bc0 Mon Sep 17 00:00:00 2001
+From: Markus Armbruster <armbru@redhat.com>
+Date: Tue, 22 Jul 2014 09:16:01 -0500
+Subject: [CHANGE 12/17] virtio-blk: Fix commit f0f6bce "fail unaligned
+ requests"
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1406020565-25364-8-git-send-email-armbru@redhat.com>
+Patchwork-id: 60000
+O-Subject: [PATCH 6.6 qemu-kvm v2 07/11] virtio-blk: Fix commit f0f6bce "fail unaligned requests"
+Bugzilla: 1064643
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+The backport inserted the unaligned check after the conditional flush
+of the MultiReqBuffer instead of before.  The change in behavior is
+harmless.  Fix it anyway.
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+---
+ hw/virtio-blk.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/virtio-blk.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/hw/virtio-blk.c b/hw/virtio-blk.c
+index 8731afc..7b25de6 100644
+--- a/hw/virtio-blk.c
++++ b/hw/virtio-blk.c
+@@ -323,6 +323,10 @@ static void virtio_blk_handle_write(BlockRequest *blkreq, int *num_writes,
+         virtio_blk_rw_complete(req, -EIO);
+         return;
+     }
++    if (req->qiov.size % req->dev->conf->logical_block_size) {
++        virtio_blk_rw_complete(req, -EIO);
++        return;
++    }
+ 
+     if (req->dev->bs != *old_bs || *num_writes == 32) {
+         if (*old_bs != NULL) {
+@@ -331,10 +335,6 @@ static void virtio_blk_handle_write(BlockRequest *blkreq, int *num_writes,
+         *num_writes = 0;
+         *old_bs = req->dev->bs;
+     }
+-    if (req->qiov.size % req->dev->conf->logical_block_size) {
+-        virtio_blk_rw_complete(req, -EIO);
+-        return;
+-    }
+ 
+     blkreq[*num_writes].sector = req->out->sector;
+     blkreq[*num_writes].nb_sectors = req->qiov.size / 512;
+-- 
+1.9.3
+

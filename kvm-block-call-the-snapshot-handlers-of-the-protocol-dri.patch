@@ -1,0 +1,157 @@
+From 309c5c84a0e961f5d553c35f2b2e82ffc1dc6bd0 Mon Sep 17 00:00:00 2001
+Message-Id: <309c5c84a0e961f5d553c35f2b2e82ffc1dc6bd0.1376495567.git.minovotn@redhat.com>
+In-Reply-To: <00d7e0e572c0fbe3521a2d1ffb6cc704e1abd2eb.1376495567.git.minovotn@redhat.com>
+References: <00d7e0e572c0fbe3521a2d1ffb6cc704e1abd2eb.1376495567.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Wed, 14 Aug 2013 08:52:50 +0200
+Subject: [PATCH 6/6] block: call the snapshot handlers of the protocol
+ drivers
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1376470370-32441-7-git-send-email-kwolf@redhat.com>
+Patchwork-id: 53334
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 6/6] block: call the snapshot handlers of the protocol drivers
+Bugzilla: 988079
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: MORITA Kazutaka <morita.kazutaka@lab.ntt.co.jp>
+
+Bugzilla: 988079
+
+When snapshot handlers are not defined in the format driver, it is
+better to call the ones of the protocol driver.  This enables us to
+implement snapshot support in the protocol driver.
+
+We need to call bdrv_close() and bdrv_open() handlers of the format
+driver before and after bdrv_snapshot_goto() call of the protocol.  It is
+because the contents of the block driver state may need to be changed
+after loading vmstate.
+
+Signed-off-by: MORITA Kazutaka <morita.kazutaka@lab.ntt.co.jp>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 7cdb1f6d305e1000b5f882257cbee71b8bb08ef5)
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block.c | 61 +++++++++++++++++++++++++++++++++++++++++++------------------
+ 1 file changed, 43 insertions(+), 18 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.c | 61 +++++++++++++++++++++++++++++++++++++++++++------------------
+ 1 file changed, 43 insertions(+), 18 deletions(-)
+
+diff --git a/block.c b/block.c
+index 5c5e9f7..ecbbf2a 100644
+--- a/block.c
++++ b/block.c
+@@ -3098,9 +3098,11 @@ int bdrv_save_vmstate(BlockDriverState *bs, const uint8_t *buf,
+     BlockDriver *drv = bs->drv;
+     if (!drv)
+         return -ENOMEDIUM;
+-    if (!drv->bdrv_save_vmstate)
+-        return -ENOTSUP;
+-    return drv->bdrv_save_vmstate(bs, buf, pos, size);
++    if (drv->bdrv_save_vmstate)
++        return drv->bdrv_save_vmstate(bs, buf, pos, size);
++    if (bs->file)
++        return bdrv_save_vmstate(bs->file, buf, pos, size);
++    return -ENOTSUP;
+ }
+ 
+ int bdrv_load_vmstate(BlockDriverState *bs, uint8_t *buf,
+@@ -3109,9 +3111,11 @@ int bdrv_load_vmstate(BlockDriverState *bs, uint8_t *buf,
+     BlockDriver *drv = bs->drv;
+     if (!drv)
+         return -ENOMEDIUM;
+-    if (!drv->bdrv_load_vmstate)
+-        return -ENOTSUP;
+-    return drv->bdrv_load_vmstate(bs, buf, pos, size);
++    if (drv->bdrv_load_vmstate)
++        return drv->bdrv_load_vmstate(bs, buf, pos, size);
++    if (bs->file)
++        return bdrv_load_vmstate(bs->file, buf, pos, size);
++    return -ENOTSUP;
+ }
+ 
+ void bdrv_debug_event(BlockDriverState *bs, BlkDebugEvent event)
+@@ -3176,20 +3180,37 @@ int bdrv_snapshot_create(BlockDriverState *bs,
+     BlockDriver *drv = bs->drv;
+     if (!drv)
+         return -ENOMEDIUM;
+-    if (!drv->bdrv_snapshot_create)
+-        return -ENOTSUP;
+-    return drv->bdrv_snapshot_create(bs, sn_info);
++    if (drv->bdrv_snapshot_create)
++        return drv->bdrv_snapshot_create(bs, sn_info);
++    if (bs->file)
++        return bdrv_snapshot_create(bs->file, sn_info);
++    return -ENOTSUP;
+ }
+ 
+ int bdrv_snapshot_goto(BlockDriverState *bs,
+                        const char *snapshot_id)
+ {
+     BlockDriver *drv = bs->drv;
++    int ret, open_ret;
++
+     if (!drv)
+         return -ENOMEDIUM;
+-    if (!drv->bdrv_snapshot_goto)
+-        return -ENOTSUP;
+-    return drv->bdrv_snapshot_goto(bs, snapshot_id);
++    if (drv->bdrv_snapshot_goto)
++        return drv->bdrv_snapshot_goto(bs, snapshot_id);
++
++    if (bs->file) {
++        drv->bdrv_close(bs);
++        ret = bdrv_snapshot_goto(bs->file, snapshot_id);
++        open_ret = drv->bdrv_open(bs, bs->open_flags);
++        if (open_ret < 0) {
++            bdrv_delete(bs->file);
++            bs->drv = NULL;
++            return open_ret;
++        }
++        return ret;
++    }
++
++    return -ENOTSUP;
+ }
+ 
+ int bdrv_snapshot_delete(BlockDriverState *bs, const char *snapshot_id)
+@@ -3197,9 +3218,11 @@ int bdrv_snapshot_delete(BlockDriverState *bs, const char *snapshot_id)
+     BlockDriver *drv = bs->drv;
+     if (!drv)
+         return -ENOMEDIUM;
+-    if (!drv->bdrv_snapshot_delete)
+-        return -ENOTSUP;
+-    return drv->bdrv_snapshot_delete(bs, snapshot_id);
++    if (drv->bdrv_snapshot_delete)
++        return drv->bdrv_snapshot_delete(bs, snapshot_id);
++    if (bs->file)
++        return bdrv_snapshot_delete(bs->file, snapshot_id);
++    return -ENOTSUP;
+ }
+ 
+ int bdrv_snapshot_list(BlockDriverState *bs,
+@@ -3208,9 +3231,11 @@ int bdrv_snapshot_list(BlockDriverState *bs,
+     BlockDriver *drv = bs->drv;
+     if (!drv)
+         return -ENOMEDIUM;
+-    if (!drv->bdrv_snapshot_list)
+-        return -ENOTSUP;
+-    return drv->bdrv_snapshot_list(bs, psn_info);
++    if (drv->bdrv_snapshot_list)
++        return drv->bdrv_snapshot_list(bs, psn_info);
++    if (bs->file)
++        return bdrv_snapshot_list(bs->file, psn_info);
++    return -ENOTSUP;
+ }
+ 
+ /* backing_file can either be relative, or absolute, or a protocol.  If it is
+-- 
+1.7.11.7
+

@@ -1,0 +1,180 @@
+From ac2eb773a50517fbf457130ab2e05ec791b646f1 Mon Sep 17 00:00:00 2001
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 21 Jun 2013 06:20:10 +0200
+Subject: [PATCH 14/21] ide: convert ide_sector_read() to asynchronous I/O
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1371795611-7208-15-git-send-email-famz@redhat.com>
+Patchwork-id: 52088
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 14/15] ide: convert ide_sector_read() to asynchronous I/O
+Bugzilla: 956825
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+
+The IDE PIO interface currently uses bdrv_read() to perform reads
+synchronously.  Synchronous I/O in the vcpu thread is bad because it
+prevents the guest from executing code - it makes the guest
+unresponsive.
+
+This patch converts IDE PIO to use bdrv_aio_readv().  We simply need to
+use the BUSY_STAT status so the guest knows to wait while we are busy.
+
+The only external user of ide_sector_read() is restart behavior on I/O
+errors and it is not affected by this change.  We still need to restart
+I/O in the same way.
+
+Migration is also unaffected if I understand the code correctly.  We
+continue to use the same transfer function and the BUSY_STAT status
+should never be migrated since we flush I/O before migrating device
+state.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Reviewed-by: Zhi Yong Wu <wuzhy@linux.vnet.ibm.com>
+Tested-by: Richard Davies <richard@arachsys.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit bef0fd5958120542f126f2dedbfce65d8839a94d)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+
+Conflicts:
+    hw/ide/core.c
+---
+ hw/ide/core.c     | 77 ++++++++++++++++++++++++++++++++++++++++---------------
+ hw/ide/internal.h |  3 +++
+ 2 files changed, 59 insertions(+), 21 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ hw/ide/core.c     |   77 ++++++++++++++++++++++++++++++++++++++--------------
+ hw/ide/internal.h |    3 ++
+ 2 files changed, 59 insertions(+), 21 deletions(-)
+
+diff --git a/hw/ide/core.c b/hw/ide/core.c
+index a9df4d8..e8c0267 100644
+--- a/hw/ide/core.c
++++ b/hw/ide/core.c
+@@ -378,40 +378,69 @@ static void ide_rw_error(IDEState *s) {
+     ide_set_irq(s->bus);
+ }
+ 
++static void ide_sector_read(IDEState *s);
++static void ide_sector_read_cb(void *opaque, int ret)
++{
++    IDEState *s = opaque;
++    int n;
++
++    s->pio_aiocb = NULL;
++    s->status &= ~BUSY_STAT;
++
++    bdrv_acct_done(s->bs, &s->acct);
++    if (ret != 0) {
++        if (ide_handle_rw_error(s, -ret, BM_STATUS_PIO_RETRY |
++                                BM_STATUS_RETRY_READ)) {
++            return;
++        }
++    }
++
++    n = s->nsector;
++    if (n > s->req_nb_sectors) {
++        n = s->req_nb_sectors;
++    }
++
++    /* Allow the guest to read the io_buffer */
++    ide_transfer_start(s, s->io_buffer, n * BDRV_SECTOR_SIZE, ide_sector_read);
++
++    ide_set_irq(s->bus);
++
++    ide_set_sector(s, ide_get_sector(s) + n);
++    s->nsector -= n;
++}
++
+ static void ide_sector_read(IDEState *s)
+ {
+     int64_t sector_num;
+-    int ret, n;
++    int n;
+ 
+     s->status = READY_STAT | SEEK_STAT;
+     s->error = 0; /* not needed by IDE spec, but needed by Windows */
+     sector_num = ide_get_sector(s);
+     n = s->nsector;
++
+     if (n == 0) {
+-        /* no more sector to read from disk */
+         ide_transfer_stop(s);
+-    } else {
++        return;
++    }
++
++    s->status |= BUSY_STAT;
++
++    if (n > s->req_nb_sectors) {
++        n = s->req_nb_sectors;
++    }
++
+ #if defined(DEBUG_IDE)
+-        printf("read sector=%" PRId64 "\n", sector_num);
++    printf("sector=%" PRId64 "\n", sector_num);
+ #endif
+-        if (n > s->req_nb_sectors)
+-            n = s->req_nb_sectors;
+ 
+-        bdrv_acct_start(s->bs, &s->acct, n * BDRV_SECTOR_SIZE, BDRV_ACCT_READ);
+-        ret = bdrv_read(s->bs, sector_num, s->io_buffer, n);
+-        bdrv_acct_done(s->bs, &s->acct);
+-        if (ret != 0) {
+-            if (ide_handle_rw_error(s, -ret,
+-                BM_STATUS_PIO_RETRY | BM_STATUS_RETRY_READ))
+-            {
+-                return;
+-            }
+-        }
+-        ide_transfer_start(s, s->io_buffer, 512 * n, ide_sector_read);
+-        ide_set_irq(s->bus);
+-        ide_set_sector(s, sector_num + n);
+-        s->nsector -= n;
+-    }
++    s->iov.iov_base = s->io_buffer;
++    s->iov.iov_len  = n * BDRV_SECTOR_SIZE;
++    qemu_iovec_init_external(&s->qiov, &s->iov, 1);
++
++    bdrv_acct_start(s->bs, &s->acct, n * BDRV_SECTOR_SIZE, BDRV_ACCT_READ);
++    s->pio_aiocb = bdrv_aio_readv(s->bs, sector_num, &s->qiov, n,
++                                  ide_sector_read_cb, s);
+ }
+ 
+ 
+@@ -1797,6 +1826,12 @@ static void ide_reset(IDEState *s)
+ #ifdef DEBUG_IDE
+     printf("ide: reset\n");
+ #endif
++
++    if (s->pio_aiocb) {
++        bdrv_aio_cancel(s->pio_aiocb);
++        s->pio_aiocb = NULL;
++    }
++
+     if (s->drive_kind == IDE_CFATA)
+         s->mult_sectors = 0;
+     else
+diff --git a/hw/ide/internal.h b/hw/ide/internal.h
+index 83ae6f0..9fdb9d5 100644
+--- a/hw/ide/internal.h
++++ b/hw/ide/internal.h
+@@ -435,6 +435,9 @@ struct IDEState {
+     int cd_sector_size;
+     int atapi_dma; /* true if dma is requested for the packet cmd */
+     BlockAcctCookie acct;
++    BlockDriverAIOCB *pio_aiocb;
++    struct iovec iov;
++    QEMUIOVector qiov;
+     /* ATA DMA state */
+     int io_buffer_size;
+     QEMUSGList sg;
+-- 
+1.7.1
+

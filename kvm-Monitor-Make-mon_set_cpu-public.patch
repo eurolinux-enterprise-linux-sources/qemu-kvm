@@ -1,0 +1,97 @@
+From 9a5f5d4ceeee0cbdf6a9cb43552ccabd1667bbff Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Wed, 13 Nov 2013 23:34:43 +0100
+Subject: [PATCH 28/39] Monitor: Make mon_set_cpu() public
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1384385687-11423-2-git-send-email-lersek@redhat.com>
+Patchwork-id: 55672
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 1/5] Monitor: Make mon_set_cpu() public
+Bugzilla: 1026903
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: Luiz Capitulino <lcapitulino@redhat.com>
+
+Also rename it to monitor_set_cpu().
+
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit b025c8b4ab108a5a4bb4ef1e2500fc63214e2193)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ monitor.h |  1 +
+ monitor.c | 11 +++++------
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ monitor.c |   11 +++++------
+ monitor.h |    1 +
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/monitor.c b/monitor.c
+index 34dedc3..7214d66 100644
+--- a/monitor.c
++++ b/monitor.c
+@@ -683,7 +683,6 @@ static int do_qmp_capabilities(Monitor *mon, const QDict *params,
+     return 0;
+ }
+ 
+-static int mon_set_cpu(int cpu_index);
+ static void handle_user_command(Monitor *mon, const char *cmdline);
+ 
+ static int do_hmp_passthrough(Monitor *mon, const QDict *params,
+@@ -707,7 +706,7 @@ static int do_hmp_passthrough(Monitor *mon, const QDict *params,
+     cur_mon = &hmp;
+ 
+     if (qdict_haskey(params, "cpu-index")) {
+-        ret = mon_set_cpu(qdict_get_int(params, "cpu-index"));
++        ret = monitor_set_cpu(qdict_get_int(params, "cpu-index"));
+         if (ret < 0) {
+             cur_mon = old_mon;
+             qerror_report(QERR_INVALID_PARAMETER_VALUE, "cpu-index", "a CPU number");
+@@ -1042,8 +1041,8 @@ static void do_info_uuid(Monitor *mon, QObject **ret_data)
+     *ret_data = qobject_from_jsonf("{ 'UUID': %s }", uuid);
+ }
+ 
+-/* get the current CPU defined by the user */
+-static int mon_set_cpu(int cpu_index)
++/* set the current CPU defined by the user */
++int monitor_set_cpu(int cpu_index)
+ {
+     CPUState *env;
+ 
+@@ -1059,7 +1058,7 @@ static int mon_set_cpu(int cpu_index)
+ static CPUState *mon_get_cpu(void)
+ {
+     if (!cur_mon->mon_cpu) {
+-        mon_set_cpu(0);
++        monitor_set_cpu(0);
+     }
+     cpu_synchronize_state(cur_mon->mon_cpu);
+     return cur_mon->mon_cpu;
+@@ -1171,7 +1170,7 @@ static void do_info_cpus(Monitor *mon, QObject **ret_data)
+ static int do_cpu_set(Monitor *mon, const QDict *qdict, QObject **ret_data)
+ {
+     int index = qdict_get_int(qdict, "index");
+-    if (mon_set_cpu(index) < 0) {
++    if (monitor_set_cpu(index) < 0) {
+         qerror_report(QERR_INVALID_PARAMETER_VALUE, "index",
+                       "a CPU number");
+         return -1;
+diff --git a/monitor.h b/monitor.h
+index 4821f8a..4efb0d7 100644
+--- a/monitor.h
++++ b/monitor.h
+@@ -76,6 +76,7 @@ void monitor_printf(Monitor *mon, const char *fmt, ...)
+     __attribute__ ((__format__ (__printf__, 2, 3)));
+ void monitor_print_filename(Monitor *mon, const char *filename);
+ void monitor_flush(Monitor *mon);
++int monitor_set_cpu(int cpu_index);
+ 
+ typedef void (MonitorCompletion)(void *opaque, QObject *ret_data);
+ 
+-- 
+1.7.1
+

@@ -1,0 +1,43 @@
+From a99d3a64f460b5e5d2a05f9225293b65bc4d62f2 Mon Sep 17 00:00:00 2001
+Message-Id: <a99d3a64f460b5e5d2a05f9225293b65bc4d62f2.1379425497.git.minovotn@redhat.com>
+In-Reply-To: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+References: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Fri, 6 Sep 2013 18:12:32 +0200
+Subject: [PATCH 12/25] block: do not use ->total_sectors in
+ bdrv_co_is_allocated
+
+This is more robust when the device has removable media.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 617ccb466e1937a5c99332ce77a47ebd29861ae4)
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/block.c b/block.c
+index af28408..0795071 100644
+--- a/block.c
++++ b/block.c
+@@ -2740,9 +2740,15 @@ static int coroutine_fn bdrv_co_is_allocated(BlockDriverState *bs,
+                                              int64_t sector_num,
+                                              int nb_sectors, int *pnum)
+ {
++    int64_t length;
+     int64_t n;
+ 
+-    if (sector_num >= bs->total_sectors) {
++    length = bdrv_getlength(bs);
++    if (length < 0) {
++        return length;
++    }
++
++    if (sector_num >= (length >> BDRV_SECTOR_BITS)) {
+         *pnum = 0;
+         return 0;
+     }
+-- 
+1.7.11.7
+

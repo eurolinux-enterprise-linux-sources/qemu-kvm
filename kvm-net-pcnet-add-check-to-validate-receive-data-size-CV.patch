@@ -1,0 +1,77 @@
+From d92ef785e77041159fc34293b4726c2fc69912f9 Mon Sep 17 00:00:00 2001
+From: Xiao Wang <jasowang@redhat.com>
+Date: Fri, 11 Dec 2015 08:49:29 -0500
+Subject: [PATCH 3/4] net: pcnet: add check to validate receive data
+ size(CVE-2015-7504)
+
+RH-Author: Xiao Wang <jasowang@redhat.com>
+Message-id: <1449823770-36267-1-git-send-email-jasowang@redhat.com>
+Patchwork-id: 68538
+O-Subject: [RHEL6.8/6.7z qemu-kvm PATCH V2 1/2] net: pcnet: add check to validate receive data size(CVE-2015-7504)
+Bugzilla: 1286597 1287950
+RH-Acked-by: John Snow <jsnow@redhat.com>
+RH-Acked-by: Jeff Nelson <jenelson@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+
+From: Prasad J Pandit <pjp@fedoraproject.org>
+
+Bugzilla: 1286597 1287950
+Brew build: https://brewweb.devel.redhat.com/taskinfo?taskID=10222858
+Test status: Compile test
+Upstream Status: 837f21aacf5a714c23ddaadbbc5212f9b661e3f7
+Notes: Conflicts since:
+- hw/pcnet.c were renamed to hw/net/pcnet.c upstream
+- upstream commit 9f7c594c006289ad41169b854d70f5da6e400a2a (pcnet:
+  force the buffer access to be in bounds during tx) fixes indentation
+  issue but our internal commit
+  e2fc16c877a76a954345c392db77e204a057c10a does not.
+
+In loopback mode, pcnet_receive routine appends CRC code to the
+receive buffer. If the data size given is same as the buffer size,
+the appended CRC code overwrites 4 bytes after s->buffer. Added a
+check to avoid that.
+
+Reported by: Qinghao Tang <luodalongde@gmail.com>
+Cc: qemu-stable@nongnu.org
+Reviewed-by: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Prasad J Pandit <pjp@fedoraproject.org>
+Signed-off-by: Jason Wang <jasowang@redhat.com>
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/pcnet.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/hw/pcnet.c b/hw/pcnet.c
+index 01dc0b2..bb1d892 100644
+--- a/hw/pcnet.c
++++ b/hw/pcnet.c
+@@ -1127,7 +1127,7 @@ ssize_t pcnet_receive(VLANClientState *nc, const uint8_t *buf, size_t size_)
+                 uint32_t fcs = ~0;
+                 uint8_t *p = src;
+ 
+-                while (p != &src[size-4])
++                while (p != &src[size])
+                     CRC(fcs, *p++);
+                 crc_err = (*(uint32_t *)p != htonl(fcs));
+             }
+@@ -1260,10 +1260,12 @@ static void pcnet_transmit(PCNetState *s)
+         bcnt = 4096 - GET_FIELD(tmd.length, TMDL, BCNT);
+ 
+         /* if multi-tmd packet outsizes s->buffer then skip it silently.
+-           Note: this is not what real hw does */
+-        if (s->xmit_pos + bcnt > sizeof(s->buffer)) {
+-           s->xmit_pos = -1;
+-           goto txdone;
++         * Note: this is not what real hw does.
++         * Last four bytes of s->buffer are used to store CRC FCS code.
++         */
++        if (s->xmit_pos + bcnt > sizeof(s->buffer) - 4) {
++            s->xmit_pos = -1;
++            goto txdone;
+         }
+ 
+         s->phys_mem_read(s->dma_opaque, PHYSADDR(s, tmd.tbadr),
+-- 
+2.1.0
+

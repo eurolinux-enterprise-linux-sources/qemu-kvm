@@ -1,0 +1,78 @@
+From f6a08df3006f4031a6fa60cc8eeca335be7733f2 Mon Sep 17 00:00:00 2001
+Message-Id: <f6a08df3006f4031a6fa60cc8eeca335be7733f2.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 2 Apr 2015 09:28:10 -0500
+Subject: [CHANGE 41/42] qed: Disable buggy zero write support
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1427966891-29967-3-git-send-email-kwolf@redhat.com>
+Patchwork-id: 64677
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 2/3] qed: Disable buggy zero write support
+Bugzilla: 1130022
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: John Snow <jsnow@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Upstream status: downstream-only
+
+qemu-iotests case 034 shows image corruption for zero writes with QED on
+RHEL 6. One obvious missing backport is commit ef72f76e, but that alone
+doesn't help (block.c doesn't handle -ENOTSUP in RHEL 6, and who knows
+what else is missing).
+
+As we don't officially support QED except for image conversion, let's
+not waste developer cycles and instead remove zero write support, so
+that QED images fall back to explicit zero writes instead.
+
+If used with a VM, this means that image streaming may now produce fully
+allocated images in some cases that resulted in a sparse image before.
+For image conversion, it doesn't make any difference.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/qed.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qed.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/block/qed.c b/block/qed.c
+index 53caff4..eaed67f 100644
+--- a/block/qed.c
++++ b/block/qed.c
+@@ -1400,6 +1400,7 @@ static BlockDriverAIOCB *bdrv_qed_aio_flush(BlockDriverState *bs,
+     return bdrv_aio_flush(bs->file, cb, opaque);
+ }
+ 
++#if 0
+ typedef struct {
+     Coroutine *co;
+     int ret;
+@@ -1446,6 +1447,7 @@ static int coroutine_fn bdrv_qed_co_write_zeroes(BlockDriverState *bs,
+     assert(cb.done);
+     return cb.ret;
+ }
++#endif
+ 
+ static int bdrv_qed_truncate(BlockDriverState *bs, int64_t offset)
+ {
+@@ -1605,7 +1607,10 @@ static BlockDriver bdrv_qed = {
+     .bdrv_aio_readv           = bdrv_qed_aio_readv,
+     .bdrv_aio_writev          = bdrv_qed_aio_writev,
+     .bdrv_aio_flush           = bdrv_qed_aio_flush,
++#if 0
++    /* Disabled because of corruption issue; check qemu-iotests 034 */
+     .bdrv_co_write_zeroes     = bdrv_qed_co_write_zeroes,
++#endif
+     .bdrv_truncate            = bdrv_qed_truncate,
+     .bdrv_getlength           = bdrv_qed_getlength,
+     .bdrv_get_info            = bdrv_qed_get_info,
+-- 
+2.1.0
+

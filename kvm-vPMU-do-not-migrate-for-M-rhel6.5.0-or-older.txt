@@ -1,0 +1,72 @@
+From 26a67a511bf2f6ef030fb9a09c337eb0c8ff6612 Mon Sep 17 00:00:00 2001
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Fri, 11 Jul 2014 07:38:01 -0500
+Subject: [CHANGE 05/11] vPMU: do not migrate for -M rhel6.5.0 or older
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: <1405064281-17848-4-git-send-email-pbonzini@redhat.com>
+Patchwork-id: 59774
+O-Subject: [RHEL 6.6 qemu-kvm PATCH v2 3/3] vPMU: do not migrate for -M rhel6.5.0 or older
+Bugzilla: 845667
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Igor Mammedov <imammedo@redhat.com>
+RH-Acked-by: Eduardo Habkost <ehabkost@redhat.com>
+
+Bugzilla: 845667
+
+RHEL only, no need in RHEL7 due to no 7->6 migration
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/pc.c               | 2 ++
+ hw/pc.h               | 1 +
+ target-i386/machine.c | 3 +++
+ 3 files changed, 6 insertions(+)
+
+diff --git a/hw/pc.c b/hw/pc.c
+index 8ef52fb..349d218 100644
+--- a/hw/pc.c
++++ b/hw/pc.c
+@@ -1755,9 +1755,11 @@ static void rhel_common_init(const char *type1_version,
+         }
+ 
+ bool migrate_steal_time_msr = true;
++bool migrate_pmu = true;
+ 
+ static void pc_rhel650_compat(void)
+ {
++    migrate_pmu = false;
+ }
+ 
+ static void pc_rhel640_compat(void)
+diff --git a/hw/pc.h b/hw/pc.h
+index f800d4e..87d5bbe 100644
+--- a/hw/pc.h
++++ b/hw/pc.h
+@@ -186,5 +186,6 @@ void disable_tsc_deadline(void);
+ void disable_kvm_sep(void);
+ void set_cpu_model_level(const char *name, int level);
+ extern bool migrate_steal_time_msr;
++extern bool migrate_pmu;
+ 
+ #endif
+diff --git a/target-i386/machine.c b/target-i386/machine.c
+index fa331c9..54218ef 100644
+--- a/target-i386/machine.c
++++ b/target-i386/machine.c
+@@ -532,6 +532,9 @@ static bool pmu_enable_needed(void *opaque)
+     CPUState *env = opaque;
+     int i;
+ 
++    if (!migrate_pmu) {
++        return false;
++    }
+     if (env->msr_fixed_ctr_ctrl || env->msr_global_ctrl ||
+         env->msr_global_status || env->msr_global_ovf_ctrl) {
+         return true;
+-- 
+1.9.3
+

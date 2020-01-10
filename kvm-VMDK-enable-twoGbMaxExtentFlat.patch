@@ -1,0 +1,62 @@
+From 0917f3ee15593a14181862ff55de9783035f47d6 Mon Sep 17 00:00:00 2001
+Message-Id: <0917f3ee15593a14181862ff55de9783035f47d6.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:32 +0200
+Subject: [PATCH 17/47] VMDK: enable twoGbMaxExtentFlat
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-18-git-send-email-famz@redhat.com>
+Patchwork-id: 51453
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 17/47] VMDK: enable twoGbMaxExtentFlat
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Fam Zheng <famcool@gmail.com>
+
+Enable the createType 'twoGbMaxExtentFlat'. The supporting code is
+already in.
+
+Signed-off-by: Fam Zheng <famcool@gmail.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 6398de5160e3271b720190b7d6801aecffc91978)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 5029cd3..e4744c2 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -552,7 +552,8 @@ static int vmdk_open_desc_file(BlockDriverState *bs, int flags)
+     if (vmdk_parse_description(buf, "createType", ct, sizeof(ct))) {
+         return -EINVAL;
+     }
+-    if (strcmp(ct, "monolithicFlat")) {
++    if (strcmp(ct, "monolithicFlat") &&
++        strcmp(ct, "twoGbMaxExtentFlat")) {
+         fprintf(stderr,
+                 "VMDK: Not supported image type \"%s\""".\n", ct);
+         return -ENOTSUP;
+@@ -675,6 +676,7 @@ static int get_cluster_offset(BlockDriverState *bs,
+         return 0;
+     }
+ 
++    offset -= (extent->end_sector - extent->sectors) * SECTOR_SIZE;
+     l1_index = (offset >> 9) / extent->l1_entry_sectors;
+     if (l1_index >= extent->l1_size) {
+         return -1;
+-- 
+1.7.11.7
+

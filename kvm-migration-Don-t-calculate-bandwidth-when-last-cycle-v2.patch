@@ -1,0 +1,64 @@
+From 8b25ff2c8decdac8ff408f32d8e86127f66a5fdb Mon Sep 17 00:00:00 2001
+Message-Id: <8b25ff2c8decdac8ff408f32d8e86127f66a5fdb.1421272770.git.jen@redhat.com>
+In-Reply-To: <acd6d327ae856e72f084949fd71314237a4b9b8b.1421272770.git.jen@redhat.com>
+References: <acd6d327ae856e72f084949fd71314237a4b9b8b.1421272770.git.jen@redhat.com>
+From: Juan Quintela <quintela@redhat.com>
+Date: Wed, 7 Jan 2015 16:45:12 -0600
+Subject: [CHANGE 08/10] migration: Don't calculate bandwidth when last cycle
+ was too short
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Juan Quintela <quintela@redhat.com>
+Message-id: <1420649114-17435-9-git-send-email-quintela@redhat.com>
+Patchwork-id: 63165
+O-Subject: [PATCH qemu-kvm RHEL6.7 08/10] migration: Don't calculate bandwidth when last cycle was too short
+Bugzilla: 970103
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+If cycle is too short (10ms) we don't want to try to calculate
+Bandwidth, because sometimes it just gives a very bad indicator.
+
+But, if networking is really flacky, and we don't get 10ms cycles, we
+also exit if pending memory is smaller than 10MB.
+
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+---
+ vl.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ vl.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/vl.c b/vl.c
+index 5faf0bb..6e05abf 100644
+--- a/vl.c
++++ b/vl.c
+@@ -2948,6 +2948,20 @@ static int ram_save_live(Monitor *mon, QEMUFile *f, int stage, void *opaque)
+         uint64_t expected_time;
+         double bwidth = 0;
+ 
++        /*
++         * If it is smaller than 10ms, we don't trust the measurement.
++         *
++         * Sometimes as the amount of time is very small and that
++         * makes the bandwidth really, really high.  But if
++         * networking is very flaky, we also want to finish migration
++         * when the amount of memory pending is small enough. (10MB
++         * on this case).
++         */
++
++        if ((ram_bytes_remaining() > 10 * 1024 * 1024) && (t0 < 10000000)) {
++            return 0;
++        }
++
+         bwidth = ((double)bytes_transferred - bytes_transferred_last) / t0;
+ 
+         /*
+-- 
+2.1.0
+

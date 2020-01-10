@@ -1,0 +1,56 @@
+From d57bff8cf3457c2e855eeca4b18266bf5956270d Mon Sep 17 00:00:00 2001
+Message-Id: <d57bff8cf3457c2e855eeca4b18266bf5956270d.1422637807.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Mon, 19 Jan 2015 14:52:02 -0500
+Subject: [CHANGE 01/10] Revert "Documentation: Mention qcow2 full
+ preallocation"
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1421679130-22714-2-git-send-email-mreitz@redhat.com>
+Patchwork-id: 63361
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 1/9] Revert "Documentation: Mention qcow2 full preallocation"
+Bugzilla: 1040220
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1040220
+Upstream: N/A (below commit was downstream-only)
+
+This reverts commit 42265c953db3c785383f1f0191ef5cd4a58d67d5.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ qemu-img.texi | 9 +++------
+ 1 file changed, 3 insertions(+), 6 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ qemu-img.texi | 9 +++------
+ 1 file changed, 3 insertions(+), 6 deletions(-)
+
+diff --git a/qemu-img.texi b/qemu-img.texi
+index c7042ed..cc50e13 100644
+--- a/qemu-img.texi
++++ b/qemu-img.texi
+@@ -356,12 +356,9 @@ sizes can improve the image file size whereas larger cluster sizes generally
+ provide better performance.
+ 
+ @item preallocation
+-Preallocation mode (allowed values: off, metadata, full). An image with
+-preallocated metadata is initially larger but can improve performance when the
+-image needs to grow. Full preallocation additionally writes zeros to the whole
+-image in order to preallocate lower layers (e.g. the file system containing the
+-image file) as well. Note that full preallocation writes to every byte of the
+-virtual disk, so it can take a long time for large images.
++Preallocation mode (allowed values: off, metadata). An image with preallocated
++metadata is initially larger but can improve performance when the image needs
++to grow.
+ 
+ @end table
+ 
+-- 
+2.1.0
+

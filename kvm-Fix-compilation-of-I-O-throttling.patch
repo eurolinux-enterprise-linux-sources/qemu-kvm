@@ -1,0 +1,83 @@
+From 83dedbc5b813a611a79fd9ee4ef39644f0ef74e4 Mon Sep 17 00:00:00 2001
+Message-Id: <83dedbc5b813a611a79fd9ee4ef39644f0ef74e4.1375723024.git.minovotn@redhat.com>
+From: Michal Novotny <minovotn@redhat.com>
+Date: Mon, 5 Aug 2013 16:44:14 +0200
+Subject: [PATCH] Fix compilation of I/O throttling
+
+RH-Author: Michal Novotny <minovotn@redhat.com>
+Message-id: <a9890041d257620945957b04ce6ca74ebd4a83b5.1375720998.git.minovotn@redhat.com>
+Patchwork-id: 52967
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] Fix compilation of I/O throttling
+Bugzilla: 975468
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Radim Krcmar <rkrcmar@redhat.com>
+
+The commit 6b1eb15c51a7042579aa54d8ebbf562bf7451ffc broke compilation of qemu-kvm
+when I/O throttling is disabled. This happened because of "-Wundef -Werror"
+directives when doing compile on brew ("make -C redhat rh-brew" and also
+official build). The change from #if to #ifdef was necessary to make it work
+and the patch is essential for qemu-kvm-rhel6 compilation.
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.c    | 2 +-
+ blockdev.c | 2 +-
+ configure  | 4 ++--
+ 3 files changed, 4 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.c    | 2 +-
+ blockdev.c | 2 +-
+ configure  | 4 ++--
+ 3 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/block.c b/block.c
+index dbb8b1a..2aa6e34 100644
+--- a/block.c
++++ b/block.c
+@@ -2833,7 +2833,7 @@ static void bdrv_print_dict(QObject *obj, void *opaque)
+                             qdict_get_str(qdict, "drv"),
+                             qdict_get_bool(qdict, "encrypted"));
+ 
+-#if CONFIG_BLOCK_IO_THROTTLING
++#ifdef CONFIG_BLOCK_IO_THROTTLING
+         monitor_printf(mon, " bps=%" PRId64 " bps_rd=%" PRId64
+                 " bps_wr=%" PRId64 " iops=%" PRId64
+                 " iops_rd=%" PRId64 " iops_wr=%" PRId64,
+diff --git a/blockdev.c b/blockdev.c
+index 0fd1902..e4db09f 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -486,7 +486,7 @@ DriveInfo *drive_init(QemuOpts *opts, int default_to_scsi)
+         return NULL;
+     }
+ 
+-#if CONFIG_BLOCK_IO_THROTTLING
++#ifdef CONFIG_BLOCK_IO_THROTTLING
+     /* disk I/O throttling */
+     io_limits.bps[BLOCK_IO_LIMIT_TOTAL]  =
+                            qemu_opt_get_number(opts, "bps", 0);
+diff --git a/configure b/configure
+index 82a9990..dcb9a2b 100755
+--- a/configure
++++ b/configure
+@@ -707,12 +707,12 @@ for opt do
+   --disable-rhev-features)
+        live_snapshots="no";
+        block_stream="no";
+-       io_throttling="no"
++       io_throttling="no";
+   ;;
+   --enable-rhev-features)
+        live_snapshots="yes";
+        block_stream="yes";
+-       io_throttling="yes"
++       io_throttling="yes";
+   ;;
+   --disable-virtio-blk-data-plane) virtio_blk_data_plane="no"
+   ;;
+-- 
+1.7.11.7
+

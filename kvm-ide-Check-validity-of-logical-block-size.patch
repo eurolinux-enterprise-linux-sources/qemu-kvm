@@ -1,0 +1,89 @@
+From a3bc183f06a55a44f606adfd9e0d4941f933f5a7 Mon Sep 17 00:00:00 2001
+Message-Id: <a3bc183f06a55a44f606adfd9e0d4941f933f5a7.1422637807.git.jen@redhat.com>
+In-Reply-To: <d57bff8cf3457c2e855eeca4b18266bf5956270d.1422637807.git.jen@redhat.com>
+References: <d57bff8cf3457c2e855eeca4b18266bf5956270d.1422637807.git.jen@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Tue, 27 Jan 2015 15:13:46 -0500
+Subject: [CHANGE 10/10] ide: Check validity of logical block size
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1422371626-17480-1-git-send-email-kwolf@redhat.com>
+Patchwork-id: 63580
+O-Subject: [RHEL-6.7 qemu-kvm PATCH] ide: Check validity of logical block size
+Bugzilla: 1134693
+RH-Acked-by: John Snow <jsnow@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1134693
+
+Our IDE emulation can't handle logical block sizes other than 512. Check
+for it.
+
+The original assumption was that other values would silently be ignored
+(which is bad enough), but it's not quite true: The physical block size
+is exposed in IDENTIFY DEVICE as a multiple of the logical block size.
+Setting a logical block size therefore also corrupts the physical block
+size (4096/4096 doesn't silently downgrade to 4096/512, but 512/512).
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: John Snow <jsnow@redhat.com>
+(cherry picked from commit d20051856cd2fa8f10fed2d2a0b2751de5f7b20d)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	hw/ide/qdev.c
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=8642473
+
+=== git-backport-diff output ===
+
+Key:
+[----] : patches are identical
+[####] : number of functional differences between upstream/downstream patch
+[down] : patch is downstream-only
+The flags [FC] indicate (F)unctional and (C)ontextual differences, respectively
+
+001/1:[----] [-C] 'ide: Check validity of logical block size'
+
+=== git-compile-check output ===
+
+Performing a test compile on 1 patches
+
+1/1: compiling: 8a08f0f: ide: Check validity of logical block size
+
+All patches in rhel6/master..HEAD compiled successfully!
+---
+ hw/ide/qdev.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/ide/qdev.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/hw/ide/qdev.c b/hw/ide/qdev.c
+index 247f879..97f4515 100644
+--- a/hw/ide/qdev.c
++++ b/hw/ide/qdev.c
+@@ -113,6 +113,11 @@ static int ide_drive_initfn(IDEDevice *dev)
+ {
+     IDEBus *bus = DO_UPCAST(IDEBus, qbus, dev->qdev.parent_bus);
+ 
++    if (dev->conf.logical_block_size != 512) {
++        error_report("logical_block_size must be 512 for IDE");
++        return -1;
++    }
++
+     if (ide_init_drive(bus->ifs + dev->unit, dev->conf.bs, dev->version, dev->wwn) < 0) {
+         return -1;
+     }
+-- 
+2.1.0
+

@@ -1,0 +1,62 @@
+From b689b27414df3ad7907a2c641981c9b0594c13a6 Mon Sep 17 00:00:00 2001
+Message-Id: <b689b27414df3ad7907a2c641981c9b0594c13a6.1421272770.git.jen@redhat.com>
+In-Reply-To: <acd6d327ae856e72f084949fd71314237a4b9b8b.1421272770.git.jen@redhat.com>
+References: <acd6d327ae856e72f084949fd71314237a4b9b8b.1421272770.git.jen@redhat.com>
+From: Juan Quintela <quintela@redhat.com>
+Date: Wed, 7 Jan 2015 16:45:06 -0600
+Subject: [CHANGE 02/10] virtio-net: drop assert on vm stop
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Juan Quintela <quintela@redhat.com>
+Message-id: <1420649114-17435-3-git-send-email-quintela@redhat.com>
+Patchwork-id: 63159
+O-Subject: [PATCH qemu-kvm RHEL6.7 02/10] virtio-net: drop assert on vm stop
+Bugzilla: 970103
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+From: "Michael S. Tsirkin" <mst@redhat.com>
+
+On vm stop, vm_running state set to stopped
+before device is notified, so callbacks can get envoked with
+vm_running = false; and this is not an error.
+
+Cc: qemu-stable@nongnu.org
+Acked-by: Jason Wang <jasowang@redhat.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+(cherry picked from commit 131c5221fe25a9547c4a388a3d26ff7fd14843e5)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	hw/net/virtio-net.c
+
+On RHEL6 it is hw/virtio-net.c
+
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+---
+ hw/virtio-net.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/virtio-net.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/hw/virtio-net.c b/hw/virtio-net.c
+index 35b3a07..7c15bdc 100644
+--- a/hw/virtio-net.c
++++ b/hw/virtio-net.c
+@@ -811,8 +811,6 @@ static int32_t virtio_net_flush_tx(VirtIONet *n, VirtQueue *vq)
+         return num_packets;
+     }
+ 
+-    assert(n->vdev.vm_running);
+-
+     if (n->async_tx.elem.out_num) {
+         virtio_queue_set_notification(n->tx_vq, 0);
+         return num_packets;
+-- 
+2.1.0
+

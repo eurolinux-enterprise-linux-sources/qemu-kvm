@@ -1,0 +1,72 @@
+From b75c0930ed50819b83d3403add4eaba7c5cbc465 Mon Sep 17 00:00:00 2001
+Message-Id: <b75c0930ed50819b83d3403add4eaba7c5cbc465.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:56 +0200
+Subject: [PATCH 41/47] vmdk: Allow space in file name
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-42-git-send-email-famz@redhat.com>
+Patchwork-id: 51477
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 41/47] vmdk: Allow space in file name
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Philipp Hahn <hahn@univention.de>
+
+The previous scanf() format string stopped parsing the file name on the
+first white white space, which seems to be allowed at least by VMware
+Workstation.
+
+Change the format string to collect everything between the first and
+second quote as the file name, disallowing line breaks.
+
+Signed-off-by: Philipp Hahn <hahn@univention.de>
+Reviewed-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit cd9234757528a1b7155a75ec2eedb375f71e99fa)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 10 +---------
+ 1 file changed, 1 insertion(+), 9 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 10 +---------
+ 1 file changed, 1 insertion(+), 9 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 4ea66a6..55bc44b 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -639,7 +639,7 @@ static int vmdk_parse_extents(const char *desc, BlockDriverState *bs,
+          * RW [size in sectors] SPARSE "file-name.vmdk"
+          */
+         flat_offset = -1;
+-        ret = sscanf(p, "%10s %" SCNd64 " %10s %511s %" SCNd64,
++        ret = sscanf(p, "%10s %" SCNd64 " %10s \"%511[^\n\r\"]\" %" SCNd64,
+                 access, &sectors, type, fname, &flat_offset);
+         if (ret < 4 || strcmp(access, "RW")) {
+             goto next_line;
+@@ -651,14 +651,6 @@ static int vmdk_parse_extents(const char *desc, BlockDriverState *bs,
+             return -EINVAL;
+         }
+ 
+-        /* trim the quotation marks around */
+-        if (fname[0] == '"') {
+-            memmove(fname, fname + 1, strlen(fname));
+-            if (strlen(fname) <= 1 || fname[strlen(fname) - 1] != '"') {
+-                return -EINVAL;
+-            }
+-            fname[strlen(fname) - 1] = '\0';
+-        }
+         if (sectors <= 0 ||
+             (strcmp(type, "FLAT") && strcmp(type, "SPARSE")) ||
+             (strcmp(access, "RW"))) {
+-- 
+1.7.11.7
+

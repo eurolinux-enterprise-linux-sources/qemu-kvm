@@ -1,0 +1,324 @@
+From 89085f351de4db8f09d8b22381723a73129aadf0 Mon Sep 17 00:00:00 2001
+Message-Id: <89085f351de4db8f09d8b22381723a73129aadf0.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:30 +0200
+Subject: [PATCH 15/47] block: add bdrv_get_allocated_file_size() operation
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-16-git-send-email-famz@redhat.com>
+Patchwork-id: 51451
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 15/47] block: add bdrv_get_allocated_file_size() operation
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Fam Zheng <famcool@gmail.com>
+
+qemu-img.c wants to count allocated file size of image. Previously it
+counts a single bs->file by 'stat' or Window API. As VMDK introduces
+multiple file support, the operation becomes format specific with
+platform specific meanwhile.
+
+The functions are moved to block/raw-{posix,win32}.c and qemu-img.c calls
+bdrv_get_allocated_file_size to count the bs. And also added VMDK code
+to count his own extents.
+
+Signed-off-by: Fam Zheng <famcool@gmail.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 4a1d5e1fded54358ddc4d8cbd53388ca7c93499b)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block.c           | 19 +++++++++++++++++++
+ block.h           |  1 +
+ block/raw-posix.c | 21 +++++++++++++++++++++
+ block/raw-win32.c | 29 +++++++++++++++++++++++++++++
+ block/vmdk.c      | 24 ++++++++++++++++++++++++
+ block_int.h       |  1 +
+ qemu-img.c        | 31 +------------------------------
+ 7 files changed, 96 insertions(+), 30 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.c           | 19 +++++++++++++++++++
+ block.h           |  1 +
+ block/raw-posix.c | 21 +++++++++++++++++++++
+ block/raw-win32.c | 29 +++++++++++++++++++++++++++++
+ block/vmdk.c      | 24 ++++++++++++++++++++++++
+ block_int.h       |  1 +
+ qemu-img.c        | 31 +------------------------------
+ 7 files changed, 96 insertions(+), 30 deletions(-)
+
+diff --git a/block.c b/block.c
+index d3ebbe8..3812712 100644
+--- a/block.c
++++ b/block.c
+@@ -2136,6 +2136,25 @@ int bdrv_truncate(BlockDriverState *bs, int64_t offset)
+ }
+ 
+ /**
++ * Length of a allocated file in bytes. Sparse files are counted by actual
++ * allocated space. Return < 0 if error or unknown.
++ */
++int64_t bdrv_get_allocated_file_size(BlockDriverState *bs)
++{
++    BlockDriver *drv = bs->drv;
++    if (!drv) {
++        return -ENOMEDIUM;
++    }
++    if (drv->bdrv_get_allocated_file_size) {
++        return drv->bdrv_get_allocated_file_size(bs);
++    }
++    if (bs->file) {
++        return bdrv_get_allocated_file_size(bs->file);
++    }
++    return -ENOTSUP;
++}
++
++/**
+  * Length of a file in bytes. Return < 0 if error or unknown.
+  */
+ int64_t bdrv_getlength(BlockDriverState *bs)
+diff --git a/block.h b/block.h
+index cb3f1f1..d69b1d6 100644
+--- a/block.h
++++ b/block.h
+@@ -194,6 +194,7 @@ BlockDriverState *bdrv_find_backing_image(BlockDriverState *bs,
+     const char *backing_file);
+ int bdrv_truncate(BlockDriverState *bs, int64_t offset);
+ int64_t bdrv_getlength(BlockDriverState *bs);
++int64_t bdrv_get_allocated_file_size(BlockDriverState *bs);
+ void bdrv_get_geometry(BlockDriverState *bs, uint64_t *nb_sectors_ptr);
+ void bdrv_guess_geometry(BlockDriverState *bs, int *pcyls, int *pheads, int *psecs);
+ int bdrv_commit(BlockDriverState *bs);
+diff --git a/block/raw-posix.c b/block/raw-posix.c
+index 3b2670f..76149f8 100644
+--- a/block/raw-posix.c
++++ b/block/raw-posix.c
+@@ -605,6 +605,17 @@ again:
+ }
+ #endif
+ 
++static int64_t raw_get_allocated_file_size(BlockDriverState *bs)
++{
++    struct stat st;
++    BDRVRawState *s = bs->opaque;
++
++    if (fstat(s->fd, &st) < 0) {
++        return -errno;
++    }
++    return (int64_t)st.st_blocks * 512;
++}
++
+ static int raw_create(const char *filename, QEMUOptionParameter *options)
+ {
+     int fd;
+@@ -695,6 +706,8 @@ static BlockDriver bdrv_file = {
+ 
+     .bdrv_truncate = raw_truncate,
+     .bdrv_getlength = raw_getlength,
++    .bdrv_get_allocated_file_size
++                        = raw_get_allocated_file_size,
+ 
+     .create_options = raw_create_options,
+ };
+@@ -1006,6 +1019,8 @@ static BlockDriver bdrv_host_device = {
+ 
+     .bdrv_truncate      = raw_truncate,
+     .bdrv_getlength	= raw_getlength,
++    .bdrv_get_allocated_file_size
++                        = raw_get_allocated_file_size,
+ 
+     /* generic scsi device */
+ #ifdef __linux__
+@@ -1103,6 +1118,8 @@ static BlockDriver bdrv_host_floppy = {
+ 
+     .bdrv_truncate      = raw_truncate,
+     .bdrv_getlength	= raw_getlength,
++    .bdrv_get_allocated_file_size
++                        = raw_get_allocated_file_size,
+ 
+     /* removable device support */
+     .bdrv_is_inserted   = floppy_is_inserted,
+@@ -1200,6 +1217,8 @@ static BlockDriver bdrv_host_cdrom = {
+ 
+     .bdrv_truncate      = raw_truncate,
+     .bdrv_getlength     = raw_getlength,
++    .bdrv_get_allocated_file_size
++                        = raw_get_allocated_file_size,
+ 
+     /* removable device support */
+     .bdrv_is_inserted   = cdrom_is_inserted,
+@@ -1320,6 +1339,8 @@ static BlockDriver bdrv_host_cdrom = {
+ 
+     .bdrv_truncate      = raw_truncate,
+     .bdrv_getlength     = raw_getlength,
++    .bdrv_get_allocated_file_size
++                        = raw_get_allocated_file_size,
+ 
+     /* removable device support */
+     .bdrv_is_inserted   = cdrom_is_inserted,
+diff --git a/block/raw-win32.c b/block/raw-win32.c
+index e3d9dc6..8002100 100644
+--- a/block/raw-win32.c
++++ b/block/raw-win32.c
+@@ -224,6 +224,31 @@ static int64_t raw_getlength(BlockDriverState *bs)
+     return l.QuadPart;
+ }
+ 
++static int64_t raw_get_allocated_file_size(BlockDriverState *bs)
++{
++    typedef DWORD (WINAPI * get_compressed_t)(const char *filename,
++                                              DWORD * high);
++    get_compressed_t get_compressed;
++    struct _stati64 st;
++    const char *filename = bs->filename;
++    /* WinNT support GetCompressedFileSize to determine allocate size */
++    get_compressed =
++        (get_compressed_t) GetProcAddress(GetModuleHandle("kernel32"),
++                                            "GetCompressedFileSizeA");
++    if (get_compressed) {
++        DWORD high, low;
++        low = get_compressed(filename, &high);
++        if (low != 0xFFFFFFFFlu || GetLastError() == NO_ERROR) {
++            return (((int64_t) high) << 32) + low;
++        }
++    }
++
++    if (_stati64(filename, &st) < 0) {
++        return -1;
++    }
++    return st.st_size;
++}
++
+ static int raw_create(const char *filename, QEMUOptionParameter *options)
+ {
+     int fd;
+@@ -268,6 +293,8 @@ static BlockDriver bdrv_file = {
+     .bdrv_write		= raw_write,
+     .bdrv_truncate	= raw_truncate,
+     .bdrv_getlength	= raw_getlength,
++    .bdrv_get_allocated_file_size
++                        = raw_get_allocated_file_size,
+ 
+     .create_options = raw_create_options,
+ };
+@@ -387,6 +414,8 @@ static BlockDriver bdrv_host_device = {
+     .bdrv_read		= raw_read,
+     .bdrv_write	        = raw_write,
+     .bdrv_getlength	= raw_getlength,
++    .bdrv_get_allocated_file_size
++                        = raw_get_allocated_file_size,
+ };
+ 
+ static void bdrv_file_init(void)
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 014143e..8f86c81 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -1316,6 +1316,29 @@ static coroutine_fn int vmdk_co_flush(BlockDriverState *bs)
+     return ret;
+ }
+ 
++static int64_t vmdk_get_allocated_file_size(BlockDriverState *bs)
++{
++    int i;
++    int64_t ret = 0;
++    int64_t r;
++    BDRVVmdkState *s = bs->opaque;
++
++    ret = bdrv_get_allocated_file_size(bs->file);
++    if (ret < 0) {
++        return ret;
++    }
++    for (i = 0; i < s->num_extents; i++) {
++        if (s->extents[i].file == bs->file) {
++            continue;
++        }
++        r = bdrv_get_allocated_file_size(s->extents[i].file);
++        if (r < 0) {
++            return r;
++        }
++        ret += r;
++    }
++    return ret;
++}
+ 
+ static QEMUOptionParameter vmdk_create_options[] = {
+     {
+@@ -1354,6 +1377,7 @@ static BlockDriver bdrv_vmdk = {
+     .bdrv_create    = vmdk_create,
+     .bdrv_co_flush  = vmdk_co_flush,
+     .bdrv_co_is_allocated   = vmdk_co_is_allocated,
++    .bdrv_get_allocated_file_size  = vmdk_get_allocated_file_size,
+ 
+     .create_options = vmdk_create_options,
+ };
+diff --git a/block_int.h b/block_int.h
+index 3148e12..f909351 100644
+--- a/block_int.h
++++ b/block_int.h
+@@ -166,6 +166,7 @@ struct BlockDriver {
+     const char *protocol_name;
+     int (*bdrv_truncate)(BlockDriverState *bs, int64_t offset);
+     int64_t (*bdrv_getlength)(BlockDriverState *bs);
++    int64_t (*bdrv_get_allocated_file_size)(BlockDriverState *bs);
+     int (*bdrv_write_compressed)(BlockDriverState *bs, int64_t sector_num,
+                                  const uint8_t *buf, int nb_sectors);
+ 
+diff --git a/qemu-img.c b/qemu-img.c
+index 3bbd1a5..30a9313 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -1201,35 +1201,6 @@ out:
+     return 0;
+ }
+ 
+-#ifdef _WIN32
+-static int64_t get_allocated_file_size(const char *filename)
+-{
+-    typedef DWORD (WINAPI * get_compressed_t)(const char *filename, DWORD *high);
+-    get_compressed_t get_compressed;
+-    struct _stati64 st;
+-
+-    /* WinNT support GetCompressedFileSize to determine allocate size */
+-    get_compressed = (get_compressed_t) GetProcAddress(GetModuleHandle("kernel32"), "GetCompressedFileSizeA");
+-    if (get_compressed) {
+-    	DWORD high, low;
+-    	low = get_compressed(filename, &high);
+-    	if (low != 0xFFFFFFFFlu || GetLastError() == NO_ERROR)
+-	    return (((int64_t) high) << 32) + low;
+-    }
+-
+-    if (_stati64(filename, &st) < 0)
+-        return -1;
+-    return st.st_size;
+-}
+-#else
+-static int64_t get_allocated_file_size(const char *filename)
+-{
+-    struct stat st;
+-    if (stat(filename, &st) < 0)
+-        return -1;
+-    return (int64_t)st.st_blocks * 512;
+-}
+-#endif
+ 
+ static void dump_snapshots(BlockDriverState *bs)
+ {
+@@ -1288,7 +1259,7 @@ static int img_info(int argc, char **argv)
+     }
+     bdrv_get_geometry(bs, &total_sectors);
+     get_human_readable_size(size_buf, sizeof(size_buf), total_sectors * 512);
+-    allocated_size = get_allocated_file_size(filename);
++    allocated_size = bdrv_get_allocated_file_size(bs);
+     if (allocated_size < 0) {
+         snprintf(dsize_buf, sizeof(dsize_buf), "unavailable");
+     } else {
+-- 
+1.7.11.7
+

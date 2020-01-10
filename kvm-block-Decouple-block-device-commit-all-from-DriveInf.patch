@@ -1,0 +1,168 @@
+From 36750bf64a907139115140007a802b2520a202bd Mon Sep 17 00:00:00 2001
+Message-Id: <36750bf64a907139115140007a802b2520a202bd.1376917686.git.minovotn@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Thu, 15 Aug 2013 20:19:40 +0200
+Subject: [PATCH 1/3] block: Decouple block device "commit all" from DriveInfo
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <531ffc488dbae1dcea4487f359c30977ac97d0ed.1376596451.git.jcody@redhat.com>
+Patchwork-id: 53528
+O-Subject: [RHEL6.5 qemu-kvm PATCH 1/3] block: Decouple block device "commit all" from DriveInfo
+Bugzilla: 856505
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+RHEL6 Note: This squashes two upstream commits: 6ab4b5ab and e8877497.
+            The summary for this commit is the summary from 6ab4b5ab.
+            These were combined because the functionality of e8877497
+            was already backported prior to breaking out bdrv_commit_all().
+            This is a manual backport.
+
+Upstream commit 6ab4b5ab:
+
+From: Markus Armbruster <armbru@redhat.com>
+
+block: Decouple block device "commit all" from DriveInfo
+
+do_commit() and mux_proc_byte() iterate over the list of drives
+defined with drive_init().  This misses host block devices defined by
+other means.  Such means don't exist now, but will be introduced later
+in this series.
+
+Change them to use new bdrv_commit_all(), which iterates over all host
+block devices.
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+
+Upstream commit e8877497:
+
+From: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+
+block: handle -EBUSY in bdrv_commit_all()
+
+Monitor operations that manipulate image files must not execute while a
+background job (like image streaming) is in progress.  This prevents
+corruptions from happening when two pieces of code are manipulating the
+image file without knowledge of each other.
+
+The monitor "commit" command raises QERR_DEVICE_IN_USE when
+bdrv_commit() returns -EBUSY but "commit all" has no error handling.
+This is easy to fix, although note that we do not deliver a detailed
+error about which device was busy in the "commit all" case.
+
+Suggested-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ block.c     | 13 +++++++++++++
+ block.h     |  1 +
+ blockdev.c  | 25 +++++++++++++++----------
+ qemu-char.c |  7 +------
+ 4 files changed, 30 insertions(+), 16 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.c     | 13 +++++++++++++
+ block.h     |  1 +
+ blockdev.c  | 25 +++++++++++++++----------
+ qemu-char.c |  7 +------
+ 4 files changed, 30 insertions(+), 16 deletions(-)
+
+diff --git a/block.c b/block.c
+index ecbbf2a..32feb72 100644
+--- a/block.c
++++ b/block.c
+@@ -1514,6 +1514,19 @@ ro_cleanup:
+     return ret;
+ }
+ 
++int bdrv_commit_all(void)
++{
++    BlockDriverState *bs;
++
++    QTAILQ_FOREACH(bs, &bdrv_states, list) {
++        int ret = bdrv_commit(bs);
++        if (ret < 0) {
++            return ret;
++        }
++    }
++    return 0;
++}
++
+ struct BdrvTrackedRequest {
+     BlockDriverState *bs;
+     int64_t sector_num;
+diff --git a/block.h b/block.h
+index 088d397..7c511e0 100644
+--- a/block.h
++++ b/block.h
+@@ -206,6 +206,7 @@ int64_t bdrv_get_allocated_file_size(BlockDriverState *bs);
+ void bdrv_get_geometry(BlockDriverState *bs, uint64_t *nb_sectors_ptr);
+ void bdrv_guess_geometry(BlockDriverState *bs, int *pcyls, int *pheads, int *psecs);
+ int bdrv_commit(BlockDriverState *bs);
++int bdrv_commit_all(void);
+ int bdrv_change_backing_file(BlockDriverState *bs,
+     const char *backing_file, const char *backing_fmt);
+ void bdrv_register(BlockDriver *bdrv);
+diff --git a/blockdev.c b/blockdev.c
+index 48e16d9..d0b3925 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -708,18 +708,23 @@ err:
+ 
+ void do_commit(Monitor *mon, const QDict *qdict)
+ {
+-    int all_devices;
+-    DriveInfo *dinfo;
+     const char *device = qdict_get_str(qdict, "device");
++    BlockDriverState *bs;
++    int ret;
+ 
+-    all_devices = !strcmp(device, "all");
+-    QTAILQ_FOREACH(dinfo, &drives, next) {
+-        int ret;
+-
+-        if (!all_devices)
+-            if (strcmp(bdrv_get_device_name(dinfo->bdrv), device))
+-                continue;
+-        ret = bdrv_commit(dinfo->bdrv);
++    if (!strcmp(device, "all")) {
++        ret = bdrv_commit_all();
++        if (ret == -EBUSY) {
++            qerror_report(QERR_DEVICE_IN_USE, device);
++            return;
++        }
++    } else {
++        bs = bdrv_find(device);
++        if (!bs) {
++            qerror_report(QERR_DEVICE_NOT_FOUND, device);
++            return;
++        }
++        ret = bdrv_commit(bs);
+         if (ret == -EBUSY) {
+             qerror_report(QERR_DEVICE_IN_USE, device);
+             return;
+diff --git a/qemu-char.c b/qemu-char.c
+index 86f838a..2dfc625 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -378,12 +378,7 @@ static int mux_proc_byte(CharDriverState *chr, MuxDriver *d, int ch)
+                  break;
+             }
+         case 's':
+-            {
+-                DriveInfo *dinfo;
+-                QTAILQ_FOREACH(dinfo, &drives, next) {
+-                    bdrv_commit(dinfo->bdrv);
+-                }
+-            }
++            bdrv_commit_all();
+             break;
+         case 'b':
+             qemu_chr_be_event(chr, CHR_EVENT_BREAK);
+-- 
+1.7.11.7
+

@@ -1,0 +1,138 @@
+From 93ce800a22d79a00d6cc54b843304fa7aad1cf75 Mon Sep 17 00:00:00 2001
+Message-Id: <93ce800a22d79a00d6cc54b843304fa7aad1cf75.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:39 +0200
+Subject: [PATCH 28/65] vnc: introduce a single label for error returns
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-29-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52165
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 28/65] vnc: introduce a single label for error returns
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 1ce52c78ab90c4303bcb110f2c614410386d79a2)
+
+Conflicts:
+
+	vnc.c
+---
+ vnc.c |   44 ++++++++++++++++++--------------------------
+ 1 file changed, 18 insertions(+), 26 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ vnc.c | 44 ++++++++++++++++++--------------------------
+ 1 file changed, 18 insertions(+), 26 deletions(-)
+
+diff --git a/vnc.c b/vnc.c
+index 52d16c8..9f16a07 100644
+--- a/vnc.c
++++ b/vnc.c
+@@ -2723,8 +2723,7 @@ int vnc_display_open(DisplayState *ds, const char *display)
+     if (strcmp(display, "none") == 0)
+         return 0;
+ 
+-    if (!(vs->display = strdup(display)))
+-        return -1;
++    vs->display = g_strdup(display);
+     vs->share_policy = VNC_SHARE_POLICY_ALLOW_EXCLUSIVE;
+ 
+     options = display;
+@@ -2736,9 +2735,7 @@ int vnc_display_open(DisplayState *ds, const char *display)
+                         "VNC password auth disabled due to FIPS mode, "
+                         "consider using the VeNCrypt or SASL authentication "
+                         "methods as an alternative\n");
+-                qemu_free(vs->display);
+-                vs->display = NULL;
+-                return -1;
++                goto fail;
+             }
+             password = 1; /* Require password auth */
+         } else if (strncmp(options, "reverse", 7) == 0) {
+@@ -2769,17 +2766,13 @@ int vnc_display_open(DisplayState *ds, const char *display)
+                 VNC_DEBUG("Trying certificate path '%s'\n", path);
+                 if (vnc_tls_set_x509_creds_dir(vs, path) < 0) {
+                     fprintf(stderr, "Failed to find x509 certificates/keys in %s\n", path);
+-                    qemu_free(path);
+-                    qemu_free(vs->display);
+-                    vs->display = NULL;
+-                    return -1;
++                    g_free(path);
++                    goto fail;
+                 }
+                 qemu_free(path);
+             } else {
+                 fprintf(stderr, "No certificate path provided\n");
+-                qemu_free(vs->display);
+-                vs->display = NULL;
+-                return -1;
++                goto fail;
+             }
+ #endif
+         } else if (strncmp(options, "acl", 3) == 0) {
+@@ -2793,9 +2786,7 @@ int vnc_display_open(DisplayState *ds, const char *display)
+                 vs->share_policy = VNC_SHARE_POLICY_FORCE_SHARED;
+             } else {
+                 fprintf(stderr, "unknown vnc share= option\n");
+-                g_free(vs->display);
+-                vs->display = NULL;
+-                return -1;
++                goto fail;
+             }
+         }
+     }
+@@ -2898,9 +2889,7 @@ int vnc_display_open(DisplayState *ds, const char *display)
+     if ((saslErr = sasl_server_init(NULL, "qemu-kvm")) != SASL_OK) {
+         fprintf(stderr, "Failed to initialize SASL auth %s",
+                 sasl_errstring(saslErr, NULL, NULL));
+-        free(vs->display);
+-        vs->display = NULL;
+-        return -1;
++        goto fail;
+     }
+ #endif
+ 
+@@ -2911,9 +2900,7 @@ int vnc_display_open(DisplayState *ds, const char *display)
+         else
+             vs->lsock = inet_connect(display, NULL);
+         if (vs->lsock < 0) {
+-            g_free(vs->display);
+-            vs->display = NULL;
+-            return -1;
++            goto fail;
+         } else {
+             int csock = vs->lsock;
+             vs->lsock = -1;
+@@ -2934,11 +2921,16 @@ int vnc_display_open(DisplayState *ds, const char *display)
+         }
+         if (vs->lsock < 0) {
+             g_free(dpy);
+-            return -1;
+-        } else {
+-            free(vs->display);
+-            vs->display = dpy;
++            goto fail;
+         }
++        g_free(vs->display);
++        vs->display = dpy;
++        qemu_set_fd_handler2(vs->lsock, NULL, vnc_listen_read, NULL, vs);
+     }
+-    return qemu_set_fd_handler2(vs->lsock, NULL, vnc_listen_read, NULL, vs);
++    return 0;
++
++fail:
++    g_free(vs->display);
++    vs->display = NULL;
++    return -1;
+ }
+-- 
+1.7.11.7
+

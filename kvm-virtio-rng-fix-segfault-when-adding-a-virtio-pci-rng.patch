@@ -1,0 +1,68 @@
+From 3514860050abb568ba9a21f7aaa9a361bc5689e8 Mon Sep 17 00:00:00 2001
+From: Gal Hammer <ghammer@redhat.com>
+Date: Wed, 10 Jun 2015 11:09:29 -0400
+Subject: [PATCH 1/9] virtio-rng: fix segfault when adding a virtio-pci-rng
+ device
+
+RH-Author: Gal Hammer <ghammer@redhat.com>
+Message-id: <1433934569-3516-1-git-send-email-ghammer@redhat.com>
+Patchwork-id: 65819
+O-Subject: [RHEL-6.7 qemu-kvm PATCH] virtio-rng: fix segfault when adding a virtio-pci-rng device
+Bugzilla: 1230068
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Thomas Huth <thuth@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1230068
+
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=9335072
+
+Segmentation fault happens when adding a virtio-pci-rng device that uses
+the same RNG object of a removed virtio-pci-rng device. On device removal
+the reference count of the RNG object reached zero and the object was
+deleted making it unusable for a future usage.
+
+The segmentation fault occurred because the /objects/<name> child
+property still existed and pointed to the freed object.
+
+The issue was fixed by manually increasing the reference count
+because virtio_rng_init_pci() is not allowed to steal the
+/objects/<name> child property's reference.
+
+Since proxy->rng.default_backend is unused, don't assign it.
+
+Signed-off-by: Gal Hammer <ghammer@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/virtio-pci.c | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/hw/virtio-pci.c b/hw/virtio-pci.c
+index 3a72e1e..9a15abe 100644
+--- a/hw/virtio-pci.c
++++ b/hw/virtio-pci.c
+@@ -959,15 +959,15 @@ static int virtio_rng_init_pci(PCIDevice *pci_dev)
+     VirtIODevice *vdev;
+     char *path;
+ 
+-    path = g_strdup_printf("/objects/%s", proxy->rng.name);
+-    proxy->rng.rng = RNG_BACKEND(object_resolve_path_type(path,
+-                                 TYPE_RNG_BACKEND, NULL));
+-    g_free(path);
+-
+     if (proxy->rng.name == NULL) {
+         Object *obj = object_new(TYPE_RNG_RANDOM);
+-        proxy->rng.default_backend = RNG_RANDOM(obj);
+         proxy->rng.rng = RNG_BACKEND(obj);
++    } else {
++        path = g_strdup_printf("/objects/%s", proxy->rng.name);
++        proxy->rng.rng = RNG_BACKEND(object_resolve_path_type(path,
++                                     TYPE_RNG_BACKEND, NULL));
++        object_ref(OBJECT(proxy->rng.rng));
++        g_free(path);
+     }
+ 
+     vdev = virtio_rng_init(&pci_dev->qdev, &proxy->rng);
+-- 
+2.1.0
+

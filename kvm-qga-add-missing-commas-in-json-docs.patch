@@ -1,0 +1,59 @@
+From 91800ce79927a7825281938bf18946dcfeee0c5d Mon Sep 17 00:00:00 2001
+Message-Id: <91800ce79927a7825281938bf18946dcfeee0c5d.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:28:00 +0200
+Subject: [PATCH 095/114] qga: add missing commas in json docs
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-38-git-send-email-lersek@redhat.com>
+Patchwork-id: 51136
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 37/56] qga: add missing commas in json docs
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Eric Blake <eblake@redhat.com>
+
+* qga/qapi-schema.json: Use valid JSON.
+
+Signed-off-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit 01b87f6d217ed05d5948562f74f5cf7b511a9c6c)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qapi-schema-guest.json |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema-guest.json | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/qapi-schema-guest.json b/qapi-schema-guest.json
+index ed0eb69..d91d903 100644
+--- a/qapi-schema-guest.json
++++ b/qapi-schema-guest.json
+@@ -31,7 +31,7 @@
+ #
+ # Since: 1.1
+ # ##
+-{ 'command': 'guest-sync-delimited'
++{ 'command': 'guest-sync-delimited',
+   'data':    { 'id': 'int' },
+   'returns': 'int' }
+ 
+@@ -69,7 +69,7 @@
+ #
+ # Since: 0.15.0
+ ##
+-{ 'command': 'guest-sync'
++{ 'command': 'guest-sync',
+   'data':    { 'id': 'int' },
+   'returns': 'int' }
+ 
+-- 
+1.7.11.7
+

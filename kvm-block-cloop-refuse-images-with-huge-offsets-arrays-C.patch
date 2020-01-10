@@ -1,0 +1,61 @@
+From 3b4ca7a4596cdf5024d32754ea3d60362078de45 Mon Sep 17 00:00:00 2001
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Tue, 25 Mar 2014 11:45:37 +0100
+Subject: [PATCH 19/48] block/cloop: refuse images with huge offsets arrays (CVE-2014-0144)
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1395744364-16049-19-git-send-email-kwolf@redhat.com>
+Patchwork-id: n/a
+O-Subject: [EMBARGOED RHEL-6.6/6.5.z qemu-kvm PATCH v2 18/45]
+           block/cloop: refuse images with huge offsets arrays (CVE-2014-0144)
+Bugzilla: 1079453
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeff Cody <jcody@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1079453
+Upstream status: Embargoed
+
+Limit offsets_size to 512 MB so that:
+
+1. g_malloc() does not abort due to an unreasonable size argument.
+
+2. offsets_size does not overflow the bdrv_pread() int size argument.
+
+This limit imposes a maximum image size of 16 TB at 256 KB block size.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+
+Conflicts:
+	tests/qemu-iotests/075
+	tests/qemu-iotests/075.out
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/cloop.c |    9 +++++++++
+ 1 files changed, 9 insertions(+), 0 deletions(-)
+
+diff --git a/block/cloop.c b/block/cloop.c
+index ff1587c..2524c5d 100644
+--- a/block/cloop.c
++++ b/block/cloop.c
+@@ -97,6 +97,15 @@ static int cloop_open(BlockDriverState *bs, int flags)
+         return -EINVAL;
+     }
+     offsets_size = s->n_blocks * sizeof(uint64_t);
++    if (offsets_size > 512 * 1024 * 1024) {
++        /* Prevent ridiculous offsets_size which causes memory allocation to
++         * fail or overflows bdrv_pread() size.  In practice the 512 MB
++         * offsets[] limit supports 16 TB images at 256 KB block size.
++         */
++        qerror_report(QERR_GENERIC_ERROR, "image requires too many offsets, "
++                                          "try increasing block size");
++        return -EINVAL;
++    }
+     s->offsets = g_malloc(offsets_size);
+     if (bdrv_pread(bs->file, 128 + 4 + 4, s->offsets, offsets_size) <
+             offsets_size) {
+-- 
+1.7.1
+

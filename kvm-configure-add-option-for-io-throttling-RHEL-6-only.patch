@@ -1,0 +1,197 @@
+From 6b1eb15c51a7042579aa54d8ebbf562bf7451ffc Mon Sep 17 00:00:00 2001
+Message-Id: <6b1eb15c51a7042579aa54d8ebbf562bf7451ffc.1375709547.git.minovotn@redhat.com>
+In-Reply-To: <3351a61f3d3d17e088298983ea624dd8995fb1a5.1375709547.git.minovotn@redhat.com>
+References: <3351a61f3d3d17e088298983ea624dd8995fb1a5.1375709547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Tue, 23 Jul 2013 04:48:38 +0200
+Subject: [PATCH 2/4] configure: add option for io throttling (RHEL-6 only)
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1374554919-24665-2-git-send-email-famz@redhat.com>
+Patchwork-id: 52644
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 1/2] configure: add option for io throttling (RHEL-6 only)
+Bugzilla: 975468
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Added --{disable,enable}-io-throttling to disable/enable io throttling
+in QMP/HMP. The options will next be switched by
+--{enable,disable}-rhev-features.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block.c         | 11 +++++++++++
+ blockdev.c      |  2 ++
+ configure       | 12 ++++++++++++
+ qemu-config.c   |  2 ++
+ qemu-monitor.hx |  3 ++-
+ 5 files changed, 29 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.c         | 11 +++++++++++
+ blockdev.c      |  2 ++
+ configure       | 12 ++++++++++++
+ qemu-config.c   |  2 ++
+ qemu-monitor.hx |  3 ++-
+ 5 files changed, 29 insertions(+), 1 deletion(-)
+
+diff --git a/block.c b/block.c
+index b7ffa7b..dbb8b1a 100644
+--- a/block.c
++++ b/block.c
+@@ -2833,6 +2833,7 @@ static void bdrv_print_dict(QObject *obj, void *opaque)
+                             qdict_get_str(qdict, "drv"),
+                             qdict_get_bool(qdict, "encrypted"));
+ 
++#if CONFIG_BLOCK_IO_THROTTLING
+         monitor_printf(mon, " bps=%" PRId64 " bps_rd=%" PRId64
+                 " bps_wr=%" PRId64 " iops=%" PRId64
+                 " iops_rd=%" PRId64 " iops_wr=%" PRId64,
+@@ -2842,6 +2843,7 @@ static void bdrv_print_dict(QObject *obj, void *opaque)
+                 qdict_get_int(qdict, "iops"),
+                 qdict_get_int(qdict, "iops_rd"),
+                 qdict_get_int(qdict, "iops_wr"));
++#endif
+ 
+     } else {
+         monitor_printf(mon, " [not inserted]");
+@@ -2892,6 +2894,7 @@ void bdrv_info(Monitor *mon, QObject **ret_data)
+         if (bs->drv) {
+             QObject *obj;
+ 
++#ifdef CONFIG_BLOCK_IO_THROTTLING
+             obj = qobject_from_jsonf("{ 'file': %s, 'ro': %i, 'drv': %s, "
+                                      "'encrypted': %i, "
+                                      "'bps': %" PRId64 ", 'bps_rd': %" PRId64
+@@ -2908,6 +2911,14 @@ void bdrv_info(Monitor *mon, QObject **ret_data)
+                                      bs->io_limits.iops[BLOCK_IO_LIMIT_READ],
+                                      bs->io_limits.iops[BLOCK_IO_LIMIT_WRITE]
+                                      );
++#else
++            obj = qobject_from_jsonf("{ 'file': %s, 'ro': %i, 'drv': %s, "
++                                     "'encrypted': %i }",
++                                     bs->filename, bs->read_only,
++                                     bs->drv->format_name,
++                                     bdrv_is_encrypted(bs));
++#endif
++
+             if (bs->backing_file[0] != '\0') {
+                 QDict *qdict = qobject_to_qdict(obj);
+                 qdict_put(qdict, "backing_file",
+diff --git a/blockdev.c b/blockdev.c
+index 61bf5e3..0fd1902 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -486,6 +486,7 @@ DriveInfo *drive_init(QemuOpts *opts, int default_to_scsi)
+         return NULL;
+     }
+ 
++#if CONFIG_BLOCK_IO_THROTTLING
+     /* disk I/O throttling */
+     io_limits.bps[BLOCK_IO_LIMIT_TOTAL]  =
+                            qemu_opt_get_number(opts, "bps", 0);
+@@ -505,6 +506,7 @@ DriveInfo *drive_init(QemuOpts *opts, int default_to_scsi)
+                      "cannot be used at the same time");
+         return NULL;
+     }
++#endif
+ 
+     on_write_error = BLOCK_ERR_STOP_ENOSPC;
+     if ((buf = qemu_opt_get(opts, "werror")) != NULL) {
+diff --git a/configure b/configure
+index b4259d5..89a665a 100755
+--- a/configure
++++ b/configure
+@@ -288,6 +288,7 @@ smartcard=""
+ smartcard_nss=""
+ live_snapshots="yes"
+ block_stream="yes"
++io_throttling="yes"
+ usb_redir=""
+ virtio_blk_data_plane=""
+ 
+@@ -695,6 +696,10 @@ for opt do
+   ;;
+   --enable-block-stream) block_stream="yes"
+   ;;
++  --disable-io-throttling) io_throttling="no"
++  ;;
++  --enable-io-throttling) io_throttling="yes"
++  ;;
+   --disable-usb-redir) usb_redir="no"
+   ;;
+   --enable-usb-redir) usb_redir="yes"
+@@ -891,6 +896,8 @@ echo "  --disable-live-snapshots disable live block device snapshot support"
+ echo "  --enable-live-snapshots  enable live block device snapshot support"
+ echo "  --disable-block-stream   disable block streaming support"
+ echo "  --enable-block-stream    enable block streaming support"
++echo "  --disable-io-throttling  disable block io throttling support"
++echo "  --enable-io-throttling   enable block io throttling support"
+ echo "  --disable-usb-redir      disable usb network redirection support"
+ echo "  --enable-usb-redir       enable usb network redirection support"
+ echo "  --disable-rhev-features  disable RHEV-only features"
+@@ -2339,6 +2346,7 @@ echo "spice support     $spice ($spice_protocol_version/$spice_server_version)"
+ echo "nss used          $smartcard_nss"
+ echo "Live snapshots    $live_snapshots"
+ echo "Block streaming   $block_stream"
++echo "IO throttling     $io_throttling"
+ echo "xfsctl support    $xfs"
+ echo "usb net redir     $usb_redir"
+ echo "virtio-blk-data-plane $virtio_blk_data_plane"
+@@ -2603,6 +2611,10 @@ if test "$block_stream" = "yes" ; then
+   echo "CONFIG_BLOCK_STREAM=y" >> $config_host_mak
+ fi
+ 
++if test "$io_throttling" = "yes" ; then
++  echo "CONFIG_BLOCK_IO_THROTTLING=y" >> $config_host_mak
++fi
++
+ if test "$usb_redir" = "yes" ; then
+   echo "CONFIG_USB_REDIR=y" >> $config_host_mak
+ fi
+diff --git a/qemu-config.c b/qemu-config.c
+index 942f221..f4e6702 100644
+--- a/qemu-config.c
++++ b/qemu-config.c
+@@ -88,6 +88,7 @@ QemuOptsList qemu_drive_opts = {
+             .name = "copy-on-read",
+             .type = QEMU_OPT_BOOL,
+             .help = "copy read data from backing file into image file",
++#ifdef CONFIG_BLOCK_IO_THROTTLING
+         },{
+             .name = "iops",
+             .type = QEMU_OPT_NUMBER,
+@@ -112,6 +113,7 @@ QemuOptsList qemu_drive_opts = {
+             .name = "bps_wr",
+             .type = QEMU_OPT_NUMBER,
+             .help = "limit write bytes per second",
++#endif
+         },
+         { /* end if list */ }
+     },
+diff --git a/qemu-monitor.hx b/qemu-monitor.hx
+index c4f0c17..ecbfce6 100644
+--- a/qemu-monitor.hx
++++ b/qemu-monitor.hx
+@@ -2003,6 +2003,7 @@ STEXI
+ Change I/O throttle limits for a block drive to @var{bps} @var{bps_rd} @var{bps_wr} @var{iops} @var{iops_rd} @var{iops_wr}
+ ETEXI
+ 
++#ifdef CONFIG_BLOCK_IO_THROTTLING
+     {
+         .name       = "block_set_io_throttle",
+         .args_type  = "device:B,bps:l,bps_rd:l,bps_wr:l,iops:l,iops_rd:l,iops_wr:l",
+@@ -2011,7 +2012,7 @@ ETEXI
+         .user_print = monitor_user_noop,
+         .mhandler.cmd_new = do_block_set_io_throttle,
+     },
+-
++#endif
+     {
+         .name       = "cpu_set",
+         .args_type  = "cpu:i,state:s",
+-- 
+1.7.11.7
+

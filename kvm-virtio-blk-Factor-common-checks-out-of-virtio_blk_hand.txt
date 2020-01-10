@@ -1,0 +1,88 @@
+From bdf2d891e4ed625ace25832b0cba2ad447dc283d Mon Sep 17 00:00:00 2001
+From: Markus Armbruster <armbru@redhat.com>
+Date: Tue, 22 Jul 2014 09:16:02 -0500
+Subject: [CHANGE 13/17] virtio-blk: Factor common checks out of
+ virtio_blk_handle_read/write()
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1406020565-25364-9-git-send-email-armbru@redhat.com>
+Patchwork-id: 59999
+O-Subject: [PATCH 6.6 qemu-kvm v2 08/11] virtio-blk: Factor common checks out of virtio_blk_handle_read/write()
+Bugzilla: 1064643
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit d0e14376eefc40b07c8fb42c132c2202c66dcb0b)
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	hw/block/virtio-blk.c
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+---
+ hw/virtio-blk.c | 24 ++++++++++++++----------
+ 1 file changed, 14 insertions(+), 10 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/virtio-blk.c | 24 ++++++++++++++----------
+ 1 file changed, 14 insertions(+), 10 deletions(-)
+
+diff --git a/hw/virtio-blk.c b/hw/virtio-blk.c
+index 7b25de6..a5f5d93 100644
+--- a/hw/virtio-blk.c
++++ b/hw/virtio-blk.c
+@@ -312,6 +312,18 @@ static void virtio_blk_handle_flush(BlockRequest *blkreq, int *num_writes,
+     }
+ }
+ 
++static bool virtio_blk_sect_range_ok(VirtIOBlock *dev,
++                                     uint64_t sector, size_t size)
++{
++    if (sector & dev->sector_mask) {
++        return false;
++    }
++    if (size % dev->conf->logical_block_size) {
++        return false;
++    }
++    return true;
++}
++
+ static void virtio_blk_handle_write(BlockRequest *blkreq, int *num_writes,
+     VirtIOBlockReq *req, BlockDriverState **old_bs)
+ {
+@@ -319,11 +331,7 @@ static void virtio_blk_handle_write(BlockRequest *blkreq, int *num_writes,
+ 
+     bdrv_acct_start(req->dev->bs, &req->acct, req->qiov.size, BDRV_ACCT_WRITE);
+ 
+-    if (req->out->sector & req->dev->sector_mask) {
+-        virtio_blk_rw_complete(req, -EIO);
+-        return;
+-    }
+-    if (req->qiov.size % req->dev->conf->logical_block_size) {
++    if (!virtio_blk_sect_range_ok(req->dev, req->out->sector, req->qiov.size)) {
+         virtio_blk_rw_complete(req, -EIO);
+         return;
+     }
+@@ -352,11 +360,7 @@ static void virtio_blk_handle_read(VirtIOBlockReq *req)
+ 
+     bdrv_acct_start(req->dev->bs, &req->acct, req->qiov.size, BDRV_ACCT_READ);
+ 
+-    if (req->out->sector & req->dev->sector_mask) {
+-        virtio_blk_rw_complete(req, -EIO);
+-        return;
+-    }
+-    if (req->qiov.size % req->dev->conf->logical_block_size) {
++    if (!virtio_blk_sect_range_ok(req->dev, req->out->sector, req->qiov.size)) {
+         virtio_blk_rw_complete(req, -EIO);
+         return;
+     }
+-- 
+1.9.3
+

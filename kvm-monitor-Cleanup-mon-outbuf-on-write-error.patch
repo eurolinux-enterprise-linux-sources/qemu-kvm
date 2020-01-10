@@ -1,0 +1,57 @@
+From a930a09bb175124647787ffed8355d3152cb5e2d Mon Sep 17 00:00:00 2001
+From: Amit Shah <amit.shah@redhat.com>
+Date: Fri, 14 Feb 2014 07:50:10 +0100
+Subject: [PATCH] monitor: Cleanup mon->outbuf on write error
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <b06969863a952b96e9f8767526c5237207848c08.1392363471.git.amit.shah@redhat.com>
+Patchwork-id: 57271
+O-Subject: [RHEL 6.6, 6.5.z qemu-kvm PATCH 1/1] monitor: Cleanup mon->outbuf on write error
+Bugzilla: 1060024
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Stratos Psomadakis <psomas@grnet.gr>
+
+In case monitor_flush() fails to write the contents of mon->outbuf to
+the output device, mon->outbuf is not cleaned up properly. Check the
+return code of the qemu_chr_fe_write() function and cleanup the outbuf
+if it fails.
+
+References: http://lists.nongnu.org/archive/html/qemu-devel/2014-01/msg02890.html
+
+Bugzilla: 1060024
+
+Signed-off-by: Stratos Psomadakis <psomas@grnet.gr>
+Signed-off-by: Dimitris Aragiorgis <dimara@grnet.gr>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 056f49ff2cf645dc484956b00b65a3aa18a1a9a3)
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ monitor.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ monitor.c |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/monitor.c b/monitor.c
+index 9152293..72ac865 100644
+--- a/monitor.c
++++ b/monitor.c
+@@ -290,8 +290,8 @@ void monitor_flush(Monitor *mon)
+ 
+     if (len && !mon->mux_out) {
+         rc = qemu_chr_fe_write(mon->chr, (const uint8_t *) buf, len);
+-        if (rc == len) {
+-            /* all flushed */
++        if ((rc < 0 && errno != EAGAIN) || (rc == len)) {
++            /* all flushed or error */
+             QDECREF(mon->outbuf);
+             mon->outbuf = qstring_new();
+             return;
+-- 
+1.7.1
+

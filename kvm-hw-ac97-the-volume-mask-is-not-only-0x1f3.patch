@@ -1,0 +1,51 @@
+From 63f3326ee6f56a281b7121836fc672ea8b0b7916 Mon Sep 17 00:00:00 2001
+Message-Id: <63f3326ee6f56a281b7121836fc672ea8b0b7916.1369841886.git.minovotn@redhat.com>
+In-Reply-To: <9db4fbc10d733a88102ef99acaf6eb5d54153495.1369841886.git.minovotn@redhat.com>
+References: <9db4fbc10d733a88102ef99acaf6eb5d54153495.1369841886.git.minovotn@redhat.com>
+From: Marc-Andr Lureau <marcandre.lureau@redhat.com>
+Date: Wed, 29 May 2013 14:39:28 +0200
+Subject: [PATCH 11/14] hw/ac97: the volume mask is not only 0x1f
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Marc-André Lureau <marcandre.lureau@redhat.com>
+Message-id: <1369838371-26570-1-git-send-email-marcandre.lureau@redhat.com>
+Patchwork-id: 51682
+O-Subject: [RHEL-6.5 qemu-kvm PATCHv3 10/13] hw/ac97: the volume mask is not only 0x1f
+Bugzilla: 884253
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Marc-André Lureau <marcandre.lureau@gmail.com>
+
+It's a case by case (see Table 66. AC ?97 Baseline Audio Register Map)
+
+Signed-off-by: Marc-Andr? Lureau <marcandre.lureau@redhat.com>
+Signed-off-by: malc <av1474@comtv.ru>
+(cherry picked from commit 5b72392603b6fcb6ac533cb5b74d1cfb4917a0e1)
+---
+ hw/ac97.c |    1 -
+ 1 files changed, 0 insertions(+), 1 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/ac97.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/hw/ac97.c b/hw/ac97.c
+index 8dd4f88..6552da3 100644
+--- a/hw/ac97.c
++++ b/hw/ac97.c
+@@ -114,7 +114,6 @@ enum {
+ #define EACS_VRA 1
+ #define EACS_VRM 8
+ 
+-#define VOL_MASK 0x1f
+ #define MUTE_SHIFT 15
+ 
+ #define REC_MASK 7
+-- 
+1.7.11.7
+

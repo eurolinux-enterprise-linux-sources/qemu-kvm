@@ -1,0 +1,152 @@
+From e6910a6739a73a60f3eedbc3765e75d6c2184796 Mon Sep 17 00:00:00 2001
+Message-Id: <e6910a6739a73a60f3eedbc3765e75d6c2184796.1424280081.git.jen@redhat.com>
+In-Reply-To: <54163d537ed24926effb0783707492d2988ecbe8.1424280081.git.jen@redhat.com>
+References: <54163d537ed24926effb0783707492d2988ecbe8.1424280081.git.jen@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Thu, 12 Feb 2015 14:16:21 -0500
+Subject: [CHANGE 6/8] block: Repair the throttling code.
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1423750582-32065-4-git-send-email-stefanha@redhat.com>
+Patchwork-id: 63803
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 3/4] block: Repair the throttling code.
+Bugzilla: 1132848
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+From: Benoît Canet <benoit@irqsave.net>
+
+The throttling code was segfaulting since commit
+02ffb504485f0920cfc75a0982a602f824a9a4f4 because some qemu_co_queue_next caller
+does not run in a coroutine.
+qemu_co_queue_do_restart assume that the caller is a coroutinne.
+As suggested by Stefan fix this by entering the coroutine directly.
+Also make sure like suggested that qemu_co_queue_next() and
+qemu_co_queue_restart_all() can be called only in coroutines.
+
+Signed-off-by: Benoit Canet <benoit@irqsave.net>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit b681a1c73e15e08c70c10cccd9c9f5b65cca12e8)
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+The bug that this patch fixes is not present in RHEL6 because CoQueue is
+implemented using QEMUBH and 02ffb504485f0920cfc75a0982a602f824a9a4f4
+has not been backported.
+
+The patch is still needed for two reasons:
+
+1. To reduce block.c conflicts later since qemu_co_queue_next() is
+   replaced with qemu_co_enter_next().
+
+2. To add the qemu_co_enter_next() function used by the new I/O
+   throttling implementation.
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+
+	include/block/coroutine.h
+
+The path is ./qemu-coroutine.h in RHEL6.
+
+	qemu-coroutine-lock.c
+
+Drop coroutine_fn and assert(qemu_in_coroutine()) since RHEL6 CoQueue
+does not suffer from the bug that this patch fixed upstream.  It's
+perfectly fine to call qemu_co_queue_next() and
+qemu_co_queue_restart_all() outside coroutine context in RHEL6.
+---
+ block.c               |  7 +++----
+ qemu-coroutine-lock.c | 14 ++++++++++++++
+ qemu-coroutine.h      |  5 +++++
+ 3 files changed, 22 insertions(+), 4 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block.c               |  7 +++----
+ qemu-coroutine-lock.c | 14 ++++++++++++++
+ qemu-coroutine.h      |  5 +++++
+ 3 files changed, 22 insertions(+), 4 deletions(-)
+
+diff --git a/block.c b/block.c
+index 29bab36..e3662ff 100644
+--- a/block.c
++++ b/block.c
+@@ -125,7 +125,7 @@ void bdrv_io_limits_disable(BlockDriverState *bs)
+ {
+     bs->io_limits_enabled = false;
+ 
+-    while (qemu_co_queue_next(&bs->throttled_reqs));
++    do {} while (qemu_co_enter_next(&bs->throttled_reqs));
+ 
+     if (bs->block_timer) {
+         qemu_del_timer(bs->block_timer);
+@@ -141,7 +141,7 @@ static void bdrv_block_timer(void *opaque)
+ {
+     BlockDriverState *bs = opaque;
+ 
+-    qemu_co_queue_next(&bs->throttled_reqs);
++    qemu_co_enter_next(&bs->throttled_reqs);
+ }
+ 
+ void bdrv_io_limits_enable(BlockDriverState *bs)
+@@ -1135,8 +1135,7 @@ void bdrv_drain_all(void)
+          * a busy wait.
+          */
+         QTAILQ_FOREACH(bs, &bdrv_states, list) {
+-            if (!qemu_co_queue_empty(&bs->throttled_reqs)) {
+-                qemu_co_queue_restart_all(&bs->throttled_reqs);
++            while (qemu_co_enter_next(&bs->throttled_reqs)) {
+                 busy = true;
+             }
+         }
+diff --git a/qemu-coroutine-lock.c b/qemu-coroutine-lock.c
+index 85d3cc4..84c8a07 100644
+--- a/qemu-coroutine-lock.c
++++ b/qemu-coroutine-lock.c
+@@ -90,6 +90,20 @@ void qemu_co_queue_restart_all(CoQueue *queue)
+     }
+ }
+ 
++bool qemu_co_enter_next(CoQueue *queue)
++{
++    Coroutine *next;
++
++    next = QTAILQ_FIRST(&queue->entries);
++    if (!next) {
++        return false;
++    }
++
++    QTAILQ_REMOVE(&queue->entries, next, co_queue_next);
++    qemu_coroutine_enter(next, NULL);
++    return true;
++}
++
+ bool qemu_co_queue_empty(CoQueue *queue)
+ {
+     return (QTAILQ_FIRST(&queue->entries) == NULL);
+diff --git a/qemu-coroutine.h b/qemu-coroutine.h
+index b1c21d9..4e71404 100644
+--- a/qemu-coroutine.h
++++ b/qemu-coroutine.h
+@@ -137,6 +137,11 @@ bool qemu_co_queue_next(CoQueue *queue);
+ void qemu_co_queue_restart_all(CoQueue *queue);
+ 
+ /**
++ * Enter the next coroutine in the queue
++ */
++bool qemu_co_enter_next(CoQueue *queue);
++
++/**
+  * Checks if the CoQueue is empty.
+  */
+ bool qemu_co_queue_empty(CoQueue *queue);
+-- 
+2.1.0
+

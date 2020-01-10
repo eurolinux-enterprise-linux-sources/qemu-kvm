@@ -1,0 +1,120 @@
+From f2b8e2b8d2b49a8f9e7c37914ce63f4da2b79d6a Mon Sep 17 00:00:00 2001
+Message-Id: <f2b8e2b8d2b49a8f9e7c37914ce63f4da2b79d6a.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:27:46 +0200
+Subject: [PATCH 081/114] qemu-ga: qmp_guest_network_get_interfaces(): get rid
+ of snprintf() + error_set()
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-24-git-send-email-lersek@redhat.com>
+Patchwork-id: 51122
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 23/56] qemu-ga: qmp_guest_network_get_interfaces(): get rid of snprintf() + error_set()
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Convert them to error_setg_errno().
+
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+Reviewed-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit 878a0ae0ab3eb8428626e67995c9efad8eb1ba80)
+
+Conflicts:
+
+	qga/commands-posix.c
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+
+---
+ v2: adapted to g_malloc()/g_free() conversion
+
+ qga/commands-posix.c |   29 ++++++++---------------------
+ 1 files changed, 8 insertions(+), 21 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/commands-posix.c | 29 ++++++++---------------------
+ 1 file changed, 8 insertions(+), 21 deletions(-)
+
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index 524e4d5..21d4c91 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -803,12 +803,9 @@ GuestNetworkInterfaceList *qmp_guest_network_get_interfaces(Error **errp)
+ {
+     GuestNetworkInterfaceList *head = NULL, *cur_item = NULL;
+     struct ifaddrs *ifap, *ifa;
+-    char err_msg[512];
+ 
+     if (getifaddrs(&ifap) < 0) {
+-        snprintf(err_msg, sizeof(err_msg),
+-                 "getifaddrs failed: %s", strerror(errno));
+-        error_set(errp, QERR_QGA_COMMAND_FAILED, err_msg);
++        error_setg_errno(errp, errno, "getifaddrs failed");
+         goto error;
+     }
+ 
+@@ -844,20 +841,16 @@ GuestNetworkInterfaceList *qmp_guest_network_get_interfaces(Error **errp)
+             /* we haven't obtained HW address yet */
+             sock = socket(PF_INET, SOCK_STREAM, 0);
+             if (sock == -1) {
+-                snprintf(err_msg, sizeof(err_msg),
+-                         "failed to create socket: %s", strerror(errno));
+-                error_set(errp, QERR_QGA_COMMAND_FAILED, err_msg);
++                error_setg_errno(errp, errno, "failed to create socket");
+                 goto error;
+             }
+ 
+             memset(&ifr, 0, sizeof(ifr));
+             pstrcpy(ifr.ifr_name, IF_NAMESIZE, info->value->name);
+             if (ioctl(sock, SIOCGIFHWADDR, &ifr) == -1) {
+-                snprintf(err_msg, sizeof(err_msg),
+-                         "failed to get MAC addresss of %s: %s",
+-                         ifa->ifa_name,
+-                         strerror(errno));
+-                error_set(errp, QERR_QGA_COMMAND_FAILED, err_msg);
++                error_setg_errno(errp, errno,
++                                 "failed to get MAC address of %s",
++                                 ifa->ifa_name);
+                 goto error;
+             }
+ 
+@@ -868,9 +861,7 @@ GuestNetworkInterfaceList *qmp_guest_network_get_interfaces(Error **errp)
+                          (int) mac_addr[0], (int) mac_addr[1],
+                          (int) mac_addr[2], (int) mac_addr[3],
+                          (int) mac_addr[4], (int) mac_addr[5]) == -1) {
+-                snprintf(err_msg, sizeof(err_msg),
+-                         "failed to format MAC: %s", strerror(errno));
+-                error_set(errp, QERR_QGA_COMMAND_FAILED, err_msg);
++                error_setg_errno(errp, errno, "failed to format MAC");
+                 goto error;
+             }
+ 
+@@ -885,9 +876,7 @@ GuestNetworkInterfaceList *qmp_guest_network_get_interfaces(Error **errp)
+             address_item->value = g_malloc0(sizeof(*address_item->value));
+             p = &((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
+             if (!inet_ntop(AF_INET, p, addr4, sizeof(addr4))) {
+-                snprintf(err_msg, sizeof(err_msg),
+-                         "inet_ntop failed : %s", strerror(errno));
+-                error_set(errp, QERR_QGA_COMMAND_FAILED, err_msg);
++                error_setg_errno(errp, errno, "inet_ntop failed");
+                 goto error;
+             }
+ 
+@@ -907,9 +896,7 @@ GuestNetworkInterfaceList *qmp_guest_network_get_interfaces(Error **errp)
+             address_item->value = g_malloc0(sizeof(*address_item->value));
+             p = &((struct sockaddr_in6 *)ifa->ifa_addr)->sin6_addr;
+             if (!inet_ntop(AF_INET6, p, addr6, sizeof(addr6))) {
+-                snprintf(err_msg, sizeof(err_msg),
+-                         "inet_ntop failed : %s", strerror(errno));
+-                error_set(errp, QERR_QGA_COMMAND_FAILED, err_msg);
++                error_setg_errno(errp, errno, "inet_ntop failed");
+                 goto error;
+             }
+ 
+-- 
+1.7.11.7
+

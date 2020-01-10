@@ -1,0 +1,55 @@
+From b4d45e4b63b024e513a5419e029d83b6543b8d8c Mon Sep 17 00:00:00 2001
+Message-Id: <b4d45e4b63b024e513a5419e029d83b6543b8d8c.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:39 +0200
+Subject: [PATCH 65/65] virtio-console: add a no-flow-control mode for compat
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <eb163a61cf6286cc61e797e0467d947cd981f0c0.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50843
+O-Subject: [RHEL6.5 qemu-kvm PATCH 65/65] virtio-console: add a no-flow-control mode for compat
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Commit 975ced46e7e1db173ad6463081b24cbdb95bad49 had added a compat
+property to disable flow control for rhel6.0.0 machines.  virtio-console
+lost the ability to do that earlier as part of the refactoring of the
+flow control code.  Re-add that ability.
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ hw/virtio-console.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/virtio-console.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/hw/virtio-console.c b/hw/virtio-console.c
+index 348b4be..059eaed 100644
+--- a/hw/virtio-console.c
++++ b/hw/virtio-console.c
+@@ -46,6 +46,15 @@ static ssize_t flush_buf(VirtIOSerialPort *port,
+         /* If there's no backend, we can just say we consumed all data. */
+         return len;
+     }
++
++    if (!virtio_serial_flow_control_enabled(port)) {
++        ret = qemu_chr_fe_write_all(vcon->chr, buf, len);
++        if (ret < 0) {
++            ret = 0;
++        }
++        return ret;
++    }
++
+     ret = qemu_chr_fe_write(vcon->chr, buf, len);
+     trace_virtio_console_flush_buf(port->id, len, ret);
+ 
+-- 
+1.7.11.7
+

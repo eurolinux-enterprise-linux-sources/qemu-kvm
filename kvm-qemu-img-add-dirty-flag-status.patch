@@ -1,0 +1,67 @@
+From 5209bb8968da2f263e09a81d3f5daf30c2b284fc Mon Sep 17 00:00:00 2001
+Message-Id: <5209bb8968da2f263e09a81d3f5daf30c2b284fc.1380723420.git.minovotn@redhat.com>
+In-Reply-To: <68de4f1434a46df7d1b6e59cb348f11c92dbf17c.1380723420.git.minovotn@redhat.com>
+References: <68de4f1434a46df7d1b6e59cb348f11c92dbf17c.1380723420.git.minovotn@redhat.com>
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Tue, 1 Oct 2013 12:27:03 +0200
+Subject: [PATCH 07/13] qemu-img: add dirty flag status
+
+RH-Author: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: <1380630429-29077-3-git-send-email-pbonzini@redhat.com>
+Patchwork-id: 54617
+O-Subject: [RHEL 6.5 qemu-kvm PATCH 2/8] qemu-img: add dirty flag status
+Bugzilla: 1010610
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Eduardo Habkost <ehabkost@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: Dong Xu Wang <wdongxu@linux.vnet.ibm.com>
+
+Some block drivers can verify their image files are clean or not. So we can show
+it while using "qemu-img info".
+
+Signed-off-by: Dong Xu Wang <wdongxu@linux.vnet.ibm.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 64c79160b456c2d6aabc63e40b32e392a9ea3c90)
+---
+ block.h    | 1 +
+ qemu-img.c | 3 +++
+ 2 files changed, 4 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.h    | 1 +
+ qemu-img.c | 3 +++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/block.h b/block.h
+index 2122beb..8af4617 100644
+--- a/block.h
++++ b/block.h
+@@ -14,6 +14,7 @@ typedef struct BlockDriverInfo {
+     int cluster_size;
+     /* offset at which the VM state can be saved (0 if not possible) */
+     int64_t vm_state_offset;
++    bool is_dirty;
+ } BlockDriverInfo;
+ 
+ typedef struct BlockFragInfo {
+diff --git a/qemu-img.c b/qemu-img.c
+index cf1ba0f..2b2bc13 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -1278,6 +1278,9 @@ static int img_info(int argc, char **argv)
+         if (bdi.cluster_size != 0) {
+             printf("cluster_size: %d\n", bdi.cluster_size);
+         }
++        if (bdi.is_dirty) {
++            printf("cleanly shut down: no\n");
++        }
+     }
+     bdrv_get_backing_filename(bs, backing_filename, sizeof(backing_filename));
+     if (backing_filename[0] != '\0') {
+-- 
+1.7.11.7
+

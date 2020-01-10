@@ -1,0 +1,74 @@
+From 574a576c8e7076342f0becb29db84e472e90e38b Mon Sep 17 00:00:00 2001
+From: Max Reitz <mreitz@redhat.com>
+Date: Fri, 1 Nov 2013 13:07:45 +0100
+Subject: [PATCH 1/3] qcow2: Flush image after creation
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1383311265-9706-1-git-send-email-mreitz@redhat.com>
+Patchwork-id: 55212
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] qcow2: Flush image after creation
+Bugzilla: 1018451
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+BZ: 1018451
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=6508628
+
+Opening the qcow2 image with BDRV_O_NO_FLUSH prevents any flushes during
+the image creation. This means that the image has not yet been flushed
+to disk when qemu-img create exits. This flush is delayed until the next
+operation on the image involving opening it without BDRV_O_NO_FLUSH and
+closing (or directly flushing) it. For large images and/or images with a
+small cluster size and preallocated metadata, this flush may take a
+significant amount of time and may occur unexpectedly.
+
+Reopening the image without BDRV_O_NO_FLUSH right before the end of
+qcow2_create2() results in hoisting the potentially costly flush into
+the image creation, which is expected to take some time (whereas
+successive image operations may be not).
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Benoit Canet <benoit@irqsave.net>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit ba2ab2f2ca4150a7e314fbb19fa158bd8ddc36eb)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+
+Conflicts:
+	block/qcow2.c
+
+Conflicts because the downstream bdrv_open neither has an options nor an
+errp parameter.
+---
+ block/qcow2.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block/qcow2.c |    8 ++++++++
+ 1 files changed, 8 insertions(+), 0 deletions(-)
+
+diff --git a/block/qcow2.c b/block/qcow2.c
+index f209a5c..71c7b23 100644
+--- a/block/qcow2.c
++++ b/block/qcow2.c
+@@ -1060,6 +1060,14 @@ static int qcow2_create2(const char *filename, int64_t total_size,
+         }
+     }
+ 
++    bdrv_close(bs);
++
++    /* Reopen the image without BDRV_O_NO_FLUSH to flush it before returning */
++    ret = bdrv_open(bs, filename, BDRV_O_RDWR | BDRV_O_CACHE_WB, drv);
++    if (ret < 0) {
++        goto out;
++    }
++
+     ret = 0;
+ out:
+     bdrv_delete(bs);
+-- 
+1.7.1
+

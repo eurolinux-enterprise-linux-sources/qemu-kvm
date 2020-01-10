@@ -1,0 +1,69 @@
+From b7224bf9cbe497874ee68136714a17910a5d56f0 Mon Sep 17 00:00:00 2001
+Message-Id: <b7224bf9cbe497874ee68136714a17910a5d56f0.1366117835.git.minovotn@redhat.com>
+In-Reply-To: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+References: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 7 Mar 2013 15:29:21 +0100
+Subject: [PATCH 13/19] qemu-img: Improve error messages for failed bdrv_open
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1362670164-15796-10-git-send-email-kwolf@redhat.com>
+Patchwork-id: 49311
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 09/12] qemu-img: Improve error messages for failed bdrv_open
+Bugzilla: 888008
+RH-Acked-by: Eric Blake <eblake@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Output the error message string of the bdrv_open return code. Also set a
+non-empty device name for the images because the unknown feature error message
+includes it.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit b9eaf9ecb15a9c69a592f386159163d5efc3b919)
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ qemu-img.c | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-img.c | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/qemu-img.c b/qemu-img.c
+index 73d4784..894fa62 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -244,8 +244,9 @@ static BlockDriverState *bdrv_new_open(const char *filename,
+     BlockDriverState *bs;
+     BlockDriver *drv;
+     char password[256];
++    int ret;
+ 
+-    bs = bdrv_new("");
++    bs = bdrv_new("image");
+ 
+     if (fmt) {
+         drv = bdrv_find_format(fmt);
+@@ -256,10 +257,13 @@ static BlockDriverState *bdrv_new_open(const char *filename,
+     } else {
+         drv = NULL;
+     }
+-    if (bdrv_open(bs, filename, flags, drv) < 0) {
+-        error_report("Could not open '%s'", filename);
++
++    ret = bdrv_open(bs, filename, flags, drv);
++    if (ret < 0) {
++        error_report("Could not open '%s': %s", filename, strerror(-ret));
+         goto fail;
+     }
++
+     if (bdrv_is_encrypted(bs)) {
+         printf("Disk image '%s' is encrypted.\n", filename);
+         if (read_password(password, sizeof(password)) < 0) {
+-- 
+1.7.11.7
+

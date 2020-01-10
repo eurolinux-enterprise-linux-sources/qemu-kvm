@@ -1,0 +1,102 @@
+From 505b547cda88b7288fae3b8f371a3bbed9a36e30 Mon Sep 17 00:00:00 2001
+Message-Id: <505b547cda88b7288fae3b8f371a3bbed9a36e30.1375111395.git.minovotn@redhat.com>
+In-Reply-To: <fefc9cbca3288c4ca491968f9b7b5bf462059171.1375111395.git.minovotn@redhat.com>
+References: <fefc9cbca3288c4ca491968f9b7b5bf462059171.1375111395.git.minovotn@redhat.com>
+From: Asias He <asias@redhat.com>
+Date: Fri, 26 Jul 2013 01:28:43 +0200
+Subject: [PATCH 4/4] virtio-scsi: enable MSI-X support
+
+RH-Author: Asias He <asias@redhat.com>
+Message-id: <1374802123-18045-1-git-send-email-asias@redhat.com>
+Patchwork-id: 52726
+O-Subject: [HEL6.5 qemu-kvm PATCH] virtio-scsi: enable MSI-X support
+Bugzilla: 987025
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+Bugzilla: 987025
+
+This is manual backport of commit 4c205d0cb1c8bde5a53f6acceda74dae1043a197
+
+    While virtio-scsi does support multiqueue, the default number of
+    interrupt vectors is not enough to actually enable usage of
+    multiple queues in the driver; this is because with only 2
+    vectors the driver will not be able to use a separate
+    interrupt for each request queue.  Derive the desired number
+    of vectors from the number of request queues.
+
+    Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+
+In rhel6, multi-queue virtio-scsi is not enabled. We always have num_queues =
+1. So, We need 4 vectors (1 req queue, 1 ctrl queue, 1 evt queue, 1
+config intr).
+
+Also, backwards-compatibility properties for 6.4 and earlier machines
+are added (RHEL-ONLY).
+
+- vectors=2 for RHEL <= 6.4 (with a compat property);
+- vectors=4 for RHEL >= 6.5 (by changing the default; this matches
+  upstream's num_queues + 3, with num_queues == 1).
+
+Signed-off-by: Asias He <asias@redhat.com>
+---
+ hw/pc.c         | 14 +++++++++++++-
+ hw/virtio-pci.c |  2 +-
+ 2 files changed, 14 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/pc.c         | 14 +++++++++++++-
+ hw/virtio-pci.c |  2 +-
+ 2 files changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/hw/pc.c b/hw/pc.c
+index fefaee0..46b4c32 100644
+--- a/hw/pc.c
++++ b/hw/pc.c
+@@ -1629,8 +1629,16 @@ static void rhel_common_init(const char *type1_version,
+                      strlen(buf) + 1, buf);
+ }
+ 
+-#define PC_RHEL6_3_COMPAT \
++#define PC_RHEL6_4_COMPAT \
+         {\
++            .driver   = "virtio-scsi-pci",\
++            .property = "vectors",\
++            .value    = stringify(2),\
++        }
++
++#define PC_RHEL6_3_COMPAT \
++        PC_RHEL6_4_COMPAT \
++        ,{\
+             .driver   = "USB",\
+             .property = "create_unique_serial",\
+             .value    = "0",\
+@@ -1804,6 +1812,10 @@ static QEMUMachine pc_machine_rhel640 = {
+     .init = pc_init_rhel640,
+     .max_cpus = 255,
+     .no_mixemu = 1,
++    .compat_props = (GlobalProperty[]) {
++        PC_RHEL6_4_COMPAT,
++        { /* end of list */ }
++    },
+ };
+ 
+ static void pc_init_rhel630(ram_addr_t ram_size,
+diff --git a/hw/virtio-pci.c b/hw/virtio-pci.c
+index d298804..91880b1 100644
+--- a/hw/virtio-pci.c
++++ b/hw/virtio-pci.c
+@@ -1056,7 +1056,7 @@ static PCIDeviceInfo virtio_info[] = {
+         .init      = virtio_scsi_init_pci,
+         .exit      = virtio_scsi_exit_pci,
+         .qdev.props = (Property[]) {
+-            DEFINE_PROP_UINT32("vectors", VirtIOPCIProxy, nvectors, 2),
++            DEFINE_PROP_UINT32("vectors", VirtIOPCIProxy, nvectors, 4),
+             DEFINE_VIRTIO_SCSI_PROPERTIES(VirtIOPCIProxy, host_features, scsi),
+             DEFINE_PROP_END_OF_LIST(),
+         },
+-- 
+1.7.11.7
+

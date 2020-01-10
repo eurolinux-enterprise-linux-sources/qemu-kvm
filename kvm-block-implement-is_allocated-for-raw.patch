@@ -1,0 +1,51 @@
+From a6e6ca61915cfee0c1f33ba4289cafea04a2637f Mon Sep 17 00:00:00 2001
+Message-Id: <a6e6ca61915cfee0c1f33ba4289cafea04a2637f.1379425497.git.minovotn@redhat.com>
+In-Reply-To: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+References: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Fri, 6 Sep 2013 18:12:22 +0200
+Subject: [PATCH 02/25] block: implement is_allocated for raw
+
+Either FIEMAP, or SEEK_DATA+SEEK_HOLE can be used to implement the
+is_allocated callback for raw files.  On Linux ext4, btrfs and XFS
+all support it.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 5500316ded9db5b10072334cde1e27fb37682240)
+
+[RHEL6: only implement support in the format, not in the protocol]
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/raw.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/block/raw.c b/block/raw.c
+index 2c7fb97..d58be4b 100644
+--- a/block/raw.c
++++ b/block/raw.c
+@@ -38,6 +38,13 @@ static int coroutine_fn raw_co_flush(BlockDriverState *bs)
+     return bdrv_co_flush(bs->file);
+ }
+ 
++static int coroutine_fn raw_co_is_allocated(BlockDriverState *bs,
++                                            int64_t sector_num,
++                                            int nb_sectors, int *pnum)
++{
++    return bdrv_co_is_allocated(bs->file, sector_num, nb_sectors, pnum);
++}
++
+ static int64_t raw_getlength(BlockDriverState *bs)
+ {
+     return bdrv_getlength(bs->file);
+@@ -123,6 +130,7 @@ static BlockDriver bdrv_raw = {
+     .bdrv_co_readv      = raw_co_readv,
+     .bdrv_co_writev     = raw_co_writev,
+     .bdrv_co_flush      = raw_co_flush,
++    .bdrv_co_is_allocated   = raw_co_is_allocated,
+     .bdrv_co_discard    = raw_co_discard,
+ 
+     .bdrv_probe         = raw_probe,
+-- 
+1.7.11.7
+

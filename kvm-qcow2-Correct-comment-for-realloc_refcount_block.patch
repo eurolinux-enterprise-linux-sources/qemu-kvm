@@ -1,0 +1,52 @@
+From 96c80b0431925b725cb57ffa7a0f9ee29bfd973c Mon Sep 17 00:00:00 2001
+From: Max Reitz <mreitz@redhat.com>
+Date: Fri, 2 May 2014 16:58:55 -0500
+Subject: [PATCH 23/26] qcow2: Correct comment for realloc_refcount_block()
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1399049936-13496-24-git-send-email-mreitz@redhat.com>
+Patchwork-id: 58667
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 23/24] qcow2: Correct comment for realloc_refcount_block()
+Bugzilla: 1004420
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1004420
+
+Contrary to the comment describing this function's behavior, it does not
+return 0 on success, but rather the offset of the newly allocated
+cluster. This patch adjusts the comment accordingly to reflect the
+actual behavior.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 8a15b813e6034856d4177c6ab242791795434c15)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-refcount.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-refcount.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/block/qcow2-refcount.c b/block/qcow2-refcount.c
+index 1b4042e..873baee 100644
+--- a/block/qcow2-refcount.c
++++ b/block/qcow2-refcount.c
+@@ -1214,7 +1214,7 @@ static int write_reftable_entry(BlockDriverState *bs, int rt_index)
+  * does _not_ decrement the reference count for the currently occupied cluster.
+  *
+  * This function prints an informative message to stderr on error (and returns
+- * -errno); on success, 0 is returned.
++ * -errno); on success, the offset of the newly allocated cluster is returned.
+  */
+ static int64_t realloc_refcount_block(BlockDriverState *bs, int reftable_index,
+                                       uint64_t offset)
+-- 
+1.7.1
+

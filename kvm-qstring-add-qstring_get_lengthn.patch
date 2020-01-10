@@ -1,0 +1,72 @@
+From 56a593805aa4c8c8e622cf6bd2a0ebea7f46ac8b Mon Sep 17 00:00:00 2001
+Message-Id: <56a593805aa4c8c8e622cf6bd2a0ebea7f46ac8b.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:23 +0200
+Subject: [PATCH 49/65] qstring: add qstring_get_length()
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <f70051ad7b46a06c66d56a950b0f7ca52ddc7a46.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50827
+O-Subject: [RHEL6.5 qemu-kvm PATCH 49/65] qstring: add qstring_get_length()
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Luiz Capitulino <lcapitulino@redhat.com>
+
+Long overdue.
+
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 54d49ac99227aff646ac940abfab3417f5cb1693)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ qstring.c | 8 ++++++++
+ qstring.h | 1 +
+ 2 files changed, 9 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qstring.c | 8 ++++++++
+ qstring.h | 1 +
+ 2 files changed, 9 insertions(+)
+
+diff --git a/qstring.c b/qstring.c
+index 740a106..5316365 100644
+--- a/qstring.c
++++ b/qstring.c
+@@ -31,6 +31,14 @@ QString *qstring_new(void)
+ }
+ 
+ /**
++ * qstring_get_length(): Get the length of a QString
++ */
++size_t qstring_get_length(const QString *qstring)
++{
++    return qstring->length;
++}
++
++/**
+  * qstring_from_substr(): Create a new QString from a C string substring
+  *
+  * Return string reference
+diff --git a/qstring.h b/qstring.h
+index 6aaa7d5..c26266b 100644
+--- a/qstring.h
++++ b/qstring.h
+@@ -14,6 +14,7 @@ typedef struct QString {
+ QString *qstring_new(void);
+ QString *qstring_from_str(const char *str);
+ QString *qstring_from_substr(const char *str, int start, int end);
++size_t qstring_get_length(const QString *qstring);
+ const char *qstring_get_str(const QString *qstring);
+ void qstring_append_int(QString *qstring, int64_t value);
+ void qstring_append(QString *qstring, const char *str);
+-- 
+1.7.11.7
+

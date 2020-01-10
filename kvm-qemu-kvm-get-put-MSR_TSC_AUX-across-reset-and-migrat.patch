@@ -1,0 +1,79 @@
+From bbfa54906fb29b4c438fd28527c481d40a590077 Mon Sep 17 00:00:00 2001
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 25 Nov 2015 05:47:47 -0500
+Subject: [PATCH 1/4] qemu-kvm: get/put MSR_TSC_AUX across reset and migration
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <d58852a934d248d4b426147cb94032b65963264a.1448430330.git.amit.shah@redhat.com>
+Patchwork-id: 68465
+O-Subject: [RHEL 6.8 qemu-kvm PATCH 1/1] qemu-kvm: get/put MSR_TSC_AUX across reset and migration
+Bugzilla: 1265428
+RH-Acked-by: Eduardo Habkost <ehabkost@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+There's one report of migration breaking due to missing MSR_TSC_AUX
+save/restore.  The TSR_AUX MSR is already saved/loaded across migration,
+but the value is not fetched from the kernel.  Fix this by adding
+get/put calls for the MSR.
+
+This is a backport of upstream c9b8f6b6210847b4381c5b2ee172b1c7eb9985d6
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ qemu-kvm-x86.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/qemu-kvm-x86.c b/qemu-kvm-x86.c
+index 925463c..fbb4b7d 100644
+--- a/qemu-kvm-x86.c
++++ b/qemu-kvm-x86.c
+@@ -31,6 +31,7 @@ static struct kvm_msr_list *kvm_msr_list;
+ extern unsigned int kvm_shadow_memory;
+ static int kvm_has_msr_star;
+ static int kvm_has_vm_hsave_pa;
++static bool has_msr_tsc_aux;
+ static int has_msr_tsc_deadline;
+ 
+ static int lm_capable_kernel;
+@@ -828,6 +829,8 @@ int kvm_arch_qemu_create_context(void)
+ 	    kvm_has_msr_star = 1;
+         if (kvm_msr_list->indices[i] == MSR_VM_HSAVE_PA)
+             kvm_has_vm_hsave_pa = 1;
++        if (kvm_msr_list->indices[i] == MSR_TSC_AUX)
++            has_msr_tsc_aux = true;
+         if (kvm_msr_list->indices[i] == MSR_IA32_TSCDEADLINE)
+             has_msr_tsc_deadline = 1;
+     }
+@@ -879,6 +882,9 @@ static int get_msr_entry(struct kvm_msr_entry *entry, CPUState *env)
+         case MSR_VM_HSAVE_PA:
+             env->vm_hsave     = entry->data;
+             break;
++        case MSR_TSC_AUX:
++            env->tsc_aux      = entry->data;
++            break;
+         case MSR_IA32_TSCDEADLINE:
+             env->tsc_deadline = entry->data;
+             break;
+@@ -1127,6 +1133,8 @@ void kvm_arch_load_regs(CPUState *env)
+ 	set_msr_entry(&msrs[n++], MSR_STAR,              env->star);
+     if (kvm_has_vm_hsave_pa)
+         set_msr_entry(&msrs[n++], MSR_VM_HSAVE_PA, env->vm_hsave);
++    if (has_msr_tsc_aux)
++        set_msr_entry(&msrs[n++], MSR_TSC_AUX, env->tsc_aux);
+     if (has_msr_tsc_deadline)
+         set_msr_entry(&msrs[n++], MSR_IA32_TSCDEADLINE, env->tsc_deadline);
+ #ifdef TARGET_X86_64
+@@ -1400,6 +1408,8 @@ void kvm_arch_save_regs(CPUState *env)
+ 
+     if (kvm_has_vm_hsave_pa)
+         msrs[n++].index = MSR_VM_HSAVE_PA;
++    if (has_msr_tsc_aux)
++        msrs[n++].index = MSR_TSC_AUX;
+     if (has_msr_tsc_deadline)
+         msrs[n++].index = MSR_IA32_TSCDEADLINE;
+ #ifdef TARGET_X86_64
+-- 
+2.1.0
+

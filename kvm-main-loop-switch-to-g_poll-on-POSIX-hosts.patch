@@ -1,0 +1,196 @@
+From 2b0a02d3df24b6f2705d85f7b8fe76acb9a62891 Mon Sep 17 00:00:00 2001
+Message-Id: <2b0a02d3df24b6f2705d85f7b8fe76acb9a62891.1427300678.git.jen@redhat.com>
+In-Reply-To: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+References: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+From: Vlad Yasevich <vyasevic@redhat.com>
+Date: Thu, 12 Mar 2015 19:13:11 -0500
+Subject: [CHANGE 15/33] main-loop: switch to g_poll() on POSIX hosts
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Vlad Yasevich <vyasevic@redhat.com>
+Message-id: <1426187601-21396-16-git-send-email-vyasevic@redhat.com>
+Patchwork-id: 64354
+O-Subject: [RHEL6.7 qemu-kvm PATCH v2 15/25] main-loop: switch to g_poll() on POSIX hosts
+Bugzilla: 1005016
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@redhat.com>
+
+Use g_poll(3) instead of select(2).  Well, this is kind of a cheat.
+It's true that we're now using g_poll(3) on POSIX hosts but the *_fill()
+and *_poll() functions are still using rfds/wfds/xfds.
+
+We've set the scene to start converting *_fill() and *_poll() functions
+step-by-step until no more rfds/wfds/xfds users remain.  Then we'll drop
+the temporary gpollfds_from_select() and gpollfds_to_select() functions
+and be left with native g_poll(2).
+
+On Windows things are a little crazy: convert from rfds/wfds/xfds to
+GPollFDs, back to rfds/wfds/xfds, call select(2), rfds/wfds/xfds back to
+GPollFDs, and finally back to rfds/wfds/xfds again.  This is only
+temporary and keeps the Windows build working through the following
+patches.  We'll drop this excessive conversion later and be left with a
+single GPollFDs -> select(2) -> GPollFDs sequence that allows Windows to
+use select(2) while the rest of QEMU only knows about GPollFD.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Message-id: 1361356113-11049-3-git-send-email-stefanha@redhat.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit cbff4b342b000a7642125dbdabf61113e05eee44)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	main-loop.c
+
+main-loop.c doesn't exists in this version.  Relevant code was
+added to vl.c.  Win32 changes were dropped since we don't
+support it build and there is no way to test the change.
+A small change was picked from 15455536 to make the fdsets
+global.
+
+Signed-off-by: Vlad Yasevich <vyasevic@redhat.com>
+---
+ vl.c | 76 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++------
+ 1 file changed, 70 insertions(+), 6 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ vl.c | 76 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++------
+ 1 file changed, 70 insertions(+), 6 deletions(-)
+
+diff --git a/vl.c b/vl.c
+index 24656c1..9020f0c 100644
+--- a/vl.c
++++ b/vl.c
+@@ -3555,9 +3555,12 @@ static int cpu_can_run(CPUState *env)
+     return 1;
+ }
+ 
++static GArray *gpollfds;
++
+ #ifndef CONFIG_IOTHREAD
+ static int qemu_init_main_loop(void)
+ {
++    gpollfds = g_array_new(FALSE, FALSE, sizeof(GPollFD));
+     return qemu_event_init();
+ }
+ 
+@@ -3656,6 +3659,7 @@ static int qemu_init_main_loop(void)
+     if (ret)
+         return ret;
+ 
++    gpollfds = g_array_new(FALSE, FALSE, sizeof(GPollFD));
+     qemu_cond_init(&qemu_pause_cond);
+     qemu_mutex_init(&qemu_fair_mutex);
+     qemu_mutex_init(&qemu_global_mutex);
+@@ -3948,10 +3952,68 @@ void vm_stop(RunState reason)
+ #endif
+ 
+ 
++static fd_set rfds, wfds, xfds;
++static int nfds;
+ static GPollFD poll_fds[1024 * 2]; /* this is probably overkill */
+ static int n_poll_fds;
+ static int max_priority;
+ 
++/* Load rfds/wfds/xfds into gpollfds.  Will be removed a few commits later. */
++static void gpollfds_from_select(void)
++{
++    int fd;
++    for (fd = 0; fd <= nfds; fd++) {
++        int events = 0;
++        if (FD_ISSET(fd, &rfds)) {
++            events |= G_IO_IN | G_IO_HUP | G_IO_ERR;
++        }
++        if (FD_ISSET(fd, &wfds)) {
++            events |= G_IO_OUT | G_IO_ERR;
++        }
++        if (FD_ISSET(fd, &xfds)) {
++            events |= G_IO_PRI;
++        }
++        if (events) {
++            GPollFD pfd = {
++                .fd = fd,
++                .events = events,
++            };
++            g_array_append_val(gpollfds, pfd);
++        }
++    }
++}
++
++/* Store gpollfds revents into rfds/wfds/xfds.  Will be removed a few commits
++ * later.
++ */
++static void gpollfds_to_select(int ret)
++{
++    int i;
++
++    FD_ZERO(&rfds);
++    FD_ZERO(&wfds);
++    FD_ZERO(&xfds);
++
++    if (ret <= 0) {
++        return;
++    }
++
++    for (i = 0; i < gpollfds->len; i++) {
++        int fd = g_array_index(gpollfds, GPollFD, i).fd;
++        int revents = g_array_index(gpollfds, GPollFD, i).revents;
++
++        if (revents & (G_IO_IN | G_IO_HUP | G_IO_ERR)) {
++            FD_SET(fd, &rfds);
++        }
++        if (revents & (G_IO_OUT | G_IO_ERR)) {
++            FD_SET(fd, &wfds);
++        }
++        if (revents & G_IO_PRI) {
++            FD_SET(fd, &xfds);
++        }
++    }
++}
++
+ static void glib_select_fill(int *max_fd, fd_set *rfds, fd_set *wfds,
+                              fd_set *xfds, int *cur_timeout)
+ {
+@@ -4019,13 +4081,12 @@ static void glib_select_poll(fd_set *rfds, fd_set *wfds, fd_set *xfds,
+ void main_loop_wait(int timeout)
+ {
+     IOHandlerRecord *ioh;
+-    fd_set rfds, wfds, xfds;
+-    int ret, nfds;
+-    struct timeval tv;
++    int ret;
+ 
+     qemu_bh_update_timeout((uint32_t *)&timeout);
+ 
+     /* poll any events */
++    g_array_set_size(gpollfds, 0); /* reset for new iteration */
+     /* XXX: separate device handlers from system ones */
+     nfds = -1;
+     FD_ZERO(&rfds);
+@@ -4055,12 +4116,15 @@ void main_loop_wait(int timeout)
+     glib_select_fill(&nfds, &rfds, &wfds, &xfds, &timeout);
+     os_host_main_loop_wait(&timeout);
+ 
+-    tv.tv_sec = timeout / 1000;
+-    tv.tv_usec = (timeout % 1000) * 1000;
++    /* We'll eventually drop fd_set completely.  But for now we still have
++     * *_fill() and *_poll() functions that use rfds/wfds/xfds.
++     */
++    gpollfds_from_select();
+ 
+     qemu_mutex_unlock_iothread();
+-    ret = select(nfds + 1, &rfds, &wfds, &xfds, &tv);
++    ret = g_poll((GPollFD *)gpollfds->data, gpollfds->len, timeout);
+     qemu_mutex_lock_iothread();
++    gpollfds_to_select(ret);
+     if (ret > 0) {
+         IOHandlerRecord *pioh;
+ 
+-- 
+2.1.0
+

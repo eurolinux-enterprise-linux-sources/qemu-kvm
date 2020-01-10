@@ -1,0 +1,55 @@
+From e418fcaec02790d5f7809e9f639d7250f666e134 Mon Sep 17 00:00:00 2001
+Message-Id: <e418fcaec02790d5f7809e9f639d7250f666e134.1478263472.git.ymankad@redhat.com>
+In-Reply-To: <29e29ba52d27b3b659bb3fee0deffdf88597b720.1478263472.git.ymankad@redhat.com>
+References: <29e29ba52d27b3b659bb3fee0deffdf88597b720.1478263472.git.ymankad@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Wed, 26 Oct 2016 09:56:16 +0530
+Subject: [CHANGE 2/2] virtio-scsi: Prevent assertion on missed events
+To: rhvirt-patches@redhat.com,
+    ymankad@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1477475776-7740-1-git-send-email-famz@redhat.com>
+Patchwork-id: 72635
+O-Subject: [RHEL-6.9 qemu-kvm PATCH] virtio-scsi: Prevent assertion on missed events
+Bugzilla: 1333697
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: John Snow <jsnow@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Eric Farman <farman@linux.vnet.ibm.com>
+
+BZ: https://bugzilla.redhat.com/show_bug.cgi?id=1333697
+Brew: https://brewweb.engineering.redhat.com/brew/taskinfo?taskID=11953507 (RHEL)
+      https://brewweb.engineering.redhat.com/brew/taskinfo?taskID=11952976 (RHEV)
+
+In some cases, an unplug can cause events to be dropped, which
+leads to an assertion failure when preparing to notify the guest
+kernel.
+
+Signed-off-by: Eric Farman <farman@linux.vnet.ibm.com>
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 49fb65c7f985baa56d2964e0a85c1f098e3e2a9d)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ hw/virtio-scsi.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/hw/virtio-scsi.c b/hw/virtio-scsi.c
+index a30fa82..1c39c97 100644
+--- a/hw/virtio-scsi.c
++++ b/hw/virtio-scsi.c
+@@ -721,7 +721,7 @@ static void virtio_scsi_push_event(VirtIOSCSI *s, SCSIDevice *dev,
+     evt->event = event;
+     evt->reason = reason;
+     if (!dev) {
+-        assert(event == VIRTIO_SCSI_T_NO_EVENT);
++        assert(event == VIRTIO_SCSI_T_EVENTS_MISSED);
+     } else {
+         evt->lun[0] = 1;
+         evt->lun[1] = dev->id;
+-- 
+2.7.4
+

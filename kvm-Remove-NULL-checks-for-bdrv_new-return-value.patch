@@ -1,0 +1,114 @@
+From ad2d7eebcd6a6979f8b63ef2f355331f940f00a8 Mon Sep 17 00:00:00 2001
+Message-Id: <ad2d7eebcd6a6979f8b63ef2f355331f940f00a8.1366117835.git.minovotn@redhat.com>
+In-Reply-To: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+References: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 7 Mar 2013 15:29:20 +0100
+Subject: [PATCH 12/19] Remove NULL checks for bdrv_new return value
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1362670164-15796-9-git-send-email-kwolf@redhat.com>
+Patchwork-id: 49310
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 08/12] Remove NULL checks for bdrv_new return value
+Bugzilla: 888008
+RH-Acked-by: Eric Blake <eblake@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+It's an indirect call to qemu_malloc, which never returns an error.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit ad7171394f2fe3f9b5fe02f0c62496291a859a92)
+
+Conflicts:
+	qemu-io.c
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ hw/xen_disk.c | 17 ++++++-----------
+ qemu-img.c    |  5 +----
+ qemu-io.c     |  2 --
+ qemu-nbd.c    |  2 --
+ 4 files changed, 7 insertions(+), 19 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/xen_disk.c | 17 ++++++-----------
+ qemu-img.c    |  5 +----
+ qemu-io.c     |  2 --
+ qemu-nbd.c    |  2 --
+ 4 files changed, 7 insertions(+), 19 deletions(-)
+
+diff --git a/hw/xen_disk.c b/hw/xen_disk.c
+index 66f35ed..a22b94d 100644
+--- a/hw/xen_disk.c
++++ b/hw/xen_disk.c
+@@ -631,17 +631,12 @@ static int blk_init(struct XenDevice *xendev)
+     if (!blkdev->dinfo) {
+         /* setup via xenbus -> create new block driver instance */
+         xen_be_printf(&blkdev->xendev, 2, "create new bdrv (xenbus setup)\n");
+-	blkdev->bs = bdrv_new(blkdev->dev);
+-	if (blkdev->bs) {
+-	    if (bdrv_open(blkdev->bs, blkdev->filename, qflags,
+-                           bdrv_find_whitelisted_format(blkdev->fileproto))
+-                != 0) {
+-		bdrv_delete(blkdev->bs);
+-		blkdev->bs = NULL;
+-	    }
+-	}
+-	if (!blkdev->bs)
+-	    return -1;
++        blkdev->bs = bdrv_new(blkdev->dev);
++        if (bdrv_open(blkdev->bs, blkdev->filename, qflags,
++                      bdrv_find_whitelisted_format(blkdev->fileproto)) != 0) {
++            bdrv_delete(blkdev->bs);
++            return -1;
++        }
+     } else {
+         /* setup via qemu cmdline -> already setup for us */
+         xen_be_printf(&blkdev->xendev, 2, "get configured bdrv (cmdline setup)\n");
+diff --git a/qemu-img.c b/qemu-img.c
+index 030d19b..73d4784 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -246,10 +246,7 @@ static BlockDriverState *bdrv_new_open(const char *filename,
+     char password[256];
+ 
+     bs = bdrv_new("");
+-    if (!bs) {
+-        error_report("Not enough memory");
+-        goto fail;
+-    }
++
+     if (fmt) {
+         drv = bdrv_find_format(fmt);
+         if (!drv) {
+diff --git a/qemu-io.c b/qemu-io.c
+index 6d7ec15..41df969 100644
+--- a/qemu-io.c
++++ b/qemu-io.c
+@@ -1355,8 +1355,6 @@ static int openfile(char *name, int flags, int growable)
+         }
+     } else {
+         bs = bdrv_new("hda");
+-        if (!bs)
+-            return 1;
+ 
+         if (bdrv_open(bs, name, flags, NULL) < 0) {
+             fprintf(stderr, "%s: can't open device %s\n", progname, name);
+diff --git a/qemu-nbd.c b/qemu-nbd.c
+index 643a7b5..56faebe 100644
+--- a/qemu-nbd.c
++++ b/qemu-nbd.c
+@@ -329,8 +329,6 @@ int main(int argc, char **argv)
+     bdrv_init();
+ 
+     bs = bdrv_new("hda");
+-    if (bs == NULL)
+-        return 1;
+ 
+     if (bdrv_open(bs, argv[optind], flags, NULL) < 0)
+         return 1;
+-- 
+1.7.11.7
+

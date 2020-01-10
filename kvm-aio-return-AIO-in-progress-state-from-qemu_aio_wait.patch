@@ -1,0 +1,157 @@
+From fd8b3f1050c2365e6a9b1715cb1a759e6c7ae97d Mon Sep 17 00:00:00 2001
+Message-Id: <fd8b3f1050c2365e6a9b1715cb1a759e6c7ae97d.1427300678.git.jen@redhat.com>
+In-Reply-To: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+References: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+From: Vlad Yasevich <vyasevic@redhat.com>
+Date: Thu, 12 Mar 2015 19:12:59 -0500
+Subject: [CHANGE 03/33] aio: return "AIO in progress" state from qemu_aio_wait
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Vlad Yasevich <vyasevic@redhat.com>
+Message-id: <1426187601-21396-4-git-send-email-vyasevic@redhat.com>
+Patchwork-id: 64340
+O-Subject: [RHEL6.7 qemu-kvm PATCH v2 03/25] aio: return "AIO in progress" state from qemu_aio_wait
+Bugzilla: 1005016
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+The definition of when qemu_aio_flush should loop is much simpler
+than it looks.  It just has to call qemu_aio_wait until it makes
+no progress and all flush callbacks return false.  qemu_aio_wait
+is the logical place to tell the caller about this.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit bcdc18578d5b41180db2e17baa7563c5f05b39ee)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	aio.c
+
+Signed-off-by: Vladislav Yasevich <vyasevic@redhat.com>
+---
+ aio.c      | 42 ++++++++++++++++++------------------------
+ qemu-aio.h |  6 ++++--
+ 2 files changed, 22 insertions(+), 26 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ aio.c      | 42 ++++++++++++++++++------------------------
+ qemu-aio.h |  6 ++++--
+ 2 files changed, 22 insertions(+), 26 deletions(-)
+
+diff --git a/aio.c b/aio.c
+index f36ae30..87dfc42 100644
+--- a/aio.c
++++ b/aio.c
+@@ -97,39 +97,26 @@ int qemu_aio_set_fd_handler(int fd,
+ 
+ void qemu_aio_flush(void)
+ {
+-    AioHandler *node;
+-    int ret;
+-
+-    do {
+-        ret = 0;
+-
+-	/*
+-	 * If there are pending emulated aio start them now so flush
+-	 * will be able to return 1.
+-	 */
+-        qemu_aio_wait();
+-
+-        QLIST_FOREACH(node, &aio_handlers, node) {
+-            ret |= node->io_flush(node->opaque);
+-        }
+-    } while (qemu_bh_poll() || ret > 0);
++    while (qemu_aio_wait());
+ }
+ 
+-void qemu_aio_wait(void)
++bool qemu_aio_wait(void)
+ {
+     int ret;
+ 
+     /*
+      * If there are callbacks left that have been queued, we need to call then.
+-     * Return afterwards to avoid waiting needlessly in select().
++     * Do not call select in this case, because it is possible that the caller
++     * does not need a complete flush (as is the case for qemu_aio_wait loops).
+      */
+     if (qemu_bh_poll()) {
+-        return;
++        return true;
+     }
+ 
+     do {
+         AioHandler *node;
+         fd_set rdfds, wrfds;
++        bool busy;
+         int max_fd = -1;
+ 
+         walking_handlers++;
+@@ -138,14 +125,18 @@ void qemu_aio_wait(void)
+         FD_ZERO(&wrfds);
+ 
+         /* fill fd sets */
++        busy = false;
+         QLIST_FOREACH(node, &aio_handlers, node) {
+             /* If there aren't pending AIO operations, don't invoke callbacks.
+              * Otherwise, if there are no AIO requests, qemu_aio_wait() would
+              * wait indefinitely.
+              */
+-            if (node->io_flush && node->io_flush(node->opaque) == 0)
+-                continue;
+-
++            if (node->io_flush) {
++                if (node->io_flush(node->opaque) == 0) {
++                    continue;
++                }
++                busy = true;
++            }
+             if (!node->deleted && node->io_read) {
+                 FD_SET(node->fd, &rdfds);
+                 max_fd = MAX(max_fd, node->fd + 1);
+@@ -159,8 +150,9 @@ void qemu_aio_wait(void)
+         walking_handlers--;
+ 
+         /* No AIO operations?  Get us out of here */
+-        if (max_fd == -1)
+-            break;
++        if (!busy) {
++            return false;
++        }
+ 
+         /* wait until next event */
+         ret = select(max_fd, &rdfds, &wrfds, NULL, NULL);
+@@ -200,4 +192,6 @@ void qemu_aio_wait(void)
+             }
+         }
+     } while (ret == 0);
++
++    return true;
+ }
+diff --git a/qemu-aio.h b/qemu-aio.h
+index f262344..a3e6bb3 100644
+--- a/qemu-aio.h
++++ b/qemu-aio.h
+@@ -27,8 +27,10 @@ void qemu_aio_flush(void);
+ /* Wait for a single AIO completion to occur.  This function will wait
+  * until a single AIO event has completed and it will ensure something
+  * has moved before returning. This can issue new pending aio as
+- * result of executing I/O completion or bh callbacks. */
+-void qemu_aio_wait(void);
++ * result of executing I/O completion or bh callbacks.
++ *
++ * Return whether there is still any pending AIO operation.  */
++bool qemu_aio_wait(void);
+ 
+ /* Register a file descriptor and associated callbacks.  Behaves very similarly
+  * to qemu_set_fd_handler2.  Unlike qemu_set_fd_handler2, these callbacks will
+-- 
+2.1.0
+

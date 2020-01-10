@@ -1,0 +1,146 @@
+From 3b47704aea305d09d388a4552e9a659b48da72a7 Mon Sep 17 00:00:00 2001
+Message-Id: <3b47704aea305d09d388a4552e9a659b48da72a7.1467309786.git.jen@redhat.com>
+In-Reply-To: <b75cb6f28f374e6cee8f45cb30d017d2cf77dcf6.1467309786.git.jen@redhat.com>
+References: <b75cb6f28f374e6cee8f45cb30d017d2cf77dcf6.1467309786.git.jen@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 14 Jun 2016 08:53:44 -0500
+Subject: [CHANGE 07/10] vga: factor out vga register setup
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1465894427-26109-8-git-send-email-kraxel@redhat.com>
+Patchwork-id: 70598
+O-Subject: [RHEL-6.9 qemu-kvm PATCH v3 07/10] vga: factor out vga register setup
+Bugzilla: 1331408
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+When enabling vbe mode qemu will setup a bunch of vga registers to make
+sure the vga emulation operates in correct mode for a linear
+framebuffer.  Move that code to a separate function so we can call it
+from other places too.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(Upstream commit ID: 7fa5c2c5dc9f9bf878c1e8669eb9644d70a71e71)
+---
+ hw/vga.c | 78 ++++++++++++++++++++++++++++++++++++----------------------------
+ 1 file changed, 44 insertions(+), 34 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/vga.c | 78 ++++++++++++++++++++++++++++++++++++----------------------------
+ 1 file changed, 44 insertions(+), 34 deletions(-)
+
+diff --git a/hw/vga.c b/hw/vga.c
+index 65174b4..a340e89 100644
+--- a/hw/vga.c
++++ b/hw/vga.c
+@@ -607,6 +607,49 @@ static void vbe_fixup_regs(VGACommonState *s)
+     s->vbe_start_addr  = offset / 4;
+ }
+ 
++/* we initialize the VGA graphic mode */
++static void vbe_update_vgaregs(VGACommonState *s)
++{
++    int h, shift_control;
++
++    if (!vbe_enabled(s)) {
++        /* vbe is turned off -- nothing to do */
++        return;
++    }
++
++    /* graphic mode + memory map 1 */
++    s->gr[VGA_GFX_MISC] = (s->gr[VGA_GFX_MISC] & ~0x0c) | 0x04 |
++        VGA_GR06_GRAPHICS_MODE;
++    s->cr[VGA_CRTC_MODE] |= 3; /* no CGA modes */
++    s->cr[VGA_CRTC_OFFSET] = s->vbe_line_offset >> 3;
++    /* width */
++    s->cr[VGA_CRTC_H_DISP] =
++        (s->vbe_regs[VBE_DISPI_INDEX_XRES] >> 3) - 1;
++    /* height (only meaningful if < 1024) */
++    h = s->vbe_regs[VBE_DISPI_INDEX_YRES] - 1;
++    s->cr[VGA_CRTC_V_DISP_END] = h;
++    s->cr[VGA_CRTC_OVERFLOW] = (s->cr[VGA_CRTC_OVERFLOW] & ~0x42) |
++        ((h >> 7) & 0x02) | ((h >> 3) & 0x40);
++    /* line compare to 1023 */
++    s->cr[VGA_CRTC_LINE_COMPARE] = 0xff;
++    s->cr[VGA_CRTC_OVERFLOW] |= 0x10;
++    s->cr[VGA_CRTC_MAX_SCAN] |= 0x40;
++
++    if (s->vbe_regs[VBE_DISPI_INDEX_BPP] == 4) {
++        shift_control = 0;
++        s->sr[VGA_SEQ_CLOCK_MODE] &= ~8; /* no double line */
++    } else {
++        shift_control = 2;
++        /* set chain 4 mode */
++        s->sr[VGA_SEQ_MEMORY_MODE] |= VGA_SR04_CHN_4M;
++        /* activate all planes */
++        s->sr[VGA_SEQ_PLANE_WRITE] |= VGA_SR02_ALL_PLANES;
++    }
++    s->gr[VGA_GFX_MODE] = (s->gr[VGA_GFX_MODE] & ~0x60) |
++        (shift_control << 5);
++    s->cr[VGA_CRTC_MAX_SCAN] &= ~0x9f; /* no double scan */
++}
++
+ static uint32_t vbe_ioport_read_index(void *opaque, uint32_t addr)
+ {
+     VGACommonState *s = opaque;
+@@ -692,52 +735,19 @@ static void vbe_ioport_write_data(void *opaque, uint32_t addr, uint32_t val)
+         case VBE_DISPI_INDEX_ENABLE:
+             if ((val & VBE_DISPI_ENABLED) &&
+                 !(s->vbe_regs[VBE_DISPI_INDEX_ENABLE] & VBE_DISPI_ENABLED)) {
+-                int h, shift_control;
+ 
+                 s->vbe_regs[VBE_DISPI_INDEX_VIRT_WIDTH] = 0;
+                 s->vbe_regs[VBE_DISPI_INDEX_X_OFFSET] = 0;
+                 s->vbe_regs[VBE_DISPI_INDEX_Y_OFFSET] = 0;
+                 s->vbe_regs[VBE_DISPI_INDEX_ENABLE] |= VBE_DISPI_ENABLED;
+                 vbe_fixup_regs(s);
++                vbe_update_vgaregs(s);
+ 
+                 /* clear the screen */
+                 if (!(val & VBE_DISPI_NOCLEARMEM)) {
+                     memset(s->vram_ptr, 0,
+                            s->vbe_regs[VBE_DISPI_INDEX_YRES] * s->vbe_line_offset);
+                 }
+-
+-                /* we initialize the VGA graphic mode */
+-                /* graphic mode + memory map 1 */
+-                s->gr[VGA_GFX_MISC] = (s->gr[VGA_GFX_MISC] & ~0x0c) | 0x04 |
+-                    VGA_GR06_GRAPHICS_MODE;
+-                s->cr[VGA_CRTC_MODE] |= 3; /* no CGA modes */
+-                s->cr[VGA_CRTC_OFFSET] = s->vbe_line_offset >> 3;
+-                /* width */
+-                s->cr[VGA_CRTC_H_DISP] =
+-                    (s->vbe_regs[VBE_DISPI_INDEX_XRES] >> 3) - 1;
+-                 /* height (only meaningful if < 1024) */
+-                h = s->vbe_regs[VBE_DISPI_INDEX_YRES] - 1;
+-                s->cr[VGA_CRTC_V_DISP_END] = h;
+-                s->cr[VGA_CRTC_OVERFLOW] = (s->cr[VGA_CRTC_OVERFLOW] & ~0x42) |
+-                    ((h >> 7) & 0x02) | ((h >> 3) & 0x40);
+-                /* line compare to 1023 */
+-                s->cr[VGA_CRTC_LINE_COMPARE] = 0xff;
+-                s->cr[VGA_CRTC_OVERFLOW] |= 0x10;
+-                s->cr[VGA_CRTC_MAX_SCAN] |= 0x40;
+-
+-                if (s->vbe_regs[VBE_DISPI_INDEX_BPP] == 4) {
+-                    shift_control = 0;
+-                    s->sr[VGA_SEQ_CLOCK_MODE] &= ~8; /* no double line */
+-                } else {
+-                    shift_control = 2;
+-                    /* set chain 4 mode */
+-                    s->sr[VGA_SEQ_MEMORY_MODE] |= VGA_SR04_CHN_4M;
+-                    /* activate all planes */
+-                    s->sr[VGA_SEQ_PLANE_WRITE] |= VGA_SR02_ALL_PLANES;
+-                }
+-                s->gr[VGA_GFX_MODE] = (s->gr[VGA_GFX_MODE] & ~0x60) |
+-                    (shift_control << 5);
+-                s->cr[VGA_CRTC_MAX_SCAN] &= ~0x9f; /* no double scan */
+             } else {
+                 s->bank_offset = 0;
+             }
+-- 
+2.5.5
+

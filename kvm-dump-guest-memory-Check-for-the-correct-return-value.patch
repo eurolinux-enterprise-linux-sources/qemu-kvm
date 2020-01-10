@@ -1,0 +1,62 @@
+From b9baf54c77898ff6d26b6c369334e497ff97eb4d Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Sat, 22 Mar 2014 03:30:56 +0100
+Subject: [PATCH 05/30] dump-guest-memory: Check for the correct return value
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1395459071-19118-5-git-send-email-lersek@redhat.com>
+Patchwork-id: 58215
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 04/19] dump-guest-memory: Check for the correct return value
+Bugzilla: 1035162
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: "Aneesh Kumar K.V" <aneesh.kumar@linux.vnet.ibm.com>
+
+We should check for error with s->note_size
+
+Signed-off-by: Aneesh Kumar K.V <aneesh.kumar@linux.vnet.ibm.com>
+Signed-off-by: Alexander Graf <agraf@suse.de>
+(cherry picked from commit bb6b684363e83586c90d20127b0d0a79793ab1e2)
+
+Conflicts:
+	dump.c
+
+Conflict due to "target_phys_addr_t" (RHEL-6) vs. "hwaddr" (upstream).
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ dump.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ dump.c |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/dump.c b/dump.c
+index d110d15..e996331 100644
+--- a/dump.c
++++ b/dump.c
+@@ -71,7 +71,7 @@ typedef struct DumpState {
+     uint32_t sh_info;
+     bool have_section;
+     bool resume;
+-    size_t note_size;
++    ssize_t note_size;
+     target_phys_addr_t memory_offset;
+     int fd;
+ 
+@@ -764,7 +764,7 @@ static int dump_init(DumpState *s, int fd, bool paging, bool has_filter,
+ 
+     s->note_size = cpu_get_note_size(s->dump_info.d_class,
+                                      s->dump_info.d_machine, nr_cpus);
+-    if (ret < 0) {
++    if (s->note_size < 0) {
+         error_set(errp, QERR_UNSUPPORTED);
+         goto cleanup;
+     }
+-- 
+1.7.1
+

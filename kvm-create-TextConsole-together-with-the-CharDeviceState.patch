@@ -1,0 +1,136 @@
+From fa78adeb83bd209fa3fcb31ac36df0d2ab355a79 Mon Sep 17 00:00:00 2001
+Message-Id: <fa78adeb83bd209fa3fcb31ac36df0d2ab355a79.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:06:11 +0200
+Subject: [PATCH 60/65] create TextConsole together with the CharDeviceState
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-61-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52130
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 60/65] create TextConsole together with the CharDeviceState
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+A nicer solution would be to get rid of the opaque pointer and
+use containment, but it would also be a much bigger patch.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 491e114a953d746b5787e72516d052aef0b67bc4)
+
+[ rhel6: make sure n_text_consoles is only incremented on success,
+         upstream drops n_text_consoles in commit 8811e1e1 ]
+---
+ console.c |   58 ++++++++++++++++++++++++++++++++--------------------------
+ 1 file changed, 32 insertions(+), 26 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ console.c | 58 ++++++++++++++++++++++++++++++++--------------------------
+ 1 file changed, 32 insertions(+), 26 deletions(-)
+
+diff --git a/console.c b/console.c
+index bc186dd..566717d 100644
+--- a/console.c
++++ b/console.c
+@@ -1307,34 +1307,12 @@ static QemuOpts *text_console_opts[128];
+ static void text_console_do_init(CharDriverState *chr, DisplayState *ds, QemuOpts *opts)
+ {
+     TextConsole *s;
+-    unsigned width;
+-    unsigned height;
+     static int color_inited;
+ 
+-    width = qemu_opt_get_number(opts, "width", 0);
+-    if (width == 0)
+-        width = qemu_opt_get_number(opts, "cols", 0) * FONT_WIDTH;
+-
+-    height = qemu_opt_get_number(opts, "height", 0);
+-    if (height == 0)
+-        height = qemu_opt_get_number(opts, "rows", 0) * FONT_HEIGHT;
+-
+-    if (width == 0 || height == 0) {
+-        s = new_console(ds, TEXT_CONSOLE);
+-        width = ds_get_width(s->ds);
+-        height = ds_get_height(s->ds);
+-    } else {
+-        s = new_console(ds, TEXT_CONSOLE_FIXED_SIZE);
+-    }
++    s = chr->opaque;
+ 
+-    if (!s) {
+-        free(chr);
+-        return;
+-    }
+-    chr->opaque = s;
+     chr->chr_write = console_puts;
+ 
+-    s->chr = chr;
+     s->out_fifo.buf = s->out_fifo_buf;
+     s->out_fifo.buf_size = sizeof(s->out_fifo_buf);
+     s->kbd_timer = qemu_new_timer(rt_clock, kbd_send_chars, s);
+@@ -1349,8 +1327,10 @@ static void text_console_do_init(CharDriverState *chr, DisplayState *ds, QemuOpt
+     s->total_height = DEFAULT_BACKSCROLL;
+     s->x = 0;
+     s->y = 0;
+-    s->g_width = width;
+-    s->g_height = height;
++    if (s->console_type == TEXT_CONSOLE) {
++        s->g_width = ds_get_width(s->ds);
++        s->g_height = ds_get_height(s->ds);
++    }
+ 
+     s->hw_invalidate = text_console_invalidate;
+     s->hw_text_update = text_console_update;
+@@ -1386,6 +1366,9 @@ static void text_console_do_init(CharDriverState *chr, DisplayState *ds, QemuOpt
+ CharDriverState *text_console_init(QemuOpts *opts)
+ {
+     CharDriverState *chr;
++    TextConsole *s;
++    unsigned width;
++    unsigned height;
+ 
+     chr = qemu_mallocz(sizeof(CharDriverState));
+ 
+@@ -1395,8 +1378,31 @@ CharDriverState *text_console_init(QemuOpts *opts)
+     }
+     text_consoles[n_text_consoles] = chr;
+     text_console_opts[n_text_consoles] = opts;
+-    n_text_consoles++;
+ 
++    width = qemu_opt_get_number(opts, "width", 0);
++    if (width == 0)
++        width = qemu_opt_get_number(opts, "cols", 0) * FONT_WIDTH;
++
++    height = qemu_opt_get_number(opts, "height", 0);
++    if (height == 0)
++        height = qemu_opt_get_number(opts, "rows", 0) * FONT_HEIGHT;
++
++    if (width == 0 || height == 0) {
++        s = new_console(NULL, TEXT_CONSOLE);
++    } else {
++        s = new_console(NULL, TEXT_CONSOLE_FIXED_SIZE);
++    }
++
++    if (!s) {
++        free(chr);
++        return NULL;
++    }
++
++    s->chr = chr;
++    s->g_width = width;
++    s->g_height = height;
++    chr->opaque = s;
++    n_text_consoles++;
+     return chr;
+ }
+ 
+-- 
+1.7.11.7
+

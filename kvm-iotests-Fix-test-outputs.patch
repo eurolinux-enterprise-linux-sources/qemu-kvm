@@ -1,0 +1,157 @@
+From 777d9d70f68309ebd7fb89fdccbeb7799e09fb9c Mon Sep 17 00:00:00 2001
+Message-Id: <777d9d70f68309ebd7fb89fdccbeb7799e09fb9c.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:22:17 -0500
+Subject: [CHANGE 34/42] iotests: Fix test outputs
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-35-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64497
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 34/39] iotests: Fix test outputs
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1129892
+
+039, 060 and 061 all create images with referenced clusters having a
+refcount of 0. Because previous commits changed handling of such errors,
+these tests now have a different output. Fix it.
+
+Furthermore, 060 created a refblock with a refcount greater than one
+which now results in having to rebuild the refcount structure as well.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit d26e6ec052b8768ab45654dbf35d5213818a2cb8)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	tests/qemu-iotests/060.out
+
+There is no "corrupt" flag downstream (contextual); and some tests are
+not available due to qemu-io -c discard missing.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ tests/qemu-iotests/039.out | 10 ++++++++--
+ tests/qemu-iotests/060.out |  8 ++++++--
+ tests/qemu-iotests/061.out | 18 ++++++++++++------
+ 3 files changed, 26 insertions(+), 10 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ tests/qemu-iotests/039.out | 10 ++++++++--
+ tests/qemu-iotests/060.out |  8 ++++++--
+ tests/qemu-iotests/061.out | 18 ++++++++++++------
+ 3 files changed, 26 insertions(+), 10 deletions(-)
+
+diff --git a/tests/qemu-iotests/039.out b/tests/qemu-iotests/039.out
+index 67e7744..0adf153 100644
+--- a/tests/qemu-iotests/039.out
++++ b/tests/qemu-iotests/039.out
+@@ -25,7 +25,10 @@ read 512/512 bytes at offset 0
+ incompatible_features     0x1
+ 
+ == Repairing the image file must succeed ==
+-Repairing cluster 5 refcount=0 reference=1
++ERROR cluster 5 refcount=0 reference=1
++Rebuilding refcount structure
++Repairing cluster 1 refcount=1 reference=0
++Repairing cluster 2 refcount=1 reference=0
+ The following inconsistencies were found and repaired:
+ 
+     0 leaked clusters
+@@ -45,7 +48,10 @@ wrote 512/512 bytes at offset 0
+ 512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+ ./039: Aborted                 ( ulimit -c 0; exec "$@" )
+ incompatible_features     0x1
+-Repairing cluster 5 refcount=0 reference=1
++ERROR cluster 5 refcount=0 reference=1
++Rebuilding refcount structure
++Repairing cluster 1 refcount=1 reference=0
++Repairing cluster 2 refcount=1 reference=0
+ wrote 512/512 bytes at offset 0
+ 512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+ incompatible_features     0x0
+diff --git a/tests/qemu-iotests/060.out b/tests/qemu-iotests/060.out
+index 13d7790..b0adf88 100644
+--- a/tests/qemu-iotests/060.out
++++ b/tests/qemu-iotests/060.out
+@@ -28,11 +28,15 @@ incompatible_features     0x0
+ qcow2: Image is corrupt (further access will be prevented): Preventing invalid write on metadata (overlaps with refcount block); please use qemu-img check -r. Further corruption events will be suppressed
+ write failed: Input/output error
+ incompatible_features     0x0
+-Repairing refcount block 0 refcount=2
++ERROR refcount block 0 refcount=2
++ERROR cluster 2 refcount=1 reference=2
++Rebuilding refcount structure
++Repairing cluster 1 refcount=1 reference=0
++Repairing cluster 2 refcount=2 reference=1
+ The following inconsistencies were found and repaired:
+ 
+     0 leaked clusters
+-    1 corruptions
++    2 corruptions
+ 
+ Double checking the fixed image now...
+ No errors were found on the image.
+diff --git a/tests/qemu-iotests/061.out b/tests/qemu-iotests/061.out
+index e372470..4ae6472 100644
+--- a/tests/qemu-iotests/061.out
++++ b/tests/qemu-iotests/061.out
+@@ -76,8 +76,11 @@ autoclear_features        0x0
+ refcount_order            4
+ header_length             104
+ 
+-Repairing cluster 5 refcount=0 reference=1
+-Repairing cluster 6 refcount=0 reference=1
++ERROR cluster 5 refcount=0 reference=1
++ERROR cluster 6 refcount=0 reference=1
++Rebuilding refcount structure
++Repairing cluster 1 refcount=1 reference=0
++Repairing cluster 2 refcount=1 reference=0
+ magic                     0x514649fb
+ version                   2
+ backing_file_offset       0x0
+@@ -87,7 +90,7 @@ size                      67108864
+ crypt_method              0
+ l1_size                   1
+ l1_table_offset           0x30000
+-refcount_table_offset     0x10000
++refcount_table_offset     0x80000
+ refcount_table_clusters   1
+ nb_snapshots              0
+ snapshot_offset           0x0
+@@ -230,8 +233,11 @@ autoclear_features        0x0
+ refcount_order            4
+ header_length             104
+ 
+-Repairing cluster 5 refcount=0 reference=1
+-Repairing cluster 6 refcount=0 reference=1
++ERROR cluster 5 refcount=0 reference=1
++ERROR cluster 6 refcount=0 reference=1
++Rebuilding refcount structure
++Repairing cluster 1 refcount=1 reference=0
++Repairing cluster 2 refcount=1 reference=0
+ magic                     0x514649fb
+ version                   3
+ backing_file_offset       0x0
+@@ -241,7 +247,7 @@ size                      67108864
+ crypt_method              0
+ l1_size                   1
+ l1_table_offset           0x30000
+-refcount_table_offset     0x10000
++refcount_table_offset     0x80000
+ refcount_table_clusters   1
+ nb_snapshots              0
+ snapshot_offset           0x0
+-- 
+2.1.0
+

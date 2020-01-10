@@ -1,0 +1,172 @@
+From e3a0d0d3ec19840ad36bd80a034703a3ef305947 Mon Sep 17 00:00:00 2001
+Message-Id: <e3a0d0d3ec19840ad36bd80a034703a3ef305947.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:22:07 -0500
+Subject: [CHANGE 24/42] qcow2: Pull check_refblocks() up
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-25-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64491
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 24/39] qcow2: Pull check_refblocks() up
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1129892
+
+Pull check_refblocks() before calculate_refcounts() so we can drop its
+static declaration.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Benoît Canet <benoit.canet@nodalink.com>
+Reviewed-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 057a3fe57e740e5e1cc3d62c9b8e0085e9fffa74)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	block/qcow2-refcount.c
+
+Fragmentation info is missing downstream.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-refcount.c | 102 ++++++++++++++++++++++++-------------------------
+ 1 file changed, 49 insertions(+), 53 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-refcount.c | 102 ++++++++++++++++++++++++-------------------------
+ 1 file changed, 49 insertions(+), 53 deletions(-)
+
+diff --git a/block/qcow2-refcount.c b/block/qcow2-refcount.c
+index f921d5a..0989daa 100644
+--- a/block/qcow2-refcount.c
++++ b/block/qcow2-refcount.c
+@@ -1346,59 +1346,6 @@ done:
+     return new_offset;
+ }
+ 
+-static int check_refblocks(BlockDriverState *bs, BdrvCheckResult *res,
+-                           BdrvCheckMode fix, uint16_t **refcount_table,
+-                           int64_t *nb_clusters);
+-
+-/*
+- * Calculates an in-memory refcount table.
+- */
+-static int calculate_refcounts(BlockDriverState *bs, BdrvCheckResult *res,
+-                               BdrvCheckMode fix, uint16_t **refcount_table,
+-                               int64_t *nb_clusters)
+-{
+-    BDRVQcowState *s = bs->opaque;
+-    int64_t i;
+-    QCowSnapshot *sn;
+-    int ret;
+-
+-    *refcount_table = g_try_new0(uint16_t, *nb_clusters);
+-    if (*nb_clusters && *refcount_table == NULL) {
+-        res->check_errors++;
+-        return -ENOMEM;
+-    }
+-
+-    /* header */
+-    inc_refcounts(bs, res, *refcount_table, *nb_clusters,
+-        0, s->cluster_size);
+-
+-    /* current L1 table */
+-    ret = check_refcounts_l1(bs, res, *refcount_table, *nb_clusters,
+-                       s->l1_table_offset, s->l1_size);
+-    if (ret < 0) {
+-        return ret;
+-    }
+-
+-    /* snapshots */
+-    for (i = 0; i < s->nb_snapshots; i++) {
+-        sn = s->snapshots + i;
+-        ret = check_refcounts_l1(bs, res, *refcount_table, *nb_clusters,
+-            sn->l1_table_offset, sn->l1_size);
+-        if (ret < 0) {
+-            return ret;
+-        }
+-    }
+-    inc_refcounts(bs, res, *refcount_table, *nb_clusters,
+-        s->snapshots_offset, s->snapshots_size);
+-
+-    /* refcount data */
+-    inc_refcounts(bs, res, *refcount_table, *nb_clusters,
+-        s->refcount_table_offset,
+-        s->refcount_table_size * sizeof(uint64_t));
+-
+-    return check_refblocks(bs, res, fix, refcount_table, nb_clusters);
+-}
+-
+ /*
+  * Checks consistency of refblocks and accounts for each refblock in
+  * *refcount_table.
+@@ -1476,6 +1423,55 @@ static int check_refblocks(BlockDriverState *bs, BdrvCheckResult *res,
+ }
+ 
+ /*
++ * Calculates an in-memory refcount table.
++ */
++static int calculate_refcounts(BlockDriverState *bs, BdrvCheckResult *res,
++                               BdrvCheckMode fix, uint16_t **refcount_table,
++                               int64_t *nb_clusters)
++{
++    BDRVQcowState *s = bs->opaque;
++    int64_t i;
++    QCowSnapshot *sn;
++    int ret;
++
++    *refcount_table = g_try_new0(uint16_t, *nb_clusters);
++    if (*nb_clusters && *refcount_table == NULL) {
++        res->check_errors++;
++        return -ENOMEM;
++    }
++
++    /* header */
++    inc_refcounts(bs, res, *refcount_table, *nb_clusters,
++        0, s->cluster_size);
++
++    /* current L1 table */
++    ret = check_refcounts_l1(bs, res, *refcount_table, *nb_clusters,
++                             s->l1_table_offset, s->l1_size);
++    if (ret < 0) {
++        return ret;
++    }
++
++    /* snapshots */
++    for (i = 0; i < s->nb_snapshots; i++) {
++        sn = s->snapshots + i;
++        ret = check_refcounts_l1(bs, res, *refcount_table, *nb_clusters,
++            sn->l1_table_offset, sn->l1_size);
++        if (ret < 0) {
++            return ret;
++        }
++    }
++    inc_refcounts(bs, res, *refcount_table, *nb_clusters,
++        s->snapshots_offset, s->snapshots_size);
++
++    /* refcount data */
++    inc_refcounts(bs, res, *refcount_table, *nb_clusters,
++        s->refcount_table_offset,
++        s->refcount_table_size * sizeof(uint64_t));
++
++    return check_refblocks(bs, res, fix, refcount_table, nb_clusters);
++}
++
++/*
+  * Compares the actual reference count for each cluster in the image against the
+  * refcount as reported by the refcount structures on-disk.
+  */
+-- 
+2.1.0
+

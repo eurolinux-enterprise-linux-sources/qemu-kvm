@@ -1,0 +1,53 @@
+From 0424fa243e19ddc8a019355e07b4a7bf30f1c4ed Mon Sep 17 00:00:00 2001
+From: Markus Armbruster <armbru@redhat.com>
+Date: Tue, 22 Jul 2014 09:15:58 -0500
+Subject: [CHANGE 09/17] scsi-disk: improve out-of-range LBA detection for
+ WRITE SAME
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1406020565-25364-5-git-send-email-armbru@redhat.com>
+Patchwork-id: 59995
+O-Subject: [PATCH 6.6 qemu-kvm v2 04/11] scsi-disk: improve out-of-range LBA detection for WRITE SAME
+Bugzilla: 1064643
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit a084a703df9ab896c9d30ac479e1388e5e4cafb0)
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	hw/scsi-disk.c
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+---
+ hw/scsi-disk.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/scsi-disk.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/hw/scsi-disk.c b/hw/scsi-disk.c
+index 5bab20b..be09211 100644
+--- a/hw/scsi-disk.c
++++ b/hw/scsi-disk.c
+@@ -1563,7 +1563,8 @@ static int32_t scsi_send_command(SCSIRequest *req, uint8_t *buf)
+             scsi_check_condition(r, SENSE_CODE(WRITE_PROTECTED));
+             return 0;
+         }
+-        if (r->req.cmd.lba > s->qdev.max_lba) {
++        if (r->req.cmd.lba > r->req.cmd.lba + len ||
++            r->req.cmd.lba + len - 1 > s->qdev.max_lba) {
+             goto illegal_lba;
+         }
+ 
+-- 
+1.9.3
+

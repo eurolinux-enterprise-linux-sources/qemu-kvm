@@ -1,0 +1,59 @@
+From 9db391fdc26da262fa1940f4f84bc8bdc1dd6af9 Mon Sep 17 00:00:00 2001
+Message-Id: <9db391fdc26da262fa1940f4f84bc8bdc1dd6af9.1456769395.git.jen@redhat.com>
+In-Reply-To: <af9075e3725e0685c2d54d451267d48b16f48b02.1456769395.git.jen@redhat.com>
+References: <af9075e3725e0685c2d54d451267d48b16f48b02.1456769395.git.jen@redhat.com>
+From: =?UTF-8?q?Marc-Andr=C3=A9=20Lureau?= <marcandre.lureau@redhat.com>
+Date: Fri, 26 Feb 2016 14:16:00 -0500
+Subject: [CHANGE 5/8] qga: use size_t for wcslen() return value
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Marc-André Lureau <marcandre.lureau@redhat.com>
+Message-id: <1456496163-31004-6-git-send-email-marcandre.lureau@redhat.com>
+Patchwork-id: 69505
+O-Subject: [RHEL-6.8 qemu-kvm PATCH v4 5/8] qga: use size_t for wcslen() return value
+Bugzilla: 1174181
+RH-Acked-by: Thomas Huth <thuth@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Marc-André Lureau <marcandre.lureau@redhat.com>
+
+Reported-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Marc-André Lureau <marcandre.lureau@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+
+(cherry picked from commit 6771197dffb214cf9ac5de825bbb24ff5dcc70c2)
+
+BZ: https://bugzilla.redhat.com/show_bug.cgi?id=1174181
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=10566110
+Upstream-status: 6771197dffb214cf9ac5de825bbb24ff5dcc70c2
+
+Signed-off-by: Marc-André Lureau <marcandre.lureau@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ qga/commands-win32.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/qga/commands-win32.c b/qga/commands-win32.c
+index ab41b58..2819875 100644
+--- a/qga/commands-win32.c
++++ b/qga/commands-win32.c
+@@ -372,7 +372,8 @@ get_net_error_message(gint error)
+     HMODULE module = NULL;
+     gchar *retval = NULL;
+     wchar_t *msg = NULL;
+-    int flags, nchars;
++    int flags;
++    size_t nchars;
+ 
+     flags = FORMAT_MESSAGE_ALLOCATE_BUFFER |
+         FORMAT_MESSAGE_IGNORE_INSERTS |
+-- 
+2.1.0
+

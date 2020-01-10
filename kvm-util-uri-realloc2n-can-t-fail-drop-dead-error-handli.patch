@@ -1,0 +1,192 @@
+From 206c92ee1bd680682c5f88e9970adfbc9560fa59 Mon Sep 17 00:00:00 2001
+Message-Id: <206c92ee1bd680682c5f88e9970adfbc9560fa59.1430931597.git.jen@redhat.com>
+In-Reply-To: <167537380706cbdedae56a1c6445daa9e414396d.1430931597.git.jen@redhat.com>
+References: <167537380706cbdedae56a1c6445daa9e414396d.1430931597.git.jen@redhat.com>
+From: Markus Armbruster <armbru@redhat.com>
+Date: Wed, 6 May 2015 07:51:09 -0500
+Subject: [CHANGE 7/9] util/uri: realloc2n() can't fail, drop dead error
+ handling
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1430898671-22595-7-git-send-email-armbru@redhat.com>
+Patchwork-id: 65014
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 6/8] util/uri: realloc2n() can't fail, drop dead error handling
+Bugzilla: 1205288
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Michael Tokarev <mjt@tls.msk.ru>
+(cherry picked from commit afd5ea3671f936f511015a71af9cd0ed23788515)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	util/uri.c
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ uri.c | 22 ----------------------
+ 1 file changed, 22 deletions(-)
+
+diff --git a/uri.c b/uri.c
+index b898a78..0dc256a 100644
+--- a/uri.c
++++ b/uri.c
+@@ -1049,14 +1049,12 @@ uri_to_string(URI *uri) {
+ 	while (*p != 0) {
+ 	    if (len >= max) {
+                 temp = realloc2n(ret, &max);
+-                if (temp == NULL) goto mem_error;
+ 		ret = temp;
+ 	    }
+ 	    ret[len++] = *p++;
+ 	}
+ 	if (len >= max) {
+             temp = realloc2n(ret, &max);
+-            if (temp == NULL) goto mem_error;
+             ret = temp;
+ 	}
+ 	ret[len++] = ':';
+@@ -1066,7 +1064,6 @@ uri_to_string(URI *uri) {
+ 	while (*p != 0) {
+ 	    if (len + 3 >= max) {
+                 temp = realloc2n(ret, &max);
+-                if (temp == NULL) goto mem_error;
+                 ret = temp;
+ 	    }
+ 	    if (IS_RESERVED(*(p)) || IS_UNRESERVED(*(p)))
+@@ -1083,7 +1080,6 @@ uri_to_string(URI *uri) {
+ 	if (uri->server != NULL) {
+ 	    if (len + 3 >= max) {
+                 temp = realloc2n(ret, &max);
+-                if (temp == NULL) goto mem_error;
+                 ret = temp;
+ 	    }
+ 	    ret[len++] = '/';
+@@ -1093,7 +1089,6 @@ uri_to_string(URI *uri) {
+ 		while (*p != 0) {
+ 		    if (len + 3 >= max) {
+                         temp = realloc2n(ret, &max);
+-                        if (temp == NULL) goto mem_error;
+                         ret = temp;
+ 		    }
+ 		    if ((IS_UNRESERVED(*(p))) ||
+@@ -1112,7 +1107,6 @@ uri_to_string(URI *uri) {
+ 		}
+ 		if (len + 3 >= max) {
+                     temp = realloc2n(ret, &max);
+-                    if (temp == NULL) goto mem_error;
+                     ret = temp;
+ 		}
+ 		ret[len++] = '@';
+@@ -1121,7 +1115,6 @@ uri_to_string(URI *uri) {
+ 	    while (*p != 0) {
+ 		if (len >= max) {
+                     temp = realloc2n(ret, &max);
+-                    if (temp == NULL) goto mem_error;
+                     ret = temp;
+ 		}
+ 		ret[len++] = *p++;
+@@ -1129,7 +1122,6 @@ uri_to_string(URI *uri) {
+ 	    if (uri->port > 0) {
+ 		if (len + 10 >= max) {
+                     temp = realloc2n(ret, &max);
+-                    if (temp == NULL) goto mem_error;
+                     ret = temp;
+ 		}
+ 		len += snprintf(&ret[len], max - len, ":%d", uri->port);
+@@ -1137,7 +1129,6 @@ uri_to_string(URI *uri) {
+ 	} else if (uri->authority != NULL) {
+ 	    if (len + 3 >= max) {
+                 temp = realloc2n(ret, &max);
+-                if (temp == NULL) goto mem_error;
+                 ret = temp;
+ 	    }
+ 	    ret[len++] = '/';
+@@ -1146,7 +1137,6 @@ uri_to_string(URI *uri) {
+ 	    while (*p != 0) {
+ 		if (len + 3 >= max) {
+                     temp = realloc2n(ret, &max);
+-                    if (temp == NULL) goto mem_error;
+                     ret = temp;
+ 		}
+ 		if ((IS_UNRESERVED(*(p))) ||
+@@ -1165,7 +1155,6 @@ uri_to_string(URI *uri) {
+ 	} else if (uri->scheme != NULL) {
+ 	    if (len + 3 >= max) {
+                 temp = realloc2n(ret, &max);
+-                if (temp == NULL) goto mem_error;
+                 ret = temp;
+ 	    }
+ 	    ret[len++] = '/';
+@@ -1185,7 +1174,6 @@ uri_to_string(URI *uri) {
+ 	        (!strcmp(uri->scheme, "file"))) {
+ 		if (len + 3 >= max) {
+                     temp = realloc2n(ret, &max);
+-                    if (temp == NULL) goto mem_error;
+                     ret = temp;
+ 		}
+ 		ret[len++] = *p++;
+@@ -1195,7 +1183,6 @@ uri_to_string(URI *uri) {
+ 	    while (*p != 0) {
+ 		if (len + 3 >= max) {
+                     temp = realloc2n(ret, &max);
+-                    if (temp == NULL) goto mem_error;
+                     ret = temp;
+ 		}
+ 		if ((IS_UNRESERVED(*(p))) || ((*(p) == '/')) ||
+@@ -1215,7 +1202,6 @@ uri_to_string(URI *uri) {
+ 	if (uri->query != NULL) {
+ 	    if (len + 1 >= max) {
+                 temp = realloc2n(ret, &max);
+-                if (temp == NULL) goto mem_error;
+                 ret = temp;
+ 	    }
+ 	    ret[len++] = '?';
+@@ -1223,7 +1209,6 @@ uri_to_string(URI *uri) {
+ 	    while (*p != 0) {
+ 		if (len + 1 >= max) {
+                     temp = realloc2n(ret, &max);
+-                    if (temp == NULL) goto mem_error;
+                     ret = temp;
+ 		}
+ 		ret[len++] = *p++;
+@@ -1233,7 +1218,6 @@ uri_to_string(URI *uri) {
+     if (uri->fragment != NULL) {
+ 	if (len + 3 >= max) {
+             temp = realloc2n(ret, &max);
+-            if (temp == NULL) goto mem_error;
+             ret = temp;
+ 	}
+ 	ret[len++] = '#';
+@@ -1241,7 +1225,6 @@ uri_to_string(URI *uri) {
+ 	while (*p != 0) {
+ 	    if (len + 3 >= max) {
+                 temp = realloc2n(ret, &max);
+-                if (temp == NULL) goto mem_error;
+                 ret = temp;
+ 	    }
+ 	    if ((IS_UNRESERVED(*(p))) || (IS_RESERVED(*(p))))
+@@ -1257,15 +1240,10 @@ uri_to_string(URI *uri) {
+     }
+     if (len >= max) {
+         temp = realloc2n(ret, &max);
+-        if (temp == NULL) goto mem_error;
+         ret = temp;
+     }
+     ret[len] = 0;
+     return(ret);
+-
+-mem_error:
+-    g_free(ret);
+-    return(NULL);
+ }
+ 
+ /**
+-- 
+2.1.0
+

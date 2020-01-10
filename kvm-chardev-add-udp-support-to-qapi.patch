@@ -1,0 +1,214 @@
+From 557455fc9462d5dd0506aab363286742aa5e613e Mon Sep 17 00:00:00 2001
+Message-Id: <557455fc9462d5dd0506aab363286742aa5e613e.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:06:15 +0200
+Subject: [PATCH 64/65] chardev: add udp support to qapi
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-65-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52151
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 64/65] chardev: add udp support to qapi
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+This patch adds 'udp' support to qapi.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 3ecc059dcd06a79495d1bf171ef7f193eff79e98)
+
+Conflicts:
+
+	qemu-sockets.c
+---
+ qapi-schema.json |   16 +++++++++++++++-
+ qemu-char.c      |   44 ++++++++++++++++++++++++++------------------
+ qemu-sockets.c   |   25 +++++++++++++++++++++++++
+ qemu_socket.h    |    1 +
+ 4 files changed, 67 insertions(+), 19 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema.json | 16 +++++++++++++++-
+ qemu-char.c      | 44 ++++++++++++++++++++++++++------------------
+ qemu-sockets.c   | 25 +++++++++++++++++++++++++
+ qemu_socket.h    |  1 +
+ 4 files changed, 67 insertions(+), 19 deletions(-)
+
+diff --git a/qapi-schema.json b/qapi-schema.json
+index a763e17..c77f0d4 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -437,7 +437,7 @@
+ ##
+ # @ChardevSocket:
+ #
+-# Configuration info for socket chardevs.
++# Configuration info for (stream) socket chardevs.
+ #
+ # @addr: socket address to listen on (server=true)
+ #        or connect to (server=false)
+@@ -456,6 +456,19 @@
+                                      '*telnet'  : 'bool' } }
+ 
+ ##
++# @ChardevDgram:
++#
++# Configuration info for datagram socket chardevs.
++#
++# @remote: remote address
++# @local: #optional local address
++#
++# Since: 1.5
++##
++{ 'type': 'ChardevDgram', 'data': { 'remote' : 'SocketAddress',
++                                    '*local' : 'SocketAddress' } }
++
++##
+ # @ChardevMux:
+ #
+ # Configuration info for mux chardevs.
+@@ -543,6 +556,7 @@
+                                        'parallel': 'ChardevHostdev',
+                                        'pipe'   : 'ChardevHostdev',
+                                        'socket' : 'ChardevSocket',
++                                       'dgram'  : 'ChardevDgram',
+                                        'pty'    : 'ChardevDummy',
+                                        'null'   : 'ChardevDummy',
+                                        'mux'    : 'ChardevMux',
+diff --git a/qemu-char.c b/qemu-char.c
+index 83985cb..9078c17 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -2082,21 +2082,14 @@ static void udp_chr_close(CharDriverState *chr)
+     qemu_chr_be_event(chr, CHR_EVENT_CLOSED);
+ }
+ 
+-static CharDriverState *qemu_chr_open_udp(QemuOpts *opts)
++static CharDriverState *qemu_chr_open_udp_fd(int fd)
+ {
+     CharDriverState *chr = NULL;
+     NetCharDriver *s = NULL;
+-    Error *local_err = NULL;
+-    int fd = -1;
+ 
+     chr = qemu_mallocz(sizeof(CharDriverState));
+     s = qemu_mallocz(sizeof(NetCharDriver));
+ 
+-    fd = inet_dgram_opts(opts, &local_err);
+-    if (fd < 0) {
+-        goto return_err;
+-    }
+-
+     s->fd = fd;
+     s->chan = io_channel_from_socket(s->fd);
+     s->bufcnt = 0;
+@@ -2106,18 +2099,18 @@ static CharDriverState *qemu_chr_open_udp(QemuOpts *opts)
+     chr->chr_update_read_handler = udp_chr_update_read_handler;
+     chr->chr_close = udp_chr_close;
+     return chr;
++}
+ 
+-return_err:
+-    if (local_err) {
+-        qerror_report_err(local_err);
+-        error_free(local_err);
+-    }
+-    g_free(chr);
+-    g_free(s);
+-    if (fd >= 0) {
+-        closesocket(fd);
++static CharDriverState *qemu_chr_open_udp(QemuOpts *opts)
++{
++    Error *local_err = NULL;
++    int fd = -1;
++
++    fd = inet_dgram_opts(opts, &local_err);
++    if (fd < 0) {
++        return NULL;
+     }
+-    return NULL;
++    return qemu_chr_open_udp_fd(fd);
+ }
+ 
+ /***********************************************************/
+@@ -3217,6 +3210,18 @@ static CharDriverState *qmp_chardev_open_socket(ChardevSocket *sock,
+                                    is_telnet, is_waitconnect, errp);
+ }
+ 
++static CharDriverState *qmp_chardev_open_dgram(ChardevDgram *dgram,
++                                               Error **errp)
++{
++    int fd;
++
++    fd = socket_dgram(dgram->remote, dgram->local, errp);
++    if (error_is_set(errp)) {
++        return NULL;
++    }
++    return qemu_chr_open_udp_fd(fd);
++}
++
+ ChardevReturn *qmp_chardev_add(const char *id, ChardevBackend *backend,
+                                Error **errp)
+ {
+@@ -3246,6 +3251,9 @@ ChardevReturn *qmp_chardev_add(const char *id, ChardevBackend *backend,
+     case CHARDEV_BACKEND_KIND_SOCKET:
+         chr = qmp_chardev_open_socket(backend->socket, errp);
+         break;
++    case CHARDEV_BACKEND_KIND_DGRAM:
++        chr = qmp_chardev_open_dgram(backend->dgram, errp);
++        break;
+ #ifdef HAVE_CHARDEV_TTY
+     case CHARDEV_BACKEND_KIND_PTY:
+         chr = qemu_chr_open_pty(id, ret);
+diff --git a/qemu-sockets.c b/qemu-sockets.c
+index 29e88e2..046ffbb 100644
+--- a/qemu-sockets.c
++++ b/qemu-sockets.c
+@@ -955,3 +955,28 @@ int socket_listen(SocketAddress *addr, Error **errp)
+     qemu_opts_del(opts);
+     return fd;
+ }
++
++int socket_dgram(SocketAddress *remote, SocketAddress *local, Error **errp)
++{
++    QemuOpts *opts;
++    int fd;
++
++    opts = qemu_opts_create(&dummy_opts, NULL, 0);
++    switch (remote->kind) {
++    case SOCKET_ADDRESS_KIND_INET:
++        qemu_opt_set(opts, "host", remote->inet->host);
++        qemu_opt_set(opts, "port", remote->inet->port);
++        if (local) {
++            qemu_opt_set(opts, "localaddr", local->inet->host);
++            qemu_opt_set(opts, "localport", local->inet->port);
++        }
++        fd = inet_dgram_opts(opts, errp);
++        break;
++
++    default:
++        error_setg(errp, "socket type unsupported for datagram");
++        return -1;
++    }
++    qemu_opts_del(opts);
++    return fd;
++}
+diff --git a/qemu_socket.h b/qemu_socket.h
+index 284ab90..99b8309 100644
+--- a/qemu_socket.h
++++ b/qemu_socket.h
+@@ -71,6 +71,7 @@ SocketAddress *socket_parse(const char *str, Error **errp);
+ int socket_connect(SocketAddress *addr, Error **errp,
+                    NonBlockingConnectHandler *callback, void *opaque);
+ int socket_listen(SocketAddress *addr, Error **errp);
++int socket_dgram(SocketAddress *remote, SocketAddress *local, Error **errp);
+ 
+ /* Old, ipv4 only bits.  Don't use for new code. */
+ int parse_host_port(struct sockaddr_in *saddr, const char *str);
+-- 
+1.7.11.7
+

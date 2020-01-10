@@ -1,0 +1,215 @@
+From a42d493ce1e44d7894f7a0ba1ac891263662c841 Mon Sep 17 00:00:00 2001
+Message-Id: <a42d493ce1e44d7894f7a0ba1ac891263662c841.1427300678.git.jen@redhat.com>
+In-Reply-To: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+References: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+From: Vlad Yasevich <vyasevic@redhat.com>
+Date: Thu, 12 Mar 2015 19:13:09 -0500
+Subject: [CHANGE 13/33] aio: make AioContexts GSources
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Vlad Yasevich <vyasevic@redhat.com>
+Message-id: <1426187601-21396-14-git-send-email-vyasevic@redhat.com>
+Patchwork-id: 64353
+O-Subject: [RHEL6.7 qemu-kvm PATCH v2 13/25] aio: make AioContexts GSources
+Bugzilla: 1005016
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+This lets AioContexts be used (optionally) with a glib main loop.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit e3713e001fb7d4d82f6de82800c1463e758e4289)
+Signed-off-by: Vladislav Yasevich <vyasevic@redhat.com>
+---
+ aio-posix.c |  4 ++++
+ aio-win32.c |  4 ++++
+ async.c     | 65 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-
+ qemu-aio.h  | 23 ++++++++++++++++++++++
+ 4 files changed, 95 insertions(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ aio-posix.c |  4 ++++
+ aio-win32.c |  4 ++++
+ async.c     | 65 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-
+ qemu-aio.h  | 23 ++++++++++++++++++++++
+ 4 files changed, 95 insertions(+), 1 deletion(-)
+
+diff --git a/aio-posix.c b/aio-posix.c
+index 292ba06..06531f9 100644
+--- a/aio-posix.c
++++ b/aio-posix.c
+@@ -54,6 +54,8 @@ void aio_set_fd_handler(AioContext *ctx,
+     /* Are we deleting the fd handler? */
+     if (!io_read && !io_write) {
+         if (node) {
++            g_source_remove_poll(&ctx->source, &node->pfd);
++
+             /* If the lock is held, just mark the node as deleted */
+             if (ctx->walking_handlers) {
+                 node->deleted = 1;
+@@ -73,6 +75,8 @@ void aio_set_fd_handler(AioContext *ctx,
+             node = g_malloc0(sizeof(AioHandler));
+             node->pfd.fd = fd;
+             QLIST_INSERT_HEAD(&ctx->aio_handlers, node, node);
++
++            g_source_add_poll(&ctx->source, &node->pfd);
+         }
+         /* Update handler with latest information */
+         node->io_read = io_read;
+diff --git a/aio-win32.c b/aio-win32.c
+index 9881fdb..e460bd8 100644
+--- a/aio-win32.c
++++ b/aio-win32.c
+@@ -45,6 +45,8 @@ void aio_set_event_notifier(AioContext *ctx,
+     /* Are we deleting the fd handler? */
+     if (!io_notify) {
+         if (node) {
++            g_source_remove_poll(&ctx->source, &node->pfd);
++
+             /* If the lock is held, just mark the node as deleted */
+             if (ctx->walking_handlers) {
+                 node->deleted = 1;
+@@ -66,6 +68,8 @@ void aio_set_event_notifier(AioContext *ctx,
+             node->pfd.fd = (uintptr_t)event_notifier_get_handle(e);
+             node->pfd.events = G_IO_IN;
+             QLIST_INSERT_HEAD(&ctx->aio_handlers, node, node);
++
++            g_source_add_poll(&ctx->source, &node->pfd);
+         }
+         /* Update handler with latest information */
+         node->io_notify = io_notify;
+diff --git a/async.c b/async.c
+index f933ad4..d6e1643 100644
+--- a/async.c
++++ b/async.c
+@@ -136,10 +136,73 @@ void aio_bh_update_timeout(AioContext *ctx, uint32_t *timeout)
+     }
+ }
+ 
++static gboolean
++aio_ctx_prepare(GSource *source, gint    *timeout)
++{
++    AioContext *ctx = (AioContext *) source;
++    uint32_t wait = -1;
++    aio_bh_update_timeout(ctx, &wait);
++
++    if (wait != -1) {
++        *timeout = MIN(*timeout, wait);
++        return wait == 0;
++    }
++
++    return false;
++}
++
++static gboolean
++aio_ctx_check(GSource *source)
++{
++    AioContext *ctx = (AioContext *) source;
++    QEMUBH *bh;
++
++    for (bh = ctx->first_bh; bh; bh = bh->next) {
++        if (!bh->deleted && bh->scheduled) {
++            return true;
++	}
++    }
++    return aio_pending(ctx);
++}
++
++static gboolean
++aio_ctx_dispatch(GSource     *source,
++                 GSourceFunc  callback,
++                 gpointer     user_data)
++{
++    AioContext *ctx = (AioContext *) source;
++
++    assert(callback == NULL);
++    aio_poll(ctx, false);
++    return true;
++}
++
++static GSourceFuncs aio_source_funcs = {
++    aio_ctx_prepare,
++    aio_ctx_check,
++    aio_ctx_dispatch,
++    NULL
++};
++
++GSource *aio_get_g_source(AioContext *ctx)
++{
++    g_source_ref(&ctx->source);
++    return &ctx->source;
++}
+ 
+ AioContext *aio_context_new(void)
+ {
+-    return g_new0(AioContext, 1);
++    return (AioContext *) g_source_new(&aio_source_funcs, sizeof(AioContext));
++}
++
++void aio_context_ref(AioContext *ctx)
++{
++    g_source_ref(&ctx->source);
++}
++
++void aio_context_unref(AioContext *ctx)
++{
++    g_source_unref(&ctx->source);
+ }
+ 
+ void aio_flush(AioContext *ctx)
+diff --git a/qemu-aio.h b/qemu-aio.h
+index d1ee8a3..b3c5b2a 100644
+--- a/qemu-aio.h
++++ b/qemu-aio.h
+@@ -43,6 +43,8 @@ typedef struct AioHandler AioHandler;
+ typedef void IOHandler(void *opaque);
+ 
+ typedef struct AioContext {
++    GSource source;
++
+     /* The list of registered AIO handlers */
+     QLIST_HEAD(, AioHandler) aio_handlers;
+ 
+@@ -79,6 +81,22 @@ typedef int (AioProcessQueue)(void *opaque);
+ AioContext *aio_context_new(void);
+ 
+ /**
++ * aio_context_ref:
++ * @ctx: The AioContext to operate on.
++ *
++ * Add a reference to an AioContext.
++ */
++void aio_context_ref(AioContext *ctx);
++
++/**
++ * aio_context_unref:
++ * @ctx: The AioContext to operate on.
++ *
++ * Drop a reference to an AioContext.
++ */
++void aio_context_unref(AioContext *ctx);
++
++/**
+  * aio_bh_new: Allocate a new bottom half structure.
+  *
+  * Bottom halves are lightweight callbacks whose invocation is guaranteed
+@@ -175,6 +193,11 @@ void aio_set_fd_handler(AioContext *ctx,
+                         AioFlushHandler *io_flush,
+                         void *opaque);
+ 
++/* Return a GSource that lets the main loop poll the file descriptors attached
++ * to this AioContext.
++ */
++GSource *aio_get_g_source(AioContext *ctx);
++
+ /* Functions to operate on the main QEMU AioContext.  */
+ 
+ void qemu_aio_flush(void);
+-- 
+2.1.0
+

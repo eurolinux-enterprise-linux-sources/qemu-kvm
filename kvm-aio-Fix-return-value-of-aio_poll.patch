@@ -1,0 +1,107 @@
+From b6f3ea824f00bec7ebd1c36feb2ae65184384f36 Mon Sep 17 00:00:00 2001
+Message-Id: <b6f3ea824f00bec7ebd1c36feb2ae65184384f36.1427300678.git.jen@redhat.com>
+In-Reply-To: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+References: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+From: Vlad Yasevich <vyasevic@redhat.com>
+Date: Thu, 12 Mar 2015 19:13:20 -0500
+Subject: [CHANGE 24/33] aio: Fix return value of aio_poll()
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Vlad Yasevich <vyasevic@redhat.com>
+Message-id: <1426187601-21396-25-git-send-email-vyasevic@redhat.com>
+Patchwork-id: 64361
+O-Subject: [RHEL6.7 qemu-kvm PATCH v2 24/25] aio: Fix return value of aio_poll()
+Bugzilla: 1005016
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+aio_poll() must return true if any work is still pending, even if it
+didn't make progress, so that bdrv_drain_all() doesn't stop waiting too
+early. The possibility of stopping early occasionally lead to a failed
+assertion in bdrv_drain_all(), when some in-flight request was missed
+and the function didn't really drain all requests.
+
+In order to make that change, the return value as specified in the
+function comment must change for blocking = false; fortunately, the
+return value of blocking = false callers is only used in test cases, so
+this change shouldn't cause any trouble.
+
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 2ea9b58f0bc62445b7ace2381b4c4db7d5597e19)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	include/block/aio.h
+	tests/test-aio.c
+        - Tests don't exists yet, and aio.h changes when into qemu-aio.h
+
+Signed-off-by: Vladislav Yasevich <vyasevic@redhat.com>
+---
+ aio-posix.c | 3 ++-
+ aio-win32.c | 3 ++-
+ qemu-aio.h  | 6 ++----
+ 3 files changed, 6 insertions(+), 6 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ aio-posix.c | 3 ++-
+ aio-win32.c | 3 ++-
+ qemu-aio.h  | 6 ++----
+ 3 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/aio-posix.c b/aio-posix.c
+index 5387268..a5045a6 100644
+--- a/aio-posix.c
++++ b/aio-posix.c
+@@ -245,5 +245,6 @@ bool aio_poll(AioContext *ctx, bool blocking)
+         }
+     }
+ 
+-    return progress;
++    assert(progress || busy);
++    return true;
+ }
+diff --git a/aio-win32.c b/aio-win32.c
+index e460bd8..367dd90 100644
+--- a/aio-win32.c
++++ b/aio-win32.c
+@@ -209,5 +209,6 @@ bool aio_poll(AioContext *ctx, bool blocking)
+         }
+     }
+ 
+-    return progress;
++    assert(progress || busy);
++    return true;
+ }
+diff --git a/qemu-aio.h b/qemu-aio.h
+index 540ef81..7a5b78a 100644
+--- a/qemu-aio.h
++++ b/qemu-aio.h
+@@ -169,16 +169,14 @@ bool aio_pending(AioContext *ctx);
+  * aio as a result of executing I/O completion or bh callbacks.
+  *
+  * If there is no pending AIO operation or completion (bottom half),
+- * return false.  If there are pending bottom halves, return true.
++ * return false.  If there are pending AIO operations or bottom halves,
++ * return true.
+  *
+  * If there are no pending bottom halves, but there are pending AIO
+  * operations, it may not be possible to make any progress without
+  * blocking.  If @blocking is true, this function will wait until one
+  * or more AIO events have completed, to ensure something has moved
+  * before returning.
+- *
+- * If @blocking is false, this function will also return false if the
+- * function cannot make any progress without blocking.
+  */
+ bool aio_poll(AioContext *ctx, bool blocking);
+ 
+-- 
+2.1.0
+

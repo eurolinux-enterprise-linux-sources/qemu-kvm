@@ -1,0 +1,59 @@
+From 1868df204dcaad4b2694a42b1e835c5ae4583a1a Mon Sep 17 00:00:00 2001
+Message-Id: <1868df204dcaad4b2694a42b1e835c5ae4583a1a.1375955382.git.minovotn@redhat.com>
+In-Reply-To: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+References: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+From: Alon Levy <alevy@redhat.com>
+Date: Thu, 1 Aug 2013 11:53:35 +0200
+Subject: [PATCH 16/35] hw/usb/dev-smartcard-reader: support windows guest
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Alon Levy <alevy@redhat.com>
+Message-id: <1375358029-12968-17-git-send-email-alevy@redhat.com>
+Patchwork-id: 52906
+O-Subject: [RHEL-6.5 RHEL-6.4.z qemu-kvm v6 16/30] hw/usb/dev-smartcard-reader: support windows guest
+Bugzilla: 917860
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+By not advertising USB wakeup support (which we don't).
+
+Signed-off-by: Alon Levy <alevy@redhat.com>
+Reviewed-by: Marc-André Lureau <mlureau@redhat.com>
+(cherry picked from commit c5cd7c875608911ec74817d24cd12b825014ba19)
+
+Conflicts:
+	hw/usb/dev-smartcard-reader.c
+    renamed upstream from usb-ccid.c
+---
+ hw/usb-ccid.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/usb-ccid.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/hw/usb-ccid.c b/hw/usb-ccid.c
+index 784748a..4e95cc9 100644
+--- a/hw/usb-ccid.c
++++ b/hw/usb-ccid.c
+@@ -406,11 +406,11 @@ static const uint8_t qemu_ccid_config_descriptor[] = {
+                      * 20000 Short APDU level exchange with CCID
+                      * 40000 Short and Extended APDU level exchange with CCID
+                      *
+-                     * + 100000 USB Wake up signaling supported on card
++                     * 100000 USB Wake up signaling supported on card
+                      * insertion and removal. Must set bit 5 in bmAttributes
+                      * in Configuration descriptor if 100000 is set.
+                      */
+-        0xfe, 0x04, 0x11, 0x00,
++        0xfe, 0x04, 0x01, 0x00,
+                     /*
+                      * u32 dwMaxCCIDMessageLength; For extended APDU in
+                      * [261 + 10 , 65544 + 10]. Otherwise the minimum is
+-- 
+1.7.11.7
+

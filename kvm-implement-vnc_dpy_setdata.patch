@@ -1,0 +1,51 @@
+From da72b8b5c732457ae115fa00a02569ddb42eff9c Mon Sep 17 00:00:00 2001
+Message-Id: <da72b8b5c732457ae115fa00a02569ddb42eff9c.1425415444.git.jen@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Wed, 19 Nov 2014 09:24:41 -0500
+Subject: [CHANGE 1/8] implement vnc_dpy_setdata
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1416389081-13656-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 62464
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 1/1] implement vnc_dpy_setdata
+Bugzilla: 1161084
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+The comment is wrong, we have to do something in the setdata callback.
+Changing the framebuffer backing storage (happens when the guest pans
+the display) renders the whole screen content invalid.
+
+Trigger #1: cirrus vga + 32bit linux guest + vesafb with ypan enabled.
+Trigger #2: std vga + http://patchwork.ozlabs.org/patch/145479/
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 1d3323de5fe5656844ea57a16eb432f09a366140)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ vnc.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/vnc.c b/vnc.c
+index 4f685ac..fe03f55 100644
+--- a/vnc.c
++++ b/vnc.c
+@@ -2012,7 +2012,10 @@ static void pixel_format_message (VncState *vs) {
+ 
+ static void vnc_dpy_setdata(DisplayState *ds)
+ {
+-    /* We don't have to do anything */
++    VncDisplay *vd = ds->opaque;
++
++    *(vd->guest.ds) = *(ds->surface);
++    vnc_dpy_update(ds, 0, 0, ds_get_width(ds), ds_get_height(ds));
+ }
+ 
+ static void vnc_colordepth(VncState *vs)
+-- 
+2.1.0
+

@@ -1,0 +1,188 @@
+From cf90fc036cb4e0afa5a3b222ffeddcc0b7f6e9b8 Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Wed, 13 Nov 2013 23:34:44 +0100
+Subject: [PATCH 29/39] qapi: Convert human-monitor-command
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1384385687-11423-3-git-send-email-lersek@redhat.com>
+Patchwork-id: 55674
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 2/5] qapi: Convert human-monitor-command
+Bugzilla: 1026903
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: Luiz Capitulino <lcapitulino@redhat.com>
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit d51a67b4d3214654a7b100c0873b77cb2bf87f29)
+
+Conflicts:
+	qapi-schema.json
+	qmp-commands.hx
+
+RHEL-6 notes:
+
+(a) The monitor_ctrl_mode() call that this patch removes has always been a
+    RHEL-6 artifact. Refer to RHEL-6 commit
+
+      29e2814c QMP: Introduce Human Monitor passthrough command
+
+    note 2:
+
+      2. It's needed to change do_hmp_passthrough() to check if we're in
+         QMP, because the human-monitor-command command can be called by
+         the user (This is already fixed upstream)
+
+    The "already fixed upstream" statement probably references the
+    separation of QMP and HMP commands on the level of dispatch tables.
+
+    In this backport, we must substitute something for the check being
+    removed (otherwise qemu segfaults when "human-monitor-command" is
+    issued in HMP).
+
+    Therefore the command entry in "qemu-monitor.hx" is fully completed
+    (following the pattern shown in "dump-guest-memory"), and the
+    MONITOR_CMD_QMP_ONLY flag is added. This prevents the problem.
+
+(b) Some context differences originate from the out-of-order porting of
+    upstream d51a67b4 (this patch) and upstream e1f2641 (RHEL-6 5f66f886)
+    "Monitor: Make output buffer dynamic". In upstream d51a67b4 came
+    first.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qapi-schema.json | 28 ++++++++++++++++++++++++++++
+ monitor.c        | 27 ++++++++++++++-------------
+ qemu-monitor.hx  |  7 ++++---
+ 3 files changed, 46 insertions(+), 16 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ monitor.c        |   27 ++++++++++++++-------------
+ qapi-schema.json |   28 ++++++++++++++++++++++++++++
+ qemu-monitor.hx  |    7 ++++---
+ 3 files changed, 46 insertions(+), 16 deletions(-)
+
+diff --git a/monitor.c b/monitor.c
+index 7214d66..30eaf43 100644
+--- a/monitor.c
++++ b/monitor.c
+@@ -685,17 +685,13 @@ static int do_qmp_capabilities(Monitor *mon, const QDict *params,
+ 
+ static void handle_user_command(Monitor *mon, const char *cmdline);
+ 
+-static int do_hmp_passthrough(Monitor *mon, const QDict *params,
+-                              QObject **ret_data)
++char *qmp_human_monitor_command(const char *command_line, bool has_cpu_index,
++                                int64_t cpu_index, Error **errp)
+ {
+-    int ret = 0;
++    char *output = NULL;
+     Monitor *old_mon, hmp;
+     CharDriverState mchar;
+ 
+-    if (!monitor_ctrl_mode(mon)) {
+-        return -1;
+-    }
+-
+     memset(&hmp, 0, sizeof(hmp));
+     hmp.outbuf = qstring_new();
+ 
+@@ -705,26 +701,31 @@ static int do_hmp_passthrough(Monitor *mon, const QDict *params,
+     old_mon = cur_mon;
+     cur_mon = &hmp;
+ 
+-    if (qdict_haskey(params, "cpu-index")) {
+-        ret = monitor_set_cpu(qdict_get_int(params, "cpu-index"));
++    if (has_cpu_index) {
++        int ret = monitor_set_cpu(cpu_index);
+         if (ret < 0) {
+             cur_mon = old_mon;
+-            qerror_report(QERR_INVALID_PARAMETER_VALUE, "cpu-index", "a CPU number");
++            error_set(errp, QERR_INVALID_PARAMETER_VALUE, "cpu-index",
++                      "a CPU number");
+             goto out;
+         }
+     }
+ 
+-    handle_user_command(&hmp, qdict_get_str(params, "command-line"));
++    handle_user_command(&hmp, command_line);
+     cur_mon = old_mon;
+ 
+     if (qemu_chr_mem_osize(hmp.chr) > 0) {
+-        *ret_data = QOBJECT(qemu_chr_mem_to_qs(hmp.chr));
++        QString *str = qemu_chr_mem_to_qs(hmp.chr);
++        output = g_strdup(qstring_get_str(str));
++        QDECREF(str);
++    } else {
++        output = g_strdup("");
+     }
+ 
+ out:
+     QDECREF(hmp.outbuf);
+     qemu_chr_close_mem(hmp.chr);
+-    return ret;
++    return output;
+ }
+ 
+ static int compare_cmd(const char *name, const char *list)
+diff --git a/qapi-schema.json b/qapi-schema.json
+index c43768e..9125f28 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -700,3 +700,31 @@
+            '*cluster-size': 'int', '*encrypted': 'bool',
+            '*backing-filename': 'str', '*full-backing-filename': 'str',
+            '*backing-filename-format': 'str', '*snapshots': ['SnapshotInfo'] } }
++
++##
++# @human-monitor-command:
++#
++# Execute a command on the human monitor and return the output.
++#
++# @command-line: the command to execute in the human monitor
++#
++# @cpu-index: #optional The CPU to use for commands that require an implicit CPU
++#
++# Returns: the output of the command as a string
++#
++# Since: 0.14.0
++#
++# Notes: This command only exists as a stop-gap.  It's use is highly
++#        discouraged.  The semantics of this command are not guaranteed.
++#
++#        Known limitations:
++#
++#        o This command is stateless, this means that commands that depend
++#          on state information (such as getfd) might not work
++#
++#       o Commands that prompt the user for data (eg. 'cont' when the block
++#         device is encrypted) don't currently work
++##
++{ 'command': 'human-monitor-command',
++  'data': {'command-line': 'str', '*cpu-index': 'int'},
++  'returns': 'str' }
+diff --git a/qemu-monitor.hx b/qemu-monitor.hx
+index a47766d..a4c5dd6 100644
+--- a/qemu-monitor.hx
++++ b/qemu-monitor.hx
+@@ -2141,10 +2141,11 @@ EQMP
+     {
+         .name       = "human-monitor-command",
+         .args_type  = "command-line:s,cpu-index:i?",
+-        .params     = "",
+-        .help       = "",
++        .params     = "command-line [cpu-index]",
++        .help       = "execute a command on the human monitor",
+         .user_print = monitor_user_noop,
+-        .mhandler.cmd_new = do_hmp_passthrough,
++        .mhandler.cmd_new = qmp_marshal_input_human_monitor_command,
++        .flags = MONITOR_CMD_QMP_ONLY
+     },
+ 
+ SQMP
+-- 
+1.7.1
+

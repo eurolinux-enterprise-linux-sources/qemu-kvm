@@ -1,0 +1,105 @@
+From 28320d2fb9c2c3c63e9a9abd43a4105e6793b50c Mon Sep 17 00:00:00 2001
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 21 Jun 2013 06:20:05 +0200
+Subject: [PATCH 09/21] qapi: Introduce blockdev-group-snapshot-sync command
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1371795611-7208-10-git-send-email-famz@redhat.com>
+Patchwork-id: 52083
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 09/15] qapi: Introduce blockdev-group-snapshot-sync command
+Bugzilla: 956825
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Jeff Cody <jcody@redhat.com>
+
+This is a QAPI/QMP only command to take a snapshot of a group of
+devices. This is similar to the blockdev-snapshot-sync command, except
+blockdev-group-snapshot-sync accepts a list devices, filenames, and
+formats.
+
+It is attempted to keep the snapshot of the group atomic; if the
+creation or open of any of the new snapshots fails, then all of
+the new snapshots are abandoned, and the name of the snapshot image
+that failed is returned.  The failure case should not interrupt
+any operations.
+
+Rather than use bdrv_close() along with a subsequent bdrv_open() to
+perform the pivot, the original image is never closed and the new
+image is placed 'in front' of the original image via manipulation
+of the BlockDriverState fields.  Thus, once the new snapshot image
+has been successfully created, there are no more failure points
+before pivoting to the new snapshot.
+
+This allows the group of disks to remain consistent with each other,
+even across snapshot failures.
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 8802d1fdd4b73e02ce13fb3a233c64c1913634ab)
+
+Backport again for io limit fileds in bdrv_append, since previous
+backport (c032ff2a) of this commit dropped changes.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block.c | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block.c |   22 ++++++++++++++++++++++
+ 1 files changed, 22 insertions(+), 0 deletions(-)
+
+diff --git a/block.c b/block.c
+index 9e4672f..8c2f94b 100644
+--- a/block.c
++++ b/block.c
+@@ -1157,6 +1157,16 @@ void bdrv_append(BlockDriverState *bs_new, BlockDriverState *bs_top)
+     tmp.buffer_alignment  = bs_top->buffer_alignment;
+     tmp.copy_on_read      = bs_top->copy_on_read;
+ 
++    /* i/o timing parameters */
++    tmp.slice_time        = bs_top->slice_time;
++    tmp.slice_start       = bs_top->slice_start;
++    tmp.slice_end         = bs_top->slice_end;
++    tmp.io_limits         = bs_top->io_limits;
++    tmp.io_base           = bs_top->io_base;
++    tmp.throttled_reqs    = bs_top->throttled_reqs;
++    tmp.block_timer       = bs_top->block_timer;
++    tmp.io_limits_enabled = bs_top->io_limits_enabled;
++
+     /* geometry */
+     tmp.cyls              = bs_top->cyls;
+     tmp.heads             = bs_top->heads;
+@@ -1201,13 +1211,25 @@ void bdrv_append(BlockDriverState *bs_new, BlockDriverState *bs_top)
+     bs_new->device_name[0] = '\0';
+ 
+     /* clear the copied fields in the new backing file */
++
+     bdrv_detach_dev(bs_new, bs_new->dev);
+ 
+     bs_new->job                = NULL;
+     bs_new->in_use             = 0;
+     bs_new->dirty_bitmap       = NULL;
+ 
++    qemu_co_queue_init(&bs_new->throttled_reqs);
++    memset(&bs_new->io_base,   0, sizeof(bs_new->io_base));
++    memset(&bs_new->io_limits, 0, sizeof(bs_new->io_limits));
+     bdrv_iostatus_disable(bs_new);
++
++    /* we don't use bdrv_io_limits_disable() for this, because we don't want
++     * to affect or delete the block_timer, as it has been moved to bs_top */
++    bs_new->io_limits_enabled = false;
++    bs_new->block_timer       = NULL;
++    bs_new->slice_time        = 0;
++    bs_new->slice_start       = 0;
++    bs_new->slice_end         = 0;
+ }
+ 
+ void bdrv_delete(BlockDriverState *bs)
+-- 
+1.7.1
+

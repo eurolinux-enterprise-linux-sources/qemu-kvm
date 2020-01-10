@@ -1,0 +1,72 @@
+From cb27ebdfb8976d636125df70791abd230399e635 Mon Sep 17 00:00:00 2001
+Message-Id: <cb27ebdfb8976d636125df70791abd230399e635.1376492227.git.minovotn@redhat.com>
+In-Reply-To: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+References: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Tue, 13 Aug 2013 16:49:09 +0200
+Subject: [PATCH 02/22] vl: add runstate_set tracepoint
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1376412551-32226-3-git-send-email-stefanha@redhat.com>
+Patchwork-id: 53273
+O-Subject: [PATCH RHEL6.5 qemu-kvm v2 2/4] vl: add runstate_set tracepoint
+Bugzilla: 903429
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: Kazuya Saito <saito.kazuya@jp.fujitsu.com>
+
+This patch enables us to know RunState transition. It will be userful
+for investigation when the trouble occured in special event such like
+live migration, shutdown, suspend, and so on.
+
+Signed-off-by: Kazuya Saito <saito.kazuya@jp.fujitsu.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 7e8660032cd21c1bdc4160b8fab7deec62e1aa12)
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Conflicts:
+  trace-events
+  The context confuses git but the actual trace event we add is
+  unchanged from upstream.
+---
+ trace-events | 1 +
+ vl.c         | 2 +-
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ trace-events | 1 +
+ vl.c         | 2 +-
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/trace-events b/trace-events
+index f0ba3da..146a2ad 100644
+--- a/trace-events
++++ b/trace-events
+@@ -184,6 +184,7 @@ disable scsi_request_sense(int target, int lun, int tag) "target %d lun %d tag %
+ 
+ # vl.c
+ disable vm_state_notify(int running, int reason) "running %d reason %d"
++disable runstate_set(int new_state) "new state %d"
+ 
+ # block/qed-l2-cache.c
+ disable qed_alloc_l2_cache_entry(void *l2_cache, void *entry) "l2_cache %p entry %p"
+diff --git a/vl.c b/vl.c
+index c5caf6e..ce96d76 100644
+--- a/vl.c
++++ b/vl.c
+@@ -474,7 +474,7 @@ void runstate_set(RunState new_state)
+            confident enough that we've captured all valid transitions */
+         // abort();
+     }
+-
++    trace_runstate_set(new_state);
+     current_run_state = new_state;
+ }
+ 
+-- 
+1.7.11.7
+

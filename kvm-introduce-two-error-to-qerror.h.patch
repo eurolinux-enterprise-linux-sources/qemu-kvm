@@ -1,0 +1,82 @@
+From 6fe31982f1b12722eba2576d415506054dd06199 Mon Sep 17 00:00:00 2001
+From: Amos Kong <akong@redhat.com>
+Date: Tue, 10 Sep 2013 06:07:47 +0200
+Subject: [PATCH 05/39] introduce two error to qerror.h
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1378793288-3371-6-git-send-email-akong@redhat.com>
+Patchwork-id: 54240
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v3 05/26] introduce two error to qerror.h
+Bugzilla: 786407
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+QERR_AMBIGUOUS_PATH, QERR_PERMISSION_DENIED are used in
+qobject code. manually backport two qerror from upstream.
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+---
+ qerror.c |    8 ++++++++
+ qerror.h |    6 ++++++
+ 2 files changed, 14 insertions(+), 0 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ qerror.c |    8 ++++++++
+ qerror.h |    6 ++++++
+ 2 files changed, 14 insertions(+), 0 deletions(-)
+
+diff --git a/qerror.c b/qerror.c
+index 8e3912b..3d9ee5a 100644
+--- a/qerror.c
++++ b/qerror.c
+@@ -45,6 +45,10 @@ static const QType qerror_type = {
+  */
+ static const QErrorStringTable qerror_table[] = {
+     {
++        .error_fmt = QERR_AMBIGUOUS_PATH,
++        .desc      = "Path '%(path)' does not uniquely identify a %(object)"
++    },
++    {
+         .error_fmt = QERR_BAD_BUS_FOR_DEVICE,
+         .desc      = "Device '%(device)' can't go on a %(bad_bus_type) bus",
+     },
+@@ -206,6 +210,10 @@ static const QErrorStringTable qerror_table[] = {
+         .desc      = "Could not open '%(filename)': %(__com.redhat_error_message)",
+     },
+     {
++        .error_fmt = QERR_PERMISSION_DENIED,
++        .desc      = "Insufficient permission to perform this operation",
++    },
++    {
+         .error_fmt = QERR_PROPERTY_NOT_FOUND,
+         .desc      = "Property '%(device).%(property)' not found",
+     },
+diff --git a/qerror.h b/qerror.h
+index bb4c543..1e557cb 100644
+--- a/qerror.h
++++ b/qerror.h
+@@ -52,6 +52,9 @@ QError *qobject_to_qerror(const QObject *obj);
+  * Please keep the definitions in alphabetical order.
+  * Use "grep '^#define QERR_' qerror.h | sort -c" to check.
+  */
++#define QERR_AMBIGUOUS_PATH \
++    "{ 'class': 'AmbiguousPath', 'data': { 'path': %s } }"
++
+ #define QERR_BAD_BUS_FOR_DEVICE \
+     "{ 'class': 'BadBusForDevice', 'data': { 'device': %s, 'bad_bus_type': %s } }"
+ 
+@@ -176,6 +179,9 @@ QError *qobject_to_qerror(const QObject *obj);
+ #define QERR_OPEN_FILE_FAILED \
+     "{ 'class': 'OpenFileFailed', 'data': { 'filename': %s, '__com.redhat_error_message': %s } }"
+ 
++#define QERR_PERMISSION_DENIED \
++    "{ 'class': 'PermissionDenied', 'data': {} }"
++
+ #define QERR_PROPERTY_NOT_FOUND \
+     "{ 'class': 'PropertyNotFound', 'data': { 'device': %s, 'property': %s } }"
+ 
+-- 
+1.7.1
+

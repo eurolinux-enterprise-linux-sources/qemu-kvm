@@ -1,0 +1,68 @@
+From 3f0524c8c92fa9b32a83bb57662cd6eb6e4083d4 Mon Sep 17 00:00:00 2001
+Message-Id: <3f0524c8c92fa9b32a83bb57662cd6eb6e4083d4.1365603694.git.minovotn@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Fri, 1 Mar 2013 09:28:34 +0100
+Subject: [PATCH] Fix regression introduced by -machine accel=
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1362130114-32114-1-git-send-email-stefanha@redhat.com>
+Patchwork-id: 49099
+O-Subject: [PATCH qemu-kvm RHEL6.5] Fix regression introduced by -machine accel=
+Bugzilla: 916020
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+BZ: 916020
+BREW: https://brewweb.devel.redhat.com/taskinfo?taskID=5455034
+
+Commit 85097db6 changed the timing when kvm_allowed is set until after
+kvm is initialized.  During initialization, the ioeventfd initialization code
+checks kvm_enabled() and after this change, ioeventfd is effectively disabled.
+
+This causes a significant regression in performance.
+
+Fix this by setting kvm_allowed before calling init.
+
+Reported-by: Khoa Huynh <khoa@us.ibm.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from a16c53b101a9897b0b2be96a1bb3bde7c04380f2)
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+---
+ vl.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ vl.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/vl.c b/vl.c
+index efe90fc..54ce663 100644
+--- a/vl.c
++++ b/vl.c
+@@ -4998,6 +4998,7 @@ static int configure_accelerator(void)
+         p = get_opt_name(buf, sizeof (buf), p, ':');
+         for (i = 0; i < ARRAY_SIZE(accel_list); i++) {
+             if (strcmp(accel_list[i].opt_name, buf) == 0) {
++                *(accel_list[i].allowed) = 1;
+                 ret = accel_list[i].init(smp_cpus);
+                 if (ret < 0) {
+                     init_failed = 1;
+@@ -5009,9 +5010,9 @@ static int configure_accelerator(void)
+                                 accel_list[i].name,
+                                 strerror(-ret));
+                     }
++                    *(accel_list[i].allowed) = 0;
+                 } else {
+                     accel_initalised = 1;
+-                    *(accel_list[i].allowed) = 1;
+                 }
+                 break;
+             }
+-- 
+1.7.11.7
+

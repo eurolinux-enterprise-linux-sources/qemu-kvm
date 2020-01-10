@@ -1,0 +1,189 @@
+From e5f1f6f7df4d40dee1631765109b2eafeb72b364 Mon Sep 17 00:00:00 2001
+Message-Id: <e5f1f6f7df4d40dee1631765109b2eafeb72b364.1456769395.git.jen@redhat.com>
+In-Reply-To: <af9075e3725e0685c2d54d451267d48b16f48b02.1456769395.git.jen@redhat.com>
+References: <af9075e3725e0685c2d54d451267d48b16f48b02.1456769395.git.jen@redhat.com>
+From: =?UTF-8?q?Marc-Andr=C3=A9=20Lureau?= <marcandre.lureau@redhat.com>
+Date: Fri, 26 Feb 2016 14:15:57 -0500
+Subject: [CHANGE 2/8] util: add base64 decoding function
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Marc-André Lureau <marcandre.lureau@redhat.com>
+Message-id: <1456496163-31004-3-git-send-email-marcandre.lureau@redhat.com>
+Patchwork-id: 69502
+O-Subject: [RHEL-6.8 qemu-kvm PATCH v4 2/8] util: add base64 decoding function
+Bugzilla: 1174181
+RH-Acked-by: Thomas Huth <thuth@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: "Daniel P. Berrange" <berrange@redhat.com>
+
+The standard glib provided g_base64_decode doesn't provide any
+kind of sensible error checking on its input. Add a QEMU custom
+wrapper qbase64_decode which can be used with untrustworthy
+input that can contain invalid base64 characters, embedded
+NUL characters, or not be NUL terminated at all.
+
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Daniel P. Berrange <berrange@redhat.com>
+(cherry picked from commit 89bc0b6cae6e40e9247bf911162b0aee0c818c4c)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	tests/.gitignore
+	tests/Makefile
+	util/Makefile.objs
+
+BZ: https://bugzilla.redhat.com/show_bug.cgi?id=1174181
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=10566110
+Upstream-status: 89bc0b6cae6e40e9247bf911162b0aee0c818c4c
+
+Dropped test-base64, which depends on newer build system, and is tricky to
+backport due to error.o usage.
+
+Signed-off-by: Marc-André Lureau <marcandre.lureau@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ include/qemu/base64.h | 58 +++++++++++++++++++++++++++++++++++++++++++++++++
+ util/base64.c         | 60 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 118 insertions(+)
+ create mode 100644 include/qemu/base64.h
+ create mode 100644 util/base64.c
+
+diff --git a/include/qemu/base64.h b/include/qemu/base64.h
+new file mode 100644
+index 0000000..793708d
+--- /dev/null
++++ b/include/qemu/base64.h
+@@ -0,0 +1,58 @@
++/*
++ * QEMU base64 helpers
++ *
++ * Copyright (c) 2015 Red Hat, Inc.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, see <http://www.gnu.org/licenses/>.
++ *
++ */
++
++#ifndef QEMU_BASE64_H__
++#define QEMU_BASE64_H__
++
++#include "qemu-common.h"
++
++
++/**
++ * qbase64_decode:
++ * @input: the (possibly) base64 encoded text
++ * @in_len: length of @input or -1 if NUL terminated
++ * @out_len: filled with length of decoded data
++ * @errp: pointer to a NULL-initialized error object
++ *
++ * Attempt to decode the (possibly) base64 encoded
++ * text provided in @input. If the @input text may
++ * contain embedded NUL characters, or may not be
++ * NUL terminated, then @in_len must be set to the
++ * known size of the @input buffer.
++ *
++ * Note that embedded NULs, or lack of a NUL terminator
++ * are considered invalid base64 data and errors
++ * will be reported to this effect.
++ *
++ * If decoding is successful, the decoded data will
++ * be returned and @out_len set to indicate the
++ * number of bytes in the decoded data. The caller
++ * must use g_free() to free the returned data when
++ * it is no longer required.
++ *
++ * Returns: the decoded data or NULL
++ */
++uint8_t *qbase64_decode(const char *input,
++                        size_t in_len,
++                        size_t *out_len,
++                        Error **errp);
++
++
++#endif /* QEMU_BUFFER_H__ */
+diff --git a/util/base64.c b/util/base64.c
+new file mode 100644
+index 0000000..f82caa7
+--- /dev/null
++++ b/util/base64.c
+@@ -0,0 +1,60 @@
++/*
++ * QEMU base64 helpers
++ *
++ * Copyright (c) 2015 Red Hat, Inc.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, see <http://www.gnu.org/licenses/>.
++ *
++ */
++
++#include <config-host.h>
++
++#include "qemu/base64.h"
++
++static const char *base64_valid_chars =
++    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=\n";
++
++uint8_t *qbase64_decode(const char *input,
++                        size_t in_len,
++                        size_t *out_len,
++                        Error **errp)
++{
++    *out_len = 0;
++
++    if (in_len != -1) {
++        /* Lack of NUL terminator is an error */
++        if (input[in_len] != '\0') {
++            error_setg(errp, "Base64 data is not NUL terminated");
++            return NULL;
++        }
++        /* Check there's no NULs embedded since we expect
++         * this to be valid base64 data */
++        if (memchr(input, '\0', in_len) != NULL) {
++            error_setg(errp, "Base64 data contains embedded NUL characters");
++            return NULL;
++        }
++
++        /* Now we know its a valid nul terminated string
++         * strspn is safe to use... */
++    } else {
++        in_len = strlen(input);
++    }
++
++    if (strspn(input, base64_valid_chars) != in_len) {
++        error_setg(errp, "Base64 data contains invalid characters");
++        return NULL;
++    }
++
++    return g_base64_decode(input, out_len);
++}
+-- 
+2.1.0
+

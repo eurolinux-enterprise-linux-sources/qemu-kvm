@@ -1,0 +1,59 @@
+From 8de445f8643a5580bee0391e904ddb33e26be807 Mon Sep 17 00:00:00 2001
+Message-Id: <8de445f8643a5580bee0391e904ddb33e26be807.1454086772.git.jen@redhat.com>
+In-Reply-To: <2130add8159e0898eac1efd175e563148ec75ec6.1454086772.git.jen@redhat.com>
+References: <2130add8159e0898eac1efd175e563148ec75ec6.1454086772.git.jen@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Tue, 4 Aug 2015 09:36:51 -0400
+Subject: [CHANGE 2/2] scsi-disk: fix cmd.mode field typo
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1438681011-13108-3-git-send-email-stefanha@redhat.com>
+Patchwork-id: 67270
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 2/2] scsi-disk: fix cmd.mode field typo
+Bugzilla: 1249740
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+The cmd.xfer field is the data length.  The cmd.mode field is the data
+transfer direction.
+
+scsi_handle_rw_error() was using the wrong error policy for read
+requests.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Message-Id: <1438262173-11546-3-git-send-email-stefanha@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit c85a7a0057ca454607a40cde991d495e0deec34d)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+ * Context conflict because the type of is_read is 'int' downstream and
+   'bool' upstream, and the file is hw/scsi-disk.c instead of
+   hw/scsi/scsi-disk.c.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/scsi-disk.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/hw/scsi-disk.c b/hw/scsi-disk.c
+index 3f09d49..b57ff67 100644
+--- a/hw/scsi-disk.c
++++ b/hw/scsi-disk.c
+@@ -338,7 +338,7 @@ static void scsi_read_data(SCSIRequest *req)
+  */
+ static int scsi_handle_rw_error(SCSIDiskReq *r, int error)
+ {
+-    int is_read = (r->req.cmd.xfer == SCSI_XFER_FROM_DEV);
++    int is_read = (r->req.cmd.mode == SCSI_XFER_FROM_DEV);
+     SCSIDiskState *s = DO_UPCAST(SCSIDiskState, qdev, r->req.dev);
+     BlockErrorAction action = bdrv_get_on_error(s->qdev.conf.bs, is_read);
+ 
+-- 
+2.1.0
+

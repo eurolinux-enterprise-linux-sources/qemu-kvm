@@ -1,0 +1,74 @@
+From 4cb19732955ac51e1aabe6c67b17c6b6250e9876 Mon Sep 17 00:00:00 2001
+Message-Id: <4cb19732955ac51e1aabe6c67b17c6b6250e9876.1375955382.git.minovotn@redhat.com>
+In-Reply-To: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+References: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+From: Alon Levy <alevy@redhat.com>
+Date: Thu, 1 Aug 2013 11:53:23 +0200
+Subject: [PATCH 04/35] libcacard/vscclient: fix error paths for socket
+ creation
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Alon Levy <alevy@redhat.com>
+Message-id: <1375358029-12968-5-git-send-email-alevy@redhat.com>
+Patchwork-id: 52894
+O-Subject: [RHEL-6.5 RHEL-6.4.z qemu-kvm v6 04/30] libcacard/vscclient: fix error paths for socket creation
+Bugzilla: 917860
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+Signed-off-by: Alon Levy <alevy@redhat.com>
+(cherry picked from commit e7c5e89318946b57bcc3f65264be595401c12663)
+---
+ libcacard/vscclient.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ libcacard/vscclient.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/libcacard/vscclient.c b/libcacard/vscclient.c
+index 69b2266..c875545 100644
+--- a/libcacard/vscclient.c
++++ b/libcacard/vscclient.c
+@@ -357,6 +357,7 @@ connect_to_qemu(
+     if (sock < 0) {
+         /* Error */
+         fprintf(stderr, "Error opening socket!\n");
++        return -1;
+     }
+ 
+     memset(&hints, 0, sizeof(struct addrinfo));
+@@ -370,13 +371,13 @@ connect_to_qemu(
+     if (ret != 0) {
+         /* Error */
+         fprintf(stderr, "getaddrinfo failed\n");
+-        return 5;
++        return -1;
+     }
+ 
+     if (connect(sock, server->ai_addr, server->ai_addrlen) < 0) {
+         /* Error */
+         fprintf(stderr, "Could not connect\n");
+-        return 5;
++        return -1;
+     }
+     if (verbose) {
+         printf("Connected (sizeof Header=%zd)!\n", sizeof(VSCMsgHeader));
+@@ -505,6 +506,10 @@ main(
+     qemu_host = strdup(argv[argc - 2]);
+     qemu_port = strdup(argv[argc - 1]);
+     sock = connect_to_qemu(qemu_host, qemu_port);
++    if (sock == -1) {
++        fprintf(stderr, "error opening socket, exiting.\n");
++        exit(5);
++    }
+ 
+     qemu_mutex_init(&write_lock);
+     qemu_mutex_init(&pending_reader_lock);
+-- 
+1.7.11.7
+

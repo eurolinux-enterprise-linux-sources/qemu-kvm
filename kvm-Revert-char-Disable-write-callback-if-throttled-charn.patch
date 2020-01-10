@@ -1,0 +1,47 @@
+From 4ab5d3c74a1105ab94a3b0ab5954ea4b683cdfcb Mon Sep 17 00:00:00 2001
+Message-Id: <4ab5d3c74a1105ab94a3b0ab5954ea4b683cdfcb.1368111913.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:17:42 +0200
+Subject: [PATCH 08/65] Revert "char: Disable write callback if throttled
+ chardev is detached"
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <88dbe6eeec9362499cc8bf5f2c6593d9ec3ce51f.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50786
+O-Subject: [RHEL6.5 qemu-kvm PATCH 08/65] Revert "char: Disable write callback if throttled chardev is detached"
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+This reverts commit dc85ce064d3d1ab8c10e848b61824501fd2c4c9d.
+---
+ qemu-char.c | 5 -----
+ 1 file changed, 5 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 5 -----
+ 1 file changed, 5 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index d1ddcfc..d6731d4 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -206,11 +206,6 @@ void qemu_chr_add_handlers(CharDriverState *s,
+         ++s->avail_connections;
+     }
+     if (!handlers) {
+-        if (s->write_blocked) {
+-            /* Ensure we disable the callback if we were throttled */
+-            s->chr_disable_write_fd_handler(s);
+-            /* s->write_blocked is cleared below */
+-        }
+         handlers = &null_handlers;
+     }
+     s->chr_can_read = handlers->fd_can_read;
+-- 
+1.7.11.7
+

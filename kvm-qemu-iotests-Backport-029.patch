@@ -1,0 +1,64 @@
+From 8281ee397bb57ba9e39bec9d8c6718bef8705908 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:41 -0500
+Subject: [CHANGE 19/31] qemu-iotests: Backport 029
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-20-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60370
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 19/29] qemu-iotests: Backport 029
+Bugzilla: 1122410
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+RHEL 6 doesn't have qemu-img convert -s. Remove that part.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ tests/qemu-iotests/029     | 12 ------------
+ tests/qemu-iotests/029.out |  4 ----
+ 2 files changed, 16 deletions(-)
+
+diff --git a/tests/qemu-iotests/029 b/tests/qemu-iotests/029
+index fa46ace..8428439 100755
+--- a/tests/qemu-iotests/029
++++ b/tests/qemu-iotests/029
+@@ -81,18 +81,6 @@ _make_test_img 64M
+ _check_test_img
+ 
+ 
+-echo
+-echo "qcow2_snapshot_load_tmp() should take the L1 size from the snapshot"
+-echo
+-
+-CLUSTER_SIZE=512
+-_make_test_img 64M
+-{ $QEMU_IMG snapshot -c foo $TEST_IMG; } 2>&1 | _filter_qemu_io | _filter_testdir
+-poke_file "$TEST_IMG" "$offset_size" "\x00\x00\x00\x00\x00\x00\x02\x00"
+-poke_file "$TEST_IMG" "$offset_l1_size" "\x00\x00\x00\x01"
+-{ $QEMU_IMG convert -s foo $TEST_IMG $TEST_IMG.snap; } 2>&1 | _filter_qemu_io | _filter_testdir
+-
+-
+ # success, all done
+ echo "*** done"
+ rm -f $seq.full
+diff --git a/tests/qemu-iotests/029.out b/tests/qemu-iotests/029.out
+index ce0e64d..9029698 100644
+--- a/tests/qemu-iotests/029.out
++++ b/tests/qemu-iotests/029.out
+@@ -20,8 +20,4 @@ wrote 4096/4096 bytes at offset 1099511627776
+ read 4096/4096 bytes at offset 1099511627776
+ 4 KiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+ No errors were found on the image.
+-
+-qcow2_snapshot_load_tmp() should take the L1 size from the snapshot
+-
+-Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
+ *** done
+-- 
+1.9.3
+

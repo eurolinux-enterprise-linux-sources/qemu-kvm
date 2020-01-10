@@ -1,0 +1,79 @@
+From 17c410ea6fed4c308314dc88cbfc6a08bc1653e7 Mon Sep 17 00:00:00 2001
+Message-Id: <17c410ea6fed4c308314dc88cbfc6a08bc1653e7.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 27 Apr 2015 01:22:16 -0500
+Subject: [CHANGE 28/29] block: Fix bdrv_aio_co_cancel_em (RHEL only)
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1430097736-2049-1-git-send-email-famz@redhat.com>
+Patchwork-id: 64936
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v8 28/28] block: Fix bdrv_aio_co_cancel_em (RHEL only)
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+qemu_aio_wait() will block infinitely if no requests are in-flight, so
+we cannot call it unconditionally, therefore this patch is necessary to
+handle throttled requests correctly.
+
+Upstream doesn't need this because it uses aio_poll, which does fire the
+timers.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+
+---
+v8: Really remove printf.
+---
+ block.c | 26 +++++++++++++++++++++++---
+ 1 file changed, 23 insertions(+), 3 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block.c | 26 +++++++++++++++++++++++---
+ 1 file changed, 23 insertions(+), 3 deletions(-)
+
+diff --git a/block.c b/block.c
+index 65427af..628eb50 100644
+--- a/block.c
++++ b/block.c
+@@ -3833,9 +3833,29 @@ void bdrv_aio_cancel(BlockDriverAIOCB *acb)
+     qemu_aio_ref(acb);
+     bdrv_aio_cancel_async(acb);
+     while (acb->refcnt > 1) {
+-        qemu_co_queue_restart_all(&bs->throttled_reqs[0]);
+-        qemu_co_queue_restart_all(&bs->throttled_reqs[1]);
+-        qemu_aio_wait();
++        int i;
++        /*
++         * RHEL note: qemu_aio_wait doesn't fire timers that throttled reqs
++         * wait for.  If there aren't any requests in flight, qemu_aio_wait
++         * could block infinitely. Workaround this problem by only calling
++         * qemu_aio_wait when we are waiting for some IO. Also take care of
++         * resuming the throttled reqs.
++         */
++        for (i = 0; i < 2; i++) {
++            int64_t now, next_timestamp;
++            if (qemu_co_queue_empty(&bs->throttled_reqs[i])) {
++                continue;
++            }
++            now = qemu_get_clock(vm_clock);
++            if (throttle_compute_timer(&bs->throttle_state,
++                                       i, now, &next_timestamp)) {
++                usleep((next_timestamp - now) / 1000);
++            }
++            qemu_co_queue_next(&bs->throttled_reqs[i]);
++        }
++        if (!QLIST_EMPTY(&bs->tracked_requests)) {
++            qemu_aio_wait();
++        }
+     }
+     qemu_aio_unref(acb);
+ }
+-- 
+2.1.0
+

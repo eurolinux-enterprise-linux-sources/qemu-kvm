@@ -1,0 +1,104 @@
+From 502ecc7bf53da459f317c26448ee78c457738cb4 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:27 -0500
+Subject: [CHANGE 05/31] qemu-io: Implement write -c for compressed clusters
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-6-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60362
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 05/29] qemu-io: Implement write -c for compressed clusters
+Bugzilla: 1122410
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+This makes it easier to create images with both compressed and
+uncompressed clusters for testing.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 791bfa35ee00ca10b13bedfb048ffda385b151c7)
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ qemu-io.c | 23 +++++++++++++++++++++--
+ 1 file changed, 21 insertions(+), 2 deletions(-)
+
+diff --git a/qemu-io.c b/qemu-io.c
+index 58611d8..734d9b9 100644
+--- a/qemu-io.c
++++ b/qemu-io.c
+@@ -263,6 +263,18 @@ static int do_co_write_zeroes(int64_t offset, int count, int *total)
+     }
+ }
+ 
++static int do_write_compressed(char *buf, int64_t offset, int count, int *total)
++{
++    int ret;
++
++    ret = bdrv_write_compressed(bs, offset >> 9, (uint8_t *)buf, count >> 9);
++    if (ret < 0) {
++        return ret;
++    }
++    *total = count;
++    return 1;
++}
++
+ static int do_load_vmstate(char *buf, int64_t offset, int count, int *total)
+ {
+     *total = bdrv_load_vmstate(bs, (uint8_t *)buf, offset, count);
+@@ -647,6 +659,7 @@ static void write_help(void)
+ " Writes into a segment of the currently open file, using a buffer\n"
+ " filled with a set pattern (0xcdcdcdcd).\n"
+ " -b, -- write to the VM state rather than the virtual disk\n"
++" -c, -- write compressed data with bdrv_write_compressed\n"
+ " -p, -- use bdrv_pwrite to write the file\n"
+ " -P, -- use different pattern to fill file\n"
+ " -C, -- report statistics in a machine parsable format\n"
+@@ -663,7 +676,7 @@ static const cmdinfo_t write_cmd = {
+     .cfunc      = write_f,
+     .argmin     = 2,
+     .argmax     = -1,
+-    .args       = "[-bCpqz] [-P pattern ] off len",
++    .args       = "[-bcCpqz] [-P pattern ] off len",
+     .oneline    = "writes a number of bytes at a specified offset",
+     .help       = write_help,
+ };
+@@ -672,6 +685,7 @@ static int write_f(int argc, char **argv)
+ {
+     struct timeval t1, t2;
+     int Cflag = 0, pflag = 0, qflag = 0, bflag = 0, Pflag = 0, zflag = 0;
++    int cflag = 0;
+     int c, cnt;
+     char *buf = NULL;
+     int64_t offset;
+@@ -680,11 +694,14 @@ static int write_f(int argc, char **argv)
+     int total = 0;
+     int pattern = 0xcd;
+ 
+-    while ((c = getopt(argc, argv, "bCpP:qz")) != EOF) {
++    while ((c = getopt(argc, argv, "bcCpP:qz")) != EOF) {
+         switch (c) {
+         case 'b':
+             bflag = 1;
+             break;
++        case 'c':
++            cflag = 1;
++            break;
+         case 'C':
+             Cflag = 1;
+             break;
+@@ -761,6 +778,8 @@ static int write_f(int argc, char **argv)
+         cnt = do_save_vmstate(buf, offset, count, &total);
+     } else if (zflag) {
+         cnt = do_co_write_zeroes(offset, count, &total);
++    } else if (cflag) {
++        cnt = do_write_compressed(buf, offset, count, &total);
+     } else {
+         cnt = do_write(buf, offset, count, &total);
+     }
+-- 
+1.9.3
+

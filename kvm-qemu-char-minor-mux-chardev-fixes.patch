@@ -1,0 +1,71 @@
+From 91fdb354befd3626b2058f7defcc6806929df227 Mon Sep 17 00:00:00 2001
+Message-Id: <91fdb354befd3626b2058f7defcc6806929df227.1376408877.git.minovotn@redhat.com>
+In-Reply-To: <823d94e906b2aeecd2c60bc9f19ca8948a756f27.1376408877.git.minovotn@redhat.com>
+References: <823d94e906b2aeecd2c60bc9f19ca8948a756f27.1376408877.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 30 Jul 2013 11:35:27 +0200
+Subject: [PATCH 09/18] qemu-char: minor mux chardev fixes
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1375184130-11076-10-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52789
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 09/12] qemu-char: minor mux chardev fixes
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+
+mux failure path has a memory leak.  creating a mux chardev can't
+fail though, so just assert() that instead of fixing an error path
+which never ever runs anyway ...
+
+Also fix bid being leaked while being at it.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Michael Tokarev <mjt@tls.msk.ru>
+(cherry picked from commit dc2c4eca89ec5ee7b7a4c2563c991a14a7c5ee84)
+---
+ qemu-char.c |    7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 684940c..95b1f15 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -2878,7 +2878,7 @@ CharDriverState *qemu_chr_new_from_opts(QemuOpts *opts,
+         ChardevBackend *backend = g_new0(ChardevBackend, 1);
+         ChardevReturn *ret = NULL;
+         const char *id = qemu_opts_id(opts);
+-        const char *bid = NULL;
++        char *bid = NULL;
+ 
+         if (qemu_opt_get_bool(opts, "mux", 0)) {
+             bid = g_strdup_printf("%s-base", id);
+@@ -2905,9 +2905,7 @@ CharDriverState *qemu_chr_new_from_opts(QemuOpts *opts,
+             backend->kind = CHARDEV_BACKEND_KIND_MUX;
+             backend->mux->chardev = g_strdup(bid);
+             ret = qmp_chardev_add(id, backend, errp);
+-            if (error_is_set(errp)) {
+-                goto qapi_out;
+-            }
++            assert(!error_is_set(errp));
+         }
+ 
+         chr = qemu_chr_find(id);
+@@ -2922,6 +2920,7 @@ CharDriverState *qemu_chr_new_from_opts(QemuOpts *opts,
+             qapi_free_ChardevBackend(backend);
+         }
+         qapi_free_ChardevReturn(ret);
++        g_free(bid);
+         return chr;
+     }
+ 
+-- 
+1.7.11.7
+

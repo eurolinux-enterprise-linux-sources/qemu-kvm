@@ -1,0 +1,150 @@
+From ff0d6d8c347f620091c3477703d6f827fddf7216 Mon Sep 17 00:00:00 2001
+Message-Id: <ff0d6d8c347f620091c3477703d6f827fddf7216.1424280081.git.jen@redhat.com>
+In-Reply-To: <54163d537ed24926effb0783707492d2988ecbe8.1424280081.git.jen@redhat.com>
+References: <54163d537ed24926effb0783707492d2988ecbe8.1424280081.git.jen@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Thu, 5 Feb 2015 10:11:42 -0500
+Subject: [CHANGE 2/8] block: add cache=directsync parameter to -drive
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1423131102-24943-1-git-send-email-stefanha@redhat.com>
+Patchwork-id: 63726
+O-Subject: [RHEL-6.7 qemu-kvm PATCH] block: add cache=directsync parameter to -drive
+Bugzilla: 1186914
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+
+Bugzilla: 1186914
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=8693223
+Upstream: merged
+
+This patch adds -drive cache=directsync for O_DIRECT | O_SYNC host file
+I/O with no disk write cache presented to the guest.
+
+This mode is useful when guests may not be sending flushes when
+appropriate and therefore leave data at risk in case of power failure.
+When cache=directsync is used, write operations are only completed to
+the guest when data is safely on disk.
+
+This new mode is like cache=writethrough but it bypasses the host page
+cache.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 92196b2f5664d5defa778b1b24df56e2239b5e93)
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	qemu-img.c
+
+The help text in qemu-img.c has a context conflict.  Easy to resolve.
+---
+ block.c         | 6 ++++--
+ qemu-config.c   | 3 ++-
+ qemu-img.c      | 4 ++--
+ qemu-options.hx | 8 ++++++--
+ 4 files changed, 14 insertions(+), 7 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block.c         | 6 ++++--
+ qemu-config.c   | 3 ++-
+ qemu-img.c      | 4 ++--
+ qemu-options.hx | 8 ++++++--
+ 4 files changed, 14 insertions(+), 7 deletions(-)
+
+diff --git a/block.c b/block.c
+index b562da7..29bab36 100644
+--- a/block.c
++++ b/block.c
+@@ -551,6 +551,8 @@ int bdrv_parse_cache_flags(const char *mode, int *flags)
+ 
+     if (!strcmp(mode, "off") || !strcmp(mode, "none")) {
+         *flags |= BDRV_O_NOCACHE | BDRV_O_CACHE_WB;
++    } else if (!strcmp(mode, "directsync")) {
++        *flags |= BDRV_O_NOCACHE;
+     } else if (!strcmp(mode, "writeback")) {
+         *flags |= BDRV_O_CACHE_WB;
+     } else if (!strcmp(mode, "unsafe")) {
+@@ -2105,8 +2107,8 @@ int bdrv_pwrite_sync(BlockDriverState *bs, int64_t offset,
+         return ret;
+     }
+ 
+-    /* No flush needed for cache=writethrough, it uses O_DSYNC */
+-    if ((bs->open_flags & BDRV_O_CACHE_MASK) != 0) {
++    /* No flush needed for cache modes that use O_DSYNC */
++    if ((bs->open_flags & BDRV_O_CACHE_WB) != 0) {
+         bdrv_flush(bs);
+     }
+ 
+diff --git a/qemu-config.c b/qemu-config.c
+index 411b22f..cca8952 100644
+--- a/qemu-config.c
++++ b/qemu-config.c
+@@ -54,7 +54,8 @@ QemuOptsList qemu_drive_opts = {
+         },{
+             .name = "cache",
+             .type = QEMU_OPT_STRING,
+-            .help = "host cache usage (none, writeback, writethrough, unsafe)",
++            .help = "host cache usage (none, writeback, writethrough, "
++                    "directsync, unsafe)",
+         },{
+             .name = "aio",
+             .type = QEMU_OPT_STRING,
+diff --git a/qemu-img.c b/qemu-img.c
+index bc31cf2..8252173 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -78,8 +78,8 @@ static void help(void)
+            "  'filename' is a disk image filename\n"
+            "  'fmt' is the disk image format. It is guessed automatically in most cases\n"
+            "  'cache' is the cache mode used to write the output disk image, the valid\n"
+-           "    options are: 'none', 'writeback' (default), 'writethrough' and 'unsafe'\n"
+-           "  'src_cache' in contrast is the cache mode used to read input disk images\n"
++           "    options are: 'none', 'writeback' (default), 'writethrough', 'directsync'\n"
++           "    and 'unsafe'\n"
+            "  'size' is the disk image size in bytes. Optional suffixes\n"
+            "    'k' or 'K' (kilobyte, 1024), 'M' (megabyte, 1024k), 'G' (gigabyte, 1024M)\n"
+            "    and T (terabyte, 1024G) are supported. 'b' is ignored.\n"
+diff --git a/qemu-options.hx b/qemu-options.hx
+index a23da0b..8fdf2eb 100644
+--- a/qemu-options.hx
++++ b/qemu-options.hx
+@@ -102,7 +102,7 @@ ETEXI
+ DEF("drive", HAS_ARG, QEMU_OPTION_drive,
+     "-drive [file=file][,if=type][,bus=n][,unit=m][,media=d][,index=i]\n"
+     "       [,cyls=c,heads=h,secs=s[,trans=t]][,snapshot=on|off]\n"
+-    "       [,cache=writethrough|writeback|none|unsafe][,format=f]\n"
++    "       [,cache=writethrough|writeback|none|directsync|unsafe][,format=f]\n"
+     "       [,serial=s][,addr=A][,id=name][,aio=threads|native]\n"
+     "       [,readonly=on|off][,copy-on-read=on|off]\n"
+     "       [[,bps=b]|[[,bps_rd=r][,bps_wr=w]]][[,iops=i]|[[,iops_rd=r][,iops_wr=w]]\n"
+@@ -133,7 +133,7 @@ These options have the same definition as they have in @option{-hdachs}.
+ @item snapshot=@var{snapshot}
+ @var{snapshot} is "on" or "off" and allows to enable snapshot for given drive (see @option{-snapshot}).
+ @item cache=@var{cache}
+-@var{cache} is "none", "writeback", "unsafe", or "writethrough" and controls how the host cache is used to access block data.
++@var{cache} is "none", "writeback", "unsafe", "directsync" or "writethrough" and controls how the host cache is used to access block data.
+ @item aio=@var{aio}
+ @var{aio} is "threads", or "native" and selects between pthread based disk I/O and native Linux AIO.
+ @item format=@var{format}
+@@ -172,6 +172,10 @@ The host page cache can be avoided entirely with @option{cache=none}.  This will
+ attempt to do disk IO directly to the guests memory.  QEMU may still perform
+ an internal copy of the data.
+ 
++The host page cache can be avoided while only sending write notifications to
++the guest when the data has been reported as written by the storage subsystem
++using @option{cache=directsync}.
++
+ Some block drivers perform badly with @option{cache=writethrough}, most notably,
+ qcow2.  If performance is more important than correctness,
+ @option{cache=writeback} should be used with qcow2.
+-- 
+2.1.0
+

@@ -1,0 +1,45 @@
+From 013168a1b099aa3044ceabe9ab1951f5b9a58cf5 Mon Sep 17 00:00:00 2001
+From: Miroslav Rezanina <mrezanin@redhat.com>
+Date: Fri, 3 Apr 2015 08:53:20 +0200
+Subject: [PATCH 5/6] Revert "Revert "Build rbd block driver only for
+ qemu-kvm-rhev""
+
+This reverts commit 122589cc8b5dc1c282a9ede0dec78c7e7c5f94ff.
+
+As librados2-devel package is no longer available in RHEV enviroment, we have to remove the series.
+---
+ Makefile.objs     | 2 +-
+ Makefile.objs.rej | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile.objs b/Makefile.objs
+index 0812808..4141a44 100644
+--- a/Makefile.objs
++++ b/Makefile.objs
+@@ -35,7 +35,7 @@ block-nested-$(CONFIG_WIN32) += raw-win32.o
+ block-nested-$(CONFIG_POSIX) += raw-posix.o
+ block-nested-$(CONFIG_CURL) += curl.o
+ block-nested-$(CONFIG_GLUSTERFS) += gluster.o
+-block-nested-y += rbd.o
++block-nested-$(CONFIG_LIVE_SNAPSHOTS) += rbd.o
+ 
+ block-obj-y +=  $(addprefix block/, $(block-nested-y))
+ 
+diff --git a/Makefile.objs.rej b/Makefile.objs.rej
+index deb3269..ca6bd0a 100644
+--- a/Makefile.objs.rej
++++ b/Makefile.objs.rej
+@@ -4,8 +4,8 @@
+  block-nested-$(CONFIG_WIN32) += raw-win32.o
+  block-nested-$(CONFIG_POSIX) += raw-posix.o
+  block-nested-$(CONFIG_CURL) += curl.o
+--block-nested-$(CONFIG_RBD) += rbd.o
+-+block-nested-y += rbd.o
++-block-nested-y += rbd.o
+++block-nested-$(CONFIG_LIVE_SNAPSHOTS) += rbd.o
+  
+  block-obj-y +=  $(addprefix block/, $(block-nested-y))
+  
+-- 
+1.8.3.1
+

@@ -1,0 +1,177 @@
+From bb61166708d1983a22e80dac32a83315d5fb7f72 Mon Sep 17 00:00:00 2001
+Message-Id: <bb61166708d1983a22e80dac32a83315d5fb7f72.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:47 +0200
+Subject: [PATCH 36/65] chardev: add parallel chardev support to chardev-add
+ (qmp)
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-37-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52123
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 36/65] chardev: add parallel chardev support to chardev-add (qmp)
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+Also alias the old parport name to parallel for -chardev.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 88a946d32dd9e4c6c0ad56e19f2822bd5c8b416e)
+
+Conflicts:
+
+	qemu-char.c
+	qemu-options.hx
+---
+ qapi-schema.json |    3 ++-
+ qemu-char.c      |   42 ++++++++++++++++++++++++++++--------------
+ qemu-options.hx  |    7 +++++--
+ 3 files changed, 35 insertions(+), 17 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema.json |  3 ++-
+ qemu-char.c      | 42 ++++++++++++++++++++++++++++--------------
+ qemu-options.hx  |  7 +++++--
+ 3 files changed, 35 insertions(+), 17 deletions(-)
+
+diff --git a/qapi-schema.json b/qapi-schema.json
+index 8d4f0b5..430b91e 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -432,7 +432,8 @@
+ #
+ # Since: 1.4
+ ##
+-{ 'enum': 'ChardevPortKind', 'data': [ 'serial' ] }
++{ 'enum': 'ChardevPortKind', 'data': [ 'serial',
++                                       'parallel' ] }
+ 
+ { 'type': 'ChardevPort', 'data': { 'device' : 'str',
+                                    'type'   : 'ChardevPortKind'} }
+diff --git a/qemu-char.c b/qemu-char.c
+index 2a9fe65..1c18391 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -1571,16 +1571,10 @@ static void pp_close(CharDriverState *chr)
+     qemu_chr_be_event(chr, CHR_EVENT_CLOSED);
+ }
+ 
+-static CharDriverState *qemu_chr_open_pp(QemuOpts *opts)
++static CharDriverState *qemu_chr_open_pp_fd(int fd)
+ {
+-    const char *filename = qemu_opt_get(opts, "path");
+     CharDriverState *chr;
+     ParallelCharDriver *drv;
+-    int fd;
+-
+-    TFR(fd = open(filename, O_RDWR));
+-    if (fd < 0)
+-        return NULL;
+ 
+     if (ioctl(fd, PPCLAIM) < 0) {
+         close(fd);
+@@ -1644,15 +1638,9 @@ static int pp_ioctl(CharDriverState *chr, int cmd, void *arg)
+     return 0;
+ }
+ 
+-static CharDriverState *qemu_chr_open_pp(QemuOpts *opts)
++static CharDriverState *qemu_chr_open_pp_fd(int fd)
+ {
+-    const char *filename = qemu_opt_get(opts, "path");
+     CharDriverState *chr;
+-    int fd;
+-
+-    fd = open(filename, O_RDWR);
+-    if (fd < 0)
+-        return NULL;
+ 
+     chr = qemu_mallocz(sizeof(CharDriverState));
+     chr->opaque = (void *)fd;
+@@ -2769,6 +2757,22 @@ fail:
+     return NULL;
+ }
+ 
++#ifdef HAVE_CHARDEV_PARPORT
++
++static CharDriverState *qemu_chr_open_pp(QemuOpts *opts)
++{
++    const char *filename = qemu_opt_get(opts, "path");
++    int fd;
++
++    fd = qemu_open(filename, O_RDWR);
++    if (fd < 0) {
++        return NULL;
++    }
++    return qemu_chr_open_pp_fd(fd);
++}
++
++#endif
++
+ static const struct {
+     const char *name;
+     CharDriverState *(*open)(QemuOpts *opts);
+@@ -2797,6 +2801,7 @@ static const struct {
+     { .name = "pty",       .open = qemu_chr_open_pty },
+ #endif
+ #ifdef HAVE_CHARDEV_PARPORT
++    { .name = "parallel",  .open = qemu_chr_open_pp },
+     { .name = "parport",   .open = qemu_chr_open_pp },
+ #endif
+ #ifdef CONFIG_SPICE
+@@ -3068,6 +3073,15 @@ static CharDriverState *qmp_chardev_open_port(ChardevPort *port, Error **errp)
+         socket_set_nonblock(fd);
+         return qemu_chr_open_tty_fd(fd);
+ #endif
++#ifdef HAVE_CHARDEV_PARPORT
++    case CHARDEV_PORT_KIND_PARALLEL:
++        flags = O_RDWR;
++        fd = qmp_chardev_open_file_source(port->device, flags, errp);
++        if (error_is_set(errp)) {
++            return NULL;
++        }
++        return qemu_chr_open_pp_fd(fd);
++#endif
+     default:
+         error_setg(errp, "unknown chardev port (%d)", port->type);
+         return NULL;
+diff --git a/qemu-options.hx b/qemu-options.hx
+index 03c28cb..86a8778 100644
+--- a/qemu-options.hx
++++ b/qemu-options.hx
+@@ -1313,6 +1313,7 @@ DEF("chardev", HAS_ARG, QEMU_OPTION_chardev,
+     "-chardev tty,id=id,path=path\n"
+ #endif
+ #if defined(__linux__) || defined(__FreeBSD__) || defined(__DragonFly__)
++    "-chardev parallel,id=id,path=path\n"
+     "-chardev parport,id=id,path=path\n"
+ #endif
+ #if defined(CONFIG_SPICE)
+@@ -1341,7 +1342,8 @@ Backend is one of:
+ @option{stdio},
+ @option{braille},
+ @option{tty},
+-@option{parport}
++@option{parallel},
++@option{parport},
+ @option{spicevmc}.
+ The specific backend will determine the applicable options.
+ 
+@@ -1499,9 +1501,10 @@ DragonFlyBSD hosts.  It is an alias for -serial.
+ 
+ @option{path} specifies the path to the tty. @option{path} is required.
+ 
++@item -chardev parallel ,id=@var{id} ,path=@var{path}
+ @item -chardev parport ,id=@var{id} ,path=@var{path}
+ 
+-@option{parport} is only available on Linux, FreeBSD and DragonFlyBSD hosts.
++@option{parallel} is only available on Linux, FreeBSD and DragonFlyBSD hosts.
+ 
+ Connect to a local parallel port.
+ 
+-- 
+1.7.11.7
+

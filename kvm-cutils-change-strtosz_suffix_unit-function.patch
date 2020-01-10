@@ -1,0 +1,59 @@
+From 168fb03e6329b011a222b36c15d5ca08afa946e8 Mon Sep 17 00:00:00 2001
+Message-Id: <168fb03e6329b011a222b36c15d5ca08afa946e8.1425657843.git.jen@redhat.com>
+In-Reply-To: <f6cf12f0d166001c7958ddc904eff181f03da5e4.1425657843.git.jen@redhat.com>
+References: <f6cf12f0d166001c7958ddc904eff181f03da5e4.1425657843.git.jen@redhat.com>
+From: liguang <lig.fnst@cn.fujitsu.com>
+Date: Mon, 17 Dec 2012 09:49:22 +0800
+Subject: [CHANGE 02/11] cutils: change strtosz_suffix_unit function
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+if value to be translated is larger than INT64_MAX,
+this function will not be convenient for caller to
+be aware of it, so change a little for this.
+
+Signed-off-by: liguang <lig.fnst@cn.fujitsu.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 37edbf7ea8067262a5c3d8bbe4786139348c8311)
+
+RHEL 6: This patch required manual conflict resolution. We're missing
+commits ea5b1cfe and a7261486 downstream, and especially the latter
+depends on other unrelated patches, so I refrained from cherry-picking
+them.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ cutils.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/cutils.c b/cutils.c
+index 7389127..580346f 100644
+--- a/cutils.c
++++ b/cutils.c
+@@ -392,11 +392,12 @@ int fcntl_setfl(int fd, int flag)
+  * Convert string to bytes, allowing either B/b for bytes, K/k for KB,
+  * M/m for MB, G/g for GB or T/t for TB. End pointer will be returned
+  * in *end, if not NULL. A valid value must be terminated by
+- * whitespace, ',' or '\0'. Return -1 on error.
++ * whitespace, ',' or '\0'. Return -ERANGE on overflow, Return -EINVAL
++ * on other error.
+  */
+ int64_t strtosz_suffix(const char *nptr, char **end, const char default_suffix)
+ {
+-    int64_t retval = -1;
++    int64_t retval = -EINVAL;
+     char *endptr;
+     unsigned char c, d;
+     int mul_required = 0;
+@@ -457,6 +458,7 @@ int64_t strtosz_suffix(const char *nptr, char **end, const char default_suffix)
+         }
+     }
+     if ((val * mul >= INT64_MAX) || val < 0) {
++        retval = -ERANGE;
+         goto fail;
+     }
+     retval = val * mul;
+-- 
+2.1.0
+

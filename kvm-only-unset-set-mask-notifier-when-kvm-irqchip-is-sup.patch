@@ -1,0 +1,62 @@
+From a73037c981578347b7e9f99dcc1ab743ee2835d6 Mon Sep 17 00:00:00 2001
+From: Amos Kong <akong@redhat.com>
+Date: Fri, 4 Apr 2014 05:08:05 +0200
+Subject: [PATCH 25/30] only unset/set mask notifier when kvm-irqchip is supported
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1396588085-9428-1-git-send-email-akong@redhat.com>
+Patchwork-id: 58336
+O-Subject: [RHEL-6.6 qemu-kvm PATCH] only unset/set mask notifier when kvm-irqchip is supported
+Bugzilla: 1074762
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Xiao Wang <jasowang@redhat.com>
+
+Bugzilla: 1074762
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7303399
+Upstream: There is a big gap in virtio_pci_set_guest_notifiers() between
+          downstream and upstream, this patch is only available for internal
+Test: tested by myself
+
+This patch fixed a segfault when we use a virtio-net nic
+nd disable kvm-irqchip by '-no-kvm-irqchip' option.
+
+If kvm-irqchip isn't supported, we can't use eventfd to
+inject MSI interrupts, we don't need to set mask notifier.
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+---
+ hw/virtio-pci.c |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ hw/virtio-pci.c |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/hw/virtio-pci.c b/hw/virtio-pci.c
+index 347d415..516a1df 100644
+--- a/hw/virtio-pci.c
++++ b/hw/virtio-pci.c
+@@ -675,7 +675,7 @@ static int virtio_pci_set_guest_notifiers(void *opaque, bool assign)
+ 
+     /* Must unset mask notifier while guest notifier
+      * is still assigned */
+-    if (!assign) {
++    if (kvm_irqchip_in_kernel() && !assign) {
+ 	    r = msix_unset_mask_notifier(&proxy->pci_dev);
+             assert(r >= 0);
+     }
+@@ -693,7 +693,7 @@ static int virtio_pci_set_guest_notifiers(void *opaque, bool assign)
+ 
+     /* Must set mask notifier after guest notifier
+      * has been assigned */
+-    if (assign) {
++    if (kvm_irqchip_in_kernel() && assign) {
+         r = msix_set_mask_notifier(&proxy->pci_dev,
+                                    virtio_pci_mask_notifier);
+         if (r < 0) {
+-- 
+1.7.1
+

@@ -1,0 +1,163 @@
+From 25082098c376e5c7953e53dd425e836038bac504 Mon Sep 17 00:00:00 2001
+Message-Id: <25082098c376e5c7953e53dd425e836038bac504.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:28:10 +0200
+Subject: [PATCH 105/114] qga: add guest-set-time command
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-48-git-send-email-lersek@redhat.com>
+Patchwork-id: 51146
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 47/56] qga: add guest-set-time command
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Lei Li <lilei@linux.vnet.ibm.com>
+
+Signed-off-by: Lei Li <lilei@linux.vnet.ibm.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+
+*added stub for w32
+
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit a1bca57f758a1ebe2ee808aa6c94f7687f9cfdd0)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qapi-schema-guest.json |   26 ++++++++++++++++++++++
+ qga/commands-posix.c   |   55 ++++++++++++++++++++++++++++++++++++++++++++++++
+ qga/commands-win32.c   |    5 ++++
+ 3 files changed, 86 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema-guest.json | 26 ++++++++++++++++++++++++
+ qga/commands-posix.c   | 55 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ qga/commands-win32.c   |  5 +++++
+ 3 files changed, 86 insertions(+)
+
+diff --git a/qapi-schema-guest.json b/qapi-schema-guest.json
+index bb0f75e..437d750 100644
+--- a/qapi-schema-guest.json
++++ b/qapi-schema-guest.json
+@@ -96,6 +96,32 @@
+   'returns': 'int' }
+ 
+ ##
++# @guest-set-time:
++#
++# Set guest time.
++#
++# When a guest is paused or migrated to a file then loaded
++# from that file, the guest OS has no idea that there
++# was a big gap in the time. Depending on how long the
++# gap was, NTP might not be able to resynchronize the
++# guest.
++#
++# This command tries to set guest time to the given value,
++# then sets the Hardware Clock to the current System Time.
++# This will make it easier for a guest to resynchronize
++# without waiting for NTP.
++#
++# @time: time of nanoseconds, relative to the Epoch of
++#        1970-01-01 in UTC.
++#
++# Returns: Nothing on success.
++#
++# Since: 1.5
++##
++{ 'command': 'guest-set-time',
++  'data': { 'time': 'int' } }
++
++##
+ # @GuestAgentCommandInfo:
+ #
+ # Information about guest agent commands.
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index 91841a0..29e5c29 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -136,6 +136,61 @@ int64_t qmp_guest_get_time(Error **errp)
+    return time_ns;
+ }
+ 
++void qmp_guest_set_time(int64_t time_ns, Error **errp)
++{
++    int ret;
++    int status;
++    pid_t pid;
++    Error *local_err = NULL;
++    struct timeval tv;
++
++    /* year-2038 will overflow in case time_t is 32bit */
++    if (time_ns / 1000000000 != (time_t)(time_ns / 1000000000)) {
++        error_setg(errp, "Time %" PRId64 " is too large", time_ns);
++        return;
++    }
++
++    tv.tv_sec = time_ns / 1000000000;
++    tv.tv_usec = (time_ns % 1000000000) / 1000;
++
++    ret = settimeofday(&tv, NULL);
++    if (ret < 0) {
++        error_setg_errno(errp, errno, "Failed to set time to guest");
++        return;
++    }
++
++    /* Set the Hardware Clock to the current System Time. */
++    pid = fork();
++    if (pid == 0) {
++        setsid();
++        reopen_fd_to_null(0);
++        reopen_fd_to_null(1);
++        reopen_fd_to_null(2);
++
++        execle("/sbin/hwclock", "hwclock", "-w", NULL, environ);
++        _exit(EXIT_FAILURE);
++    } else if (pid < 0) {
++        error_setg_errno(errp, errno, "failed to create child process");
++        return;
++    }
++
++    ga_wait_child(pid, &status, &local_err);
++    if (error_is_set(&local_err)) {
++        error_propagate(errp, local_err);
++        return;
++    }
++
++    if (!WIFEXITED(status)) {
++        error_setg(errp, "child process has terminated abnormally");
++        return;
++    }
++
++    if (WEXITSTATUS(status)) {
++        error_setg(errp, "hwclock failed to set hardware clock to system time");
++        return;
++    }
++}
++
+ typedef struct GuestFileHandle {
+     uint64_t id;
+     FILE *fh;
+diff --git a/qga/commands-win32.c b/qga/commands-win32.c
+index 88fe5ba..3e4fd2a 100644
+--- a/qga/commands-win32.c
++++ b/qga/commands-win32.c
+@@ -284,6 +284,11 @@ int64_t qmp_guest_get_time(Error **errp)
+     return -1;
+ }
+ 
++void qmp_guest_set_time(int64_t time_ns, Error **errp)
++{
++    error_set(errp, QERR_UNSUPPORTED);
++}
++
+ /* register init/cleanup routines for stateful command groups */
+ void ga_command_state_init(GAState *s, GACommandState *cs)
+ {
+-- 
+1.7.11.7
+

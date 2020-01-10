@@ -1,0 +1,132 @@
+From c75d772c1f0d33bab00a5953a58b9df1a6f5c076 Mon Sep 17 00:00:00 2001
+Message-Id: <c75d772c1f0d33bab00a5953a58b9df1a6f5c076.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:27:41 +0200
+Subject: [PATCH 076/114] qemu-ga: qmp_guest_file_*: improve error reporting
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-19-git-send-email-lersek@redhat.com>
+Patchwork-id: 51117
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 18/56] qemu-ga: qmp_guest_file_*: improve error reporting
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Use error_setg_errno() when possible with an improved error description.
+
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit db3edb665549979b44e0376ab9e859f58b89b503)
+
+Conflicts:
+
+	qga/commands-posix.c
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+
+---
+ v2: adapted to g_malloc()/g_free() conversion
+
+ qga/commands-posix.c |   22 +++++++++++++---------
+ 1 files changed, 13 insertions(+), 9 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/commands-posix.c | 22 +++++++++++++---------
+ 1 file changed, 13 insertions(+), 9 deletions(-)
+
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index 541a828..045d016 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -139,7 +139,8 @@ int64_t qmp_guest_file_open(const char *path, bool has_mode, const char *mode, E
+     slog("guest-file-open called, filepath: %s, mode: %s", path, mode);
+     fh = fopen(path, mode);
+     if (!fh) {
+-        error_set(err, QERR_OPEN_FILE_FAILED, path, strerror(errno));
++        error_setg_errno(err, errno, "failed to open file '%s' (mode: '%s')",
++                         path, mode);
+         return -1;
+     }
+ 
+@@ -150,7 +151,8 @@ int64_t qmp_guest_file_open(const char *path, bool has_mode, const char *mode, E
+     ret = fcntl(fd, F_GETFL);
+     ret = fcntl(fd, F_SETFL, ret | O_NONBLOCK);
+     if (ret == -1) {
+-        error_set(err, QERR_QGA_COMMAND_FAILED, "fcntl() failed");
++        error_setg_errno(err, errno, "failed to make file '%s' non-blocking",
++                         path);
+         fclose(fh);
+         return -1;
+     }
+@@ -172,7 +174,7 @@ void qmp_guest_file_close(int64_t handle, Error **err)
+ 
+     ret = fclose(gfh->fh);
+     if (ret == EOF) {
+-        error_set(err, QERR_QGA_COMMAND_FAILED, "fclose() failed");
++        error_setg_errno(err, errno, "failed to close handle");
+         return;
+     }
+ 
+@@ -196,7 +198,8 @@ struct GuestFileRead *qmp_guest_file_read(int64_t handle, bool has_count,
+     if (!has_count) {
+         count = QGA_READ_COUNT_DEFAULT;
+     } else if (count < 0) {
+-        error_set(err, QERR_INVALID_PARAMETER, "count");
++        error_setg(err, "value '%" PRId64 "' is invalid for argument count",
++                   count);
+         return NULL;
+     }
+ 
+@@ -204,8 +207,8 @@ struct GuestFileRead *qmp_guest_file_read(int64_t handle, bool has_count,
+     buf = g_malloc0(count+1);
+     read_count = fread(buf, 1, count, fh);
+     if (ferror(fh)) {
++        error_setg_errno(err, errno, "failed to read file");
+         slog("guest-file-read failed, handle: %ld", handle);
+-        error_set(err, QERR_QGA_COMMAND_FAILED, "fread() failed");
+     } else {
+         buf[read_count] = 0;
+         read_data = g_malloc0(sizeof(GuestFileRead));
+@@ -241,15 +244,16 @@ GuestFileWrite *qmp_guest_file_write(int64_t handle, const char *buf_b64,
+     if (!has_count) {
+         count = buf_len;
+     } else if (count < 0 || count > buf_len) {
++        error_setg(err, "value '%" PRId64 "' is invalid for argument count",
++                   count);
+         g_free(buf);
+-        error_set(err, QERR_INVALID_PARAMETER, "count");
+         return NULL;
+     }
+ 
+     write_count = fwrite(buf, 1, count, fh);
+     if (ferror(fh)) {
++        error_setg_errno(err, errno, "failed to write to file");
+         slog("guest-file-write failed, handle: %ld", handle);
+-        error_set(err, QERR_QGA_COMMAND_FAILED, "fwrite() error");
+     } else {
+         write_data = g_malloc0(sizeof(GuestFileWrite));
+         write_data->count = write_count;
+@@ -276,7 +280,7 @@ struct GuestFileSeek *qmp_guest_file_seek(int64_t handle, int64_t offset,
+     fh = gfh->fh;
+     ret = fseek(fh, offset, whence);
+     if (ret == -1) {
+-        error_set(err, QERR_QGA_COMMAND_FAILED, strerror(errno));
++        error_setg_errno(err, errno, "failed to seek file");
+     } else {
+         seek_data = g_malloc0(sizeof(GuestFileRead));
+         seek_data->position = ftell(fh);
+@@ -300,7 +304,7 @@ void qmp_guest_file_flush(int64_t handle, Error **err)
+     fh = gfh->fh;
+     ret = fflush(fh);
+     if (ret == EOF) {
+-        error_set(err, QERR_QGA_COMMAND_FAILED, strerror(errno));
++        error_setg_errno(err, errno, "failed to flush file");
+     }
+ }
+ 
+-- 
+1.7.11.7
+

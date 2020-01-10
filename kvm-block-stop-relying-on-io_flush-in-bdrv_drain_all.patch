@@ -1,0 +1,159 @@
+From c05b85d18e050b556594169daf821830f801b0d3 Mon Sep 17 00:00:00 2001
+Message-Id: <c05b85d18e050b556594169daf821830f801b0d3.1482436097.git.ymankad@redhat.com>
+In-Reply-To: <c82b7dad71c6917c1ffa387b87de50a7d786e403.1482436097.git.ymankad@redhat.com>
+References: <c82b7dad71c6917c1ffa387b87de50a7d786e403.1482436097.git.ymankad@redhat.com>
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Fri, 16 Dec 2016 11:56:25 -0500
+Subject: [CHANGE 2/4] block: stop relying on io_flush() in bdrv_drain_all()
+To: ymankad@redhat.com
+
+RH-Author: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: <20161216115627.27874-3-pbonzini@redhat.com>
+Patchwork-id: 73074
+O-Subject: [RHEL6.9 qemu-kvm PATCH 2/4] block: stop relying on io_flush() in bdrv_drain_all()
+Bugzilla: 876993
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: John Snow <jsnow@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@redhat.com>
+
+Bugzilla: 876993
+
+Upstream commit: 88266f5aa70fa71fd5cc20aa4dbeb7a7bd8d2e92
+
+If a block driver has no file descriptors to monitor but there are still
+active requests, it can return 1 from .io_flush().  This is used to spin
+during synchronous I/O.
+
+Stop relying on .io_flush() and instead check
+QLIST_EMPTY(&bs->tracked_requests) to decide whether there are active
+requests.
+
+This is the first step in removing .io_flush() so that event loops no
+longer need to have the concept of synchronous I/O.  Eventually we may
+be able to kill synchronous I/O completely by running everything in a
+coroutine, but that is future work.
+
+Note this patch moves bs->throttled_reqs initialization to bdrv_new() so
+that bdrv_requests_pending(bs) can safely access it.  In practice bs is
+g_malloc0() so the memory is already zeroed but it's safer to initialize
+the queue properly.
+
+We also need to fix up block/stream.c:close_unused_images() to prevent
+traversing a dangling pointer while it rearranges the backing file
+chain.  This is necessary since the new bdrv_drain_all() traverses the
+backing file chain.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Conflicts: RHEL6 has the new throttling code with separate queues
+	   for reads and writes
+
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ block.c        | 46 +++++++++++++++++++++++++++++++++++++---------
+ block/stream.c |  6 +++++-
+ 2 files changed, 42 insertions(+), 10 deletions(-)
+
+diff --git a/block.c b/block.c
+index 4ad9f43..02a09c1 100644
+--- a/block.c
++++ b/block.c
+@@ -1144,6 +1144,38 @@ void bdrv_close_all(void)
+     }
+ }
+ 
++/* Check if any requests are in-flight (including throttled requests) */
++static bool bdrv_requests_pending(BlockDriverState *bs)
++{
++    if (!QLIST_EMPTY(&bs->tracked_requests)) {
++        return true;
++    }
++    if (!qemu_co_queue_empty(&bs->throttled_reqs[0])) {
++        return true;
++    }
++    if (!qemu_co_queue_empty(&bs->throttled_reqs[1])) {
++        return true;
++    }
++    if (bs->file && bdrv_requests_pending(bs->file)) {
++        return true;
++    }
++    if (bs->backing_hd && bdrv_requests_pending(bs->backing_hd)) {
++        return true;
++    }
++    return false;
++}
++
++static bool bdrv_requests_pending_all(void)
++{
++    BlockDriverState *bs;
++    QTAILQ_FOREACH(bs, &bdrv_states, list) {
++        if (bdrv_requests_pending(bs)) {
++            return true;
++        }
++    }
++    return false;
++}
++
+ /*
+  * Wait for pending requests to complete across all BlockDriverStates
+  *
+@@ -1158,13 +1190,11 @@ void bdrv_close_all(void)
+  */
+ void bdrv_drain_all(void)
+ {
++    /* Always run first iteration so any pending completion BHs run */
++    bool busy = true;
+     BlockDriverState *bs;
+-    bool busy;
+-
+-    do {
+-        busy = false;
+-        qemu_aio_flush();
+ 
++    while (busy) {
+         /* FIXME: We do not have timer support here, so this is effectively
+          * a busy wait.
+          */
+@@ -1173,11 +1203,9 @@ void bdrv_drain_all(void)
+                 busy = true;
+             }
+         }
+-    } while (busy);
+ 
+-    /* If requests are still pending there is a bug somewhere */
+-    QTAILQ_FOREACH(bs, &bdrv_states, list) {
+-        assert(QLIST_EMPTY(&bs->tracked_requests));
++        busy = bdrv_requests_pending_all();
++        busy |= aio_poll(qemu_get_aio_context(), busy);
+     }
+ }
+ 
+diff --git a/block/stream.c b/block/stream.c
+index 619038a..13845f3 100644
+--- a/block/stream.c
++++ b/block/stream.c
+@@ -82,6 +82,11 @@ static void close_unused_images(BlockDriverState *top, BlockDriverState *base,
+     BlockDriverState *intermediate;
+     intermediate = top->backing_hd;
+ 
++    /* Must assign before bdrv_delete() to prevent traversing dangling pointer
++     * while we delete backing image instances.
++     */
++    top->backing_hd = base;
++
+     while (intermediate) {
+         BlockDriverState *unused;
+ 
+@@ -95,7 +100,6 @@ static void close_unused_images(BlockDriverState *top, BlockDriverState *base,
+         unused->backing_hd = NULL;
+         bdrv_delete(unused);
+     }
+-    top->backing_hd = base;
+ }
+ 
+ static void coroutine_fn stream_run(void *opaque)
+-- 
+2.7.4
+

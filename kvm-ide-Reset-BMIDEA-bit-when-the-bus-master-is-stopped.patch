@@ -1,0 +1,60 @@
+From cc56ff5af011c6f18f52b9bd29184be26a3ef1a2 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Fri, 1 Aug 2014 16:30:57 -0500
+Subject: [CHANGE 4/4] ide: Reset BMIDEA bit when the bus master is stopped
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406910657-19808-4-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60406
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 3/3] ide: Reset BMIDEA bit when the bus master is stopped
+Bugzilla: 1104573
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Marcel Apfelbaum <marcel.a@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1104573
+
+The device is supposed to reset the Bus Master IDE Active bit in the
+status register when 0 is written to the Start/Stop Bus Master bit in
+the command register.
+
+In the common cases this happens automatically because bdrv_drain_all()
+flushes the requests, but with a large PRDT it could remain set.
+
+[ RHEL 6 note: It also fixes cases where the guest sets BMIDEA and then
+  resets it again without having performed any DMA. In this case, the
+  bit remains incorrectly set without this patch, causing requests to be
+  processed when they shouldn't be yet and exposing a wrong status
+  register.
+
+  In the reported bug this became visible as Linux disabling DMA and
+  installation with PIO taking so long that the test case timed out. ]
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit b39f96126549e2834152211a99919917423d2212)
+---
+ hw/ide/pci.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/ide/pci.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/hw/ide/pci.c b/hw/ide/pci.c
+index a10a9fc..a02ae4a 100644
+--- a/hw/ide/pci.c
++++ b/hw/ide/pci.c
+@@ -62,6 +62,7 @@ void bmdma_cmd_writeb(void *opaque, uint32_t addr, uint32_t val)
+                 if (bm->status & BM_STATUS_DMAING)
+                     printf("ide_dma_cancel: BM_STATUS_DMAING still pending\n");
+             }
++            bm->status &= ~BM_STATUS_DMAING;
+         } else {
+             bm->cur_addr = bm->addr;
+             if (!(bm->status & BM_STATUS_DMAING)) {
+-- 
+1.9.3
+

@@ -1,0 +1,71 @@
+From 434d285ecc426220d4b6933fae63e794ae5ec27b Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Wed, 9 Apr 2014 15:59:10 +0200
+Subject: [PATCH 48/48] bochs: Fix catalog size check
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1397051950-13835-2-git-send-email-kwolf@redhat.com>
+Patchwork-id: n/a
+O-Subject: [RHEL-6.6/6.5.z qemu-kvm PATCH v3 47/45] bochs: Fix
+           catalog size check
+Bugzilla: 1079518
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1079518
+Upstream status: Submitted
+
+The old check was off by a factor of 512 and didn't consider cases where
+we don't get an exact division. This could lead to an out-of-bounds
+array access in seek_to_sector().
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+
+Conflicts:
+	block/bochs.c
+	tests/qemu-iotests/078
+	tests/qemu-iotests/078.out
+
+Conflicts because RHEL 6 doesn't have error_setg() and is_power_of_2()
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/bochs.c |   13 ++++++++++---
+ 1 files changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/block/bochs.c b/block/bochs.c
+index 23c4da4..2959a0c 100644
+--- a/block/bochs.c
++++ b/block/bochs.c
+@@ -146,8 +146,13 @@ static int bochs_open(BlockDriverState *bs, int flags)
+     s->extent_blocks = 1 + (le32_to_cpu(bochs.extent) - 1) / 512;
+ 
+     s->extent_size = le32_to_cpu(bochs.extent);
+-    if (s->extent_size == 0) {
+-        qerror_report(QERR_GENERIC_ERROR, "Extent size may not be zero");
++    if (s->extent_size < BDRV_SECTOR_SIZE) {
++        /* bximage actually never creates extents smaller than 4k */
++        qerror_report(QERR_GENERIC_ERROR, "Extent size must be at least 512");
++        ret = -EINVAL;
++        goto fail;
++    } else if (s->extent_size & (s->extent_size - 1)) {
++        qerror_report(QERR_GENERIC_ERROR, "Extent size is not a power of two");
+         ret = -EINVAL;
+         goto fail;
+     } else if (s->extent_size > 0x800000) {
+@@ -156,7 +161,9 @@ static int bochs_open(BlockDriverState *bs, int flags)
+         goto fail;
+     }
+ 
+-    if (s->catalog_size < bs->total_sectors / s->extent_size) {
++    if (s->catalog_size < DIV_ROUND_UP(bs->total_sectors,
++                                       s->extent_size / BDRV_SECTOR_SIZE))
++    {
+         qerror_report(QERR_GENERIC_ERROR,
+                       "Catalog size is too small for this disk size");
+         ret = -EINVAL;
+-- 
+1.7.1
+

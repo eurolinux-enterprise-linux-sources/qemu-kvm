@@ -1,0 +1,223 @@
+From c4dd58cee9e41e408664060ffa819156649c7cb3 Mon Sep 17 00:00:00 2001
+Message-Id: <c4dd58cee9e41e408664060ffa819156649c7cb3.1371733794.git.minovotn@redhat.com>
+From: Tomoki Sekiyama <tsekiyam@redhat.com>
+Date: Wed, 22 May 2013 22:41:53 +0200
+Subject: [PATCH 1/6] Add option to mlock qemu and guest memory
+
+RH-Author: Tomoki Sekiyama <tsekiyam@redhat.com>
+Message-id: <1369262513-4834-1-git-send-email-tsekiyam@redhat.com>
+Patchwork-id: 51533
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] Add option to mlock qemu and guest memory
+Bugzilla: 826340
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Marcelo Tosatti <mtosatti@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=826340
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=5812824
+Upstream status: commit 888a6bc63c94ef34026399117ebf6a1fa0e7a29a
+
+This is manual backport of commit 888a6bc63c94ef34026399117ebf6a1fa0e7a29a
+(because of too many conflicts).
+Also added inclusion of sys/mmah.h from upstream commit
+69e8b16255898524930fc2eef59aa5dc4cf3b01f ("Include sys/mman.h before qemu-options.h").
+
+Tested on localhost RHEL6.4; I verified Mlocked value in /proc/meminfo
+increases when the guest VM is launched with "--realtime mlock=on" options.
+
+From: Satoru Moriya <satoru.moriya@hds.com>
+
+In certain scenario, latency induced by paging is significant and
+memory locking is needed. Also, in the scenario with untrusted
+guests, latency improvement due to mlock is desired.
+
+This patch introduces a following new option to mlock guest and
+qemu memory:
+
+-realtime mlock=on|off
+
+Singed-off-by: Tomoki Sekiyama <tsekiyam@redhat.com>
+---
+ os-posix.c      | 13 +++++++++++++
+ qemu-config.c   | 13 +++++++++++++
+ qemu-config.h   |  1 +
+ qemu-options.hx | 12 ++++++++++++
+ qemu-os-win32.h |  6 ++++++
+ sysemu.h        |  1 +
+ vl.c            | 21 +++++++++++++++++++++
+ 7 files changed, 67 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ os-posix.c      | 13 +++++++++++++
+ qemu-config.c   | 13 +++++++++++++
+ qemu-config.h   |  1 +
+ qemu-options.hx | 12 ++++++++++++
+ qemu-os-win32.h |  6 ++++++
+ sysemu.h        |  1 +
+ vl.c            | 21 +++++++++++++++++++++
+ 7 files changed, 67 insertions(+)
+
+diff --git a/os-posix.c b/os-posix.c
+index 948f662..5a019bc 100644
+--- a/os-posix.c
++++ b/os-posix.c
+@@ -30,6 +30,7 @@
+ /* Needed early for CONFIG_BSD etc. */
+ #include "config-host.h"
+ #include "sysemu.h"
++#include <sys/mman.h>
+ 
+ void os_setup_early_signal_handling(void)
+ {
+@@ -39,3 +40,15 @@ void os_setup_early_signal_handling(void)
+     act.sa_handler = SIG_IGN;
+     sigaction(SIGPIPE, &act, NULL);
+ }
++
++int os_mlock(void)
++{
++    int ret = 0;
++
++    ret = mlockall(MCL_CURRENT | MCL_FUTURE);
++    if (ret < 0) {
++        perror("mlockall");
++    }
++
++    return ret;
++}
+diff --git a/qemu-config.c b/qemu-config.c
+index 48792b1..66e0e94 100644
+--- a/qemu-config.c
++++ b/qemu-config.c
+@@ -468,6 +468,18 @@ QemuOptsList qemu_boot_opts = {
+     },
+ };
+ 
++QemuOptsList qemu_realtime_opts = {
++    .name = "realtime",
++    .head = QTAILQ_HEAD_INITIALIZER(qemu_realtime_opts.head),
++    .desc = {
++        {
++            .name = "mlock",
++            .type = QEMU_OPT_BOOL,
++        },
++        { /* end of list */ }
++    },
++};
++
+ static QemuOptsList *vm_config_groups[] = {
+     &qemu_drive_opts,
+     &qemu_simple_drive_opts,
+@@ -483,6 +495,7 @@ static QemuOptsList *vm_config_groups[] = {
+     &qemu_option_rom_opts,
+     &qemu_machine_opts,
+     &qemu_boot_opts,
++    &qemu_realtime_opts,
+     NULL,
+ };
+ 
+diff --git a/qemu-config.h b/qemu-config.h
+index 6cad1c3..06edea7 100644
+--- a/qemu-config.h
++++ b/qemu-config.h
+@@ -11,6 +11,7 @@ extern QemuOptsList qemu_global_opts;
+ extern QemuOptsList qemu_mon_opts;
+ extern QemuOptsList qemu_cpudef_opts;
+ extern QemuOptsList qemu_spice_opts;
++extern QemuOptsList qemu_realtime_opts;
+ 
+ QemuOptsList *qemu_find_opts(const char *group);
+ int qemu_set_option(const char *str);
+diff --git a/qemu-options.hx b/qemu-options.hx
+index a60c02a..b224140 100644
+--- a/qemu-options.hx
++++ b/qemu-options.hx
+@@ -1835,6 +1835,18 @@ STEXI
+ Do not start CPU at startup (you must type 'c' in the monitor).
+ ETEXI
+ 
++DEF("realtime", HAS_ARG, QEMU_OPTION_realtime, \
++    "-realtime [mlock=on|off]\n" \
++    "                run qemu with realtime features\n" \
++    "                mlock=on|off controls mlock support (default: on)\n")
++STEXI
++@item -realtime mlock=on|off
++@findex -realtime
++Run qemu with realtime features.
++mlocking qemu and guest memory can be enabled via @option{mlock=on}
++(enabled by default).
++ETEXI
++
+ DEF("gdb", HAS_ARG, QEMU_OPTION_gdb, \
+     "-gdb dev        wait for gdb connection on 'dev'\n")
+ STEXI
+diff --git a/qemu-os-win32.h b/qemu-os-win32.h
+index 4d1cac8..8ec2f73 100644
+--- a/qemu-os-win32.h
++++ b/qemu-os-win32.h
+@@ -41,4 +41,10 @@ int qemu_add_wait_object(HANDLE handle, WaitObjectFunc *func, void *opaque);
+ void qemu_del_wait_object(HANDLE handle, WaitObjectFunc *func, void *opaque);
+ 
+ void os_host_main_loop_wait(int *timeout);
++
++static inline int os_mlock(void)
++{
++    return -ENOSYS;
++}
++
+ #endif
+diff --git a/sysemu.h b/sysemu.h
+index 1180946..9b9e623 100644
+--- a/sysemu.h
++++ b/sysemu.h
+@@ -129,6 +129,7 @@ int qemu_loadvm_state(QEMUFile *f);
+ void do_info_slirp(Monitor *mon);
+ 
+ void os_setup_early_signal_handling(void);
++int os_mlock(void);
+ 
+ typedef enum DisplayType
+ {
+diff --git a/vl.c b/vl.c
+index 95a46fa..710dc60 100644
+--- a/vl.c
++++ b/vl.c
+@@ -2482,6 +2482,20 @@ static void smp_parse(const char *optarg)
+         max_cpus = smp_cpus;
+ }
+ 
++static void configure_realtime(QemuOpts *opts)
++{
++    bool enable_mlock;
++
++    enable_mlock = qemu_opt_get_bool(opts, "mlock", true);
++
++    if (enable_mlock) {
++        if (os_mlock() < 0) {
++            fprintf(stderr, "qemu: locking memory failed\n");
++            exit(1);
++        }
++    }
++}
++
+ /***********************************************************/
+ /* USB devices */
+ 
+@@ -6075,6 +6089,13 @@ int main(int argc, char **argv, char **envp)
+                 fake_machine = 1;
+                 break;
+ #endif
++            case QEMU_OPTION_realtime:
++                opts = qemu_opts_parse(qemu_find_opts("realtime"), optarg, 0);
++                if (!opts) {
++                    exit(1);
++                }
++                configure_realtime(opts);
++                break;
+             }
+         }
+     }
+-- 
+1.7.11.7
+

@@ -1,0 +1,37 @@
+From f308236f05bf833e76aea7fea4e41fe2483e7232 Mon Sep 17 00:00:00 2001
+Message-Id: <f308236f05bf833e76aea7fea4e41fe2483e7232.1484342411.git.ymankad@redhat.com>
+In-Reply-To: <df26b13347392089e5699a6be872de7806a36a8c.1484342411.git.ymankad@redhat.com>
+References: <df26b13347392089e5699a6be872de7806a36a8c.1484342411.git.ymankad@redhat.com>
+From: Yash Mankad <ymankad@redhat.com>
+Date: Fri, 13 Jan 2017 15:56:18 -0500
+Subject: [CHANGE 7/8] Revert "qcow2: Free allocated L2 cluster on error"
+To: ymankad@redhat.com
+
+This reverts commit 6da299cbd22aeea340aaabe3e57b8efc46a477f6.
+
+This is to revert Max's patch series that fix BZ#1405882 as
+they did not have the 6.9 release flag set and could not be
+justified as exceptions / blockers. Will be moved to 6.10.
+
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ block/qcow2-cluster.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/block/qcow2-cluster.c b/block/qcow2-cluster.c
+index 2f337fe..780cc83 100644
+--- a/block/qcow2-cluster.c
++++ b/block/qcow2-cluster.c
+@@ -254,9 +254,6 @@ static int l2_allocate(BlockDriverState *bs, int l1_index, uint64_t **table)
+ fail:
+     qcow2_cache_put(bs, s->l2_table_cache, (void**) table);
+     s->l1_table[l1_index] = old_l2_offset;
+-    if (l2_offset > 0) {
+-        qcow2_free_clusters(bs, l2_offset, s->l2_size * sizeof(uint64_t));
+-    }
+     return ret;
+ }
+ 
+-- 
+2.7.4
+

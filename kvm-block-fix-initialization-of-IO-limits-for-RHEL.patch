@@ -1,0 +1,56 @@
+From 1235dbf446ae977847be4bca07807e36b5afbe20 Mon Sep 17 00:00:00 2001
+Message-Id: <1235dbf446ae977847be4bca07807e36b5afbe20.1376059327.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Thu, 8 Aug 2013 03:08:26 +0200
+Subject: [PATCH] block: fix initialization of IO limits for RHEL
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1375931306-18104-1-git-send-email-famz@redhat.com>
+Patchwork-id: 53063
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] block: fix initialization of IO limits for RHEL
+Bugzilla: 994374
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Asias He <asias@redhat.com>
+
+BZ: 994374
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=6137512
+Test: Tested by QE with brew build:
+https://bugzilla.redhat.com/show_bug.cgi?id=994374#c11
+
+Commit:
+
+    6b1eb15c configure: add option for io throttling (RHEL-6 only)
+
+introduced configure options to disable throttling, but resulted in
+setting limits to uninitialized values.
+
+Suggested-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ blockdev.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ blockdev.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/blockdev.c b/blockdev.c
+index e4db09f..1c8d48c 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -506,6 +506,8 @@ DriveInfo *drive_init(QemuOpts *opts, int default_to_scsi)
+                      "cannot be used at the same time");
+         return NULL;
+     }
++#else
++    memset(&io_limits, '\0', sizeof io_limits);
+ #endif
+ 
+     on_write_error = BLOCK_ERR_STOP_ENOSPC;
+-- 
+1.7.11.7
+

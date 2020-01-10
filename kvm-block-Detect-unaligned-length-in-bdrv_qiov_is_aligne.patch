@@ -1,0 +1,49 @@
+From 0803b93f81a129b77e1128e37463fff96cc2bf6a Mon Sep 17 00:00:00 2001
+Message-Id: <0803b93f81a129b77e1128e37463fff96cc2bf6a.1474550614.git.jen@redhat.com>
+In-Reply-To: <6f44551fd1c5be7bdb79be79e5859122c966facb.1474550614.git.jen@redhat.com>
+References: <6f44551fd1c5be7bdb79be79e5859122c966facb.1474550614.git.jen@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Tue, 16 Aug 2016 08:17:08 -0500
+Subject: [CHANGE 2/4] block: Detect unaligned length in bdrv_qiov_is_aligned()
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1471335428-4306-2-git-send-email-kwolf@redhat.com>
+Patchwork-id: 71963
+O-Subject: [RHEL-6.9 qemu-kvm PATCH] block: Detect unaligned length in bdrv_qiov_is_aligned()
+Bugzilla: 1321862
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+For an O_DIRECT request to succeed, it's not only necessary that all
+base addresses in the qiov are aligned, but also that each length in it
+is aligned.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Wenchao Xia <xiawenc@linux.vnet.ibm.com>
+Reviewed-by: Max Reitz <mreitz@redhat.com>
+(cherry picked from commit 1ff735bdc417945bc6df1857861b127644b3f461)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/block.c b/block.c
+index 58a2f00..4ad9f43 100644
+--- a/block.c
++++ b/block.c
+@@ -4421,6 +4421,9 @@ bool bdrv_qiov_is_aligned(BlockDriverState *bs, QEMUIOVector *qiov)
+         if ((uintptr_t) qiov->iov[i].iov_base % bs->buffer_alignment) {
+             return false;
+         }
++        if (qiov->iov[i].iov_len % bs->buffer_alignment) {
++            return false;
++        }
+     }
+ 
+     return true;
+-- 
+2.7.4
+

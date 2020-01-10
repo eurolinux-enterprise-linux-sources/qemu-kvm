@@ -1,0 +1,71 @@
+From 5bdb412e12979ee50d336cdda981a9515a8ba43c Mon Sep 17 00:00:00 2001
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 21 Jun 2013 06:20:04 +0200
+Subject: [PATCH 08/21] block: fix initialization in bdrv_io_limits_enable()
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1371795611-7208-9-git-send-email-famz@redhat.com>
+Patchwork-id: 52082
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 08/15] block: fix initialization in bdrv_io_limits_enable()
+Bugzilla: 956825
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Peter Lieven <pl@dlhnet.de>
+
+bdrv_io_limits_enable() starts a new slice, but does not set io_base
+correctly for that slice.
+
+Here is how io_base is used:
+
+    bytes_base  = bs->nr_bytes[is_write] - bs->io_base.bytes[is_write];
+    bytes_res   = (unsigned) nb_sectors * BDRV_SECTOR_SIZE;
+
+    if (bytes_base + bytes_res <= bytes_limit) {
+        /* no wait */
+    } else {
+        /* operation needs to be throttled */
+    }
+
+As a result, any I/O operations that are triggered between now and
+bs->slice_end are incorrectly limited.  If 10 MB of data has been
+written since the VM was started, QEMU thinks that 10 MB of data has
+been written in this slice. This leads to a I/O lockup in the guest.
+
+We fix this by delaying the start of a new slice to the next
+call of bdrv_exceed_io_limits().
+
+Signed-off-by: Peter Lieven <pl@kamp.de>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 029d091e4975af60ff9622717af19c5910f2f4e9)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block.c |    4 ----
+ 1 files changed, 0 insertions(+), 4 deletions(-)
+
+diff --git a/block.c b/block.c
+index ae0b347..9e4672f 100644
+--- a/block.c
++++ b/block.c
+@@ -150,10 +150,6 @@ void bdrv_io_limits_enable(BlockDriverState *bs)
+ {
+     qemu_co_queue_init(&bs->throttled_reqs);
+     bs->block_timer = qemu_new_timer(vm_clock, bdrv_block_timer, bs);
+-    bs->slice_time  = 5 * BLOCK_IO_SLICE_TIME;
+-    bs->slice_start = qemu_get_clock(vm_clock);
+-    bs->slice_end   = bs->slice_start + bs->slice_time;
+-    memset(&bs->io_base, 0, sizeof(bs->io_base));
+     bs->io_limits_enabled = true;
+ }
+ 
+-- 
+1.7.1
+

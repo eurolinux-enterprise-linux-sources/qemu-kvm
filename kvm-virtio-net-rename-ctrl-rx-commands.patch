@@ -1,0 +1,98 @@
+From 40e673564b7d7a618b813fb6ec2b20d32c342a81 Mon Sep 17 00:00:00 2001
+Message-Id: <40e673564b7d7a618b813fb6ec2b20d32c342a81.1376572530.git.minovotn@redhat.com>
+In-Reply-To: <1ab1cadd348058496d2f900c3d4ac4b7c325d3e6.1376572530.git.minovotn@redhat.com>
+References: <1ab1cadd348058496d2f900c3d4ac4b7c325d3e6.1376572530.git.minovotn@redhat.com>
+From: Amos Kong <akong@redhat.com>
+Date: Wed, 14 Aug 2013 09:25:09 +0200
+Subject: [PATCH 08/11] virtio-net: rename ctrl rx commands
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1376472309-26844-5-git-send-email-akong@redhat.com>
+Patchwork-id: 53358
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v3 4/4] virtio-net: rename ctrl rx commands
+Bugzilla: 904927
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Vlad Yasevich <vyasevic@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+This patch makes rx commands consistent with specification.
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+(cherry picked from commit dd23454ba2c83168b453155365671e67723b881f)
+---
+ hw/virtio-net.c |   14 +++++++-------
+ hw/virtio-net.h |   14 +++++++-------
+ 2 files changed, 14 insertions(+), 14 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/virtio-net.c | 14 +++++++-------
+ hw/virtio-net.h | 14 +++++++-------
+ 2 files changed, 14 insertions(+), 14 deletions(-)
+
+diff --git a/hw/virtio-net.c b/hw/virtio-net.c
+index 9ff5a3c..e9ac86f 100644
+--- a/hw/virtio-net.c
++++ b/hw/virtio-net.c
+@@ -342,17 +342,17 @@ static int virtio_net_handle_rx_mode(VirtIONet *n, uint8_t cmd,
+         return VIRTIO_NET_ERR;
+     }
+ 
+-    if (cmd == VIRTIO_NET_CTRL_RX_MODE_PROMISC) {
++    if (cmd == VIRTIO_NET_CTRL_RX_PROMISC) {
+         n->promisc = on;
+-    } else if (cmd == VIRTIO_NET_CTRL_RX_MODE_ALLMULTI) {
++    } else if (cmd == VIRTIO_NET_CTRL_RX_ALLMULTI) {
+         n->allmulti = on;
+-    } else if (cmd == VIRTIO_NET_CTRL_RX_MODE_ALLUNI) {
++    } else if (cmd == VIRTIO_NET_CTRL_RX_ALLUNI) {
+         n->alluni = on;
+-    } else if (cmd == VIRTIO_NET_CTRL_RX_MODE_NOMULTI) {
++    } else if (cmd == VIRTIO_NET_CTRL_RX_NOMULTI) {
+         n->nomulti = on;
+-    } else if (cmd == VIRTIO_NET_CTRL_RX_MODE_NOUNI) {
++    } else if (cmd == VIRTIO_NET_CTRL_RX_NOUNI) {
+         n->nouni = on;
+-    } else if (cmd == VIRTIO_NET_CTRL_RX_MODE_NOBCAST) {
++    } else if (cmd == VIRTIO_NET_CTRL_RX_NOBCAST) {
+         n->nobcast = on;
+     } else {
+         return VIRTIO_NET_ERR;
+@@ -525,7 +525,7 @@ static void virtio_net_handle_ctrl(VirtIODevice *vdev, VirtQueue *vq)
+         iov_discard_front(&iov, &iov_cnt, sizeof(ctrl));
+         if (s != sizeof(ctrl)) {
+             status = VIRTIO_NET_ERR;
+-        } else if (ctrl.class == VIRTIO_NET_CTRL_RX_MODE) {
++        } else if (ctrl.class == VIRTIO_NET_CTRL_RX) {
+             status = virtio_net_handle_rx_mode(n, ctrl.cmd, iov, iov_cnt);
+         } else if (ctrl.class == VIRTIO_NET_CTRL_MAC) {
+             status = virtio_net_handle_mac(n, ctrl.cmd, iov, iov_cnt);
+diff --git a/hw/virtio-net.h b/hw/virtio-net.h
+index 10594e6..2fda689 100644
+--- a/hw/virtio-net.h
++++ b/hw/virtio-net.h
+@@ -129,13 +129,13 @@ typedef uint8_t virtio_net_ctrl_ack;
+  * 0 and 1 are supported with the VIRTIO_NET_F_CTRL_RX feature.
+  * Commands 2-5 are added with VIRTIO_NET_F_CTRL_RX_EXTRA.
+  */
+-#define VIRTIO_NET_CTRL_RX_MODE    0
+- #define VIRTIO_NET_CTRL_RX_MODE_PROMISC      0
+- #define VIRTIO_NET_CTRL_RX_MODE_ALLMULTI     1
+- #define VIRTIO_NET_CTRL_RX_MODE_ALLUNI       2
+- #define VIRTIO_NET_CTRL_RX_MODE_NOMULTI      3
+- #define VIRTIO_NET_CTRL_RX_MODE_NOUNI        4
+- #define VIRTIO_NET_CTRL_RX_MODE_NOBCAST      5
++#define VIRTIO_NET_CTRL_RX    0
++ #define VIRTIO_NET_CTRL_RX_PROMISC      0
++ #define VIRTIO_NET_CTRL_RX_ALLMULTI     1
++ #define VIRTIO_NET_CTRL_RX_ALLUNI       2
++ #define VIRTIO_NET_CTRL_RX_NOMULTI      3
++ #define VIRTIO_NET_CTRL_RX_NOUNI        4
++ #define VIRTIO_NET_CTRL_RX_NOBCAST      5
+ 
+ /*
+  * Control the MAC
+-- 
+1.7.11.7
+

@@ -1,0 +1,197 @@
+From d671b9e07fb7eebffdff501100443924d26a4eab Mon Sep 17 00:00:00 2001
+Message-Id: <d671b9e07fb7eebffdff501100443924d26a4eab.1376498713.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Wed, 14 Aug 2013 09:46:21 +0200
+Subject: [PATCH 1/2] add timestamp to error_report()
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1376473582-31743-2-git-send-email-lersek@redhat.com>
+Patchwork-id: 53361
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 1/2] add timestamp to error_report()
+Bugzilla: 906931
+RH-Acked-by: Michal Novotny <minovotn@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+[Issue]
+When we offer a customer support service and a problem happens
+in a customer's system, we try to understand the problem by
+comparing what the customer reports with message logs of the
+customer's system.
+
+In this case, we often need to know when the problem happens.
+
+But, currently, there is no timestamp in qemu's error messages.
+Therefore, we may not be able to understand the problem based on
+error messages.
+
+[Solution]
+Add a timestamp to qemu's error message logged by
+error_report() with g_time_val_to_iso8601().
+
+Signed-off-by: Seiji Aguchi <seiji.aguchi@hds.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 5e2ac5191772dea782ff78e95edd395985273019)
+
+Conflicts:
+
+	qemu-error.h
+	qemu-options.hx
+	vl.c
+
+RHEL-6 notes:
+- The upstream "vl.c" hunks have been distributed between RHEL-6 "vl.c"
+  and "qemu-config.c", adjacently to / following the pattern of the
+  "qemu_realtime_opts" backport (RHEL-6 commit c4dd58ce).
+- Other hunks are subject to file renames.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qemu-error.h    |    3 +++
+ qemu-config.c   |   13 +++++++++++++
+ qemu-error.c    |   10 ++++++++++
+ vl.c            |   13 +++++++++++++
+ qemu-options.hx |   10 ++++++++++
+ 5 files changed, 49 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-config.c   | 13 +++++++++++++
+ qemu-error.c    | 10 ++++++++++
+ qemu-error.h    |  3 +++
+ qemu-options.hx | 10 ++++++++++
+ vl.c            | 13 +++++++++++++
+ 5 files changed, 49 insertions(+)
+
+diff --git a/qemu-config.c b/qemu-config.c
+index fcca3a1..1240b64 100644
+--- a/qemu-config.c
++++ b/qemu-config.c
+@@ -513,6 +513,18 @@ QemuOptsList qemu_realtime_opts = {
+     },
+ };
+ 
++static QemuOptsList qemu_msg_opts = {
++    .name = "msg",
++    .head = QTAILQ_HEAD_INITIALIZER(qemu_msg_opts.head),
++    .desc = {
++        {
++            .name = "timestamp",
++            .type = QEMU_OPT_BOOL,
++        },
++        { /* end of list */ }
++    },
++};
++
+ static QemuOptsList *vm_config_groups[] = {
+     &qemu_drive_opts,
+     &qemu_simple_drive_opts,
+@@ -529,6 +541,7 @@ static QemuOptsList *vm_config_groups[] = {
+     &qemu_machine_opts,
+     &qemu_boot_opts,
+     &qemu_realtime_opts,
++    &qemu_msg_opts,
+     NULL,
+ };
+ 
+diff --git a/qemu-error.c b/qemu-error.c
+index 81143ab..c61f634 100644
+--- a/qemu-error.c
++++ b/qemu-error.c
+@@ -192,6 +192,7 @@ void error_print_loc(void)
+     }
+ }
+ 
++bool enable_timestamp_msg;
+ /*
+  * Print an error message to current monitor if we have one, else to stderr.
+  * Format arguments like sprintf().  The result should not contain
+@@ -202,6 +203,15 @@ void error_print_loc(void)
+ void error_report(const char *fmt, ...)
+ {
+     va_list ap;
++    GTimeVal tv;
++    gchar *timestr;
++
++    if (enable_timestamp_msg) {
++        g_get_current_time(&tv);
++        timestr = g_time_val_to_iso8601(&tv);
++        error_printf("%s ", timestr);
++        g_free(timestr);
++    }
+ 
+     error_print_loc();
+     va_start(ap, fmt);
+diff --git a/qemu-error.h b/qemu-error.h
+index a45609f..2783aaf 100644
+--- a/qemu-error.h
++++ b/qemu-error.h
+@@ -13,6 +13,8 @@
+ #ifndef QEMU_ERROR_H
+ #define QEMU_ERROR_H
+ 
++#include <stdbool.h>
++
+ typedef struct Location {
+     /* all members are private to qemu-error.c */
+     enum { LOC_NONE, LOC_CMDLINE, LOC_FILE } kind;
+@@ -37,5 +39,6 @@ void error_printf_unless_qmp(const char *fmt, ...)
+ void error_print_loc(void);
+ void error_set_progname(const char *argv0);
+ void error_report(const char *fmt, ...) __attribute__ ((format(printf, 1, 2)));
++extern bool enable_timestamp_msg;
+ 
+ #endif
+diff --git a/qemu-options.hx b/qemu-options.hx
+index 86a8778..8bcf1b4 100644
+--- a/qemu-options.hx
++++ b/qemu-options.hx
+@@ -2254,3 +2254,13 @@ DEF("fake-machine", 0, QEMU_OPTION_fake_machine,
+     "-fake-machine        create a fake machine incapable of running guest code\n"
+     "                     mimimal resource use, use for scalability testing")
+ #endif
++
++DEF("msg", HAS_ARG, QEMU_OPTION_msg,
++    "-msg timestamp[=on|off]\n"
++    "                change the format of messages\n"
++    "                on|off controls leading timestamps (default:on)\n")
++STEXI
++@item -msg timestamp[=on|off]
++@findex -msg
++prepend a timestamp to each log message.(default:on)
++ETEXI
+diff --git a/vl.c b/vl.c
+index ce96d76..e90e9c8 100644
+--- a/vl.c
++++ b/vl.c
+@@ -2496,6 +2496,12 @@ static void configure_realtime(QemuOpts *opts)
+     }
+ }
+ 
++
++static void configure_msg(QemuOpts *opts)
++{
++    enable_timestamp_msg = qemu_opt_get_bool(opts, "timestamp", true);
++}
++
+ /***********************************************************/
+ /* USB devices */
+ 
+@@ -6099,6 +6105,13 @@ int main(int argc, char **argv, char **envp)
+                 }
+                 configure_realtime(opts);
+                 break;
++            case QEMU_OPTION_msg:
++                opts = qemu_opts_parse(qemu_find_opts("msg"), optarg, 0);
++                if (!opts) {
++                    exit(1);
++                }
++                configure_msg(opts);
++                break;
+             }
+         }
+     }
+-- 
+1.7.11.7
+

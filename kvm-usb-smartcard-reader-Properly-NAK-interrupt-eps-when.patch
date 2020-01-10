@@ -1,0 +1,59 @@
+From 53acceea0e06c9108714aa8fa56dab2f96368e77 Mon Sep 17 00:00:00 2001
+Message-Id: <53acceea0e06c9108714aa8fa56dab2f96368e77.1375955382.git.minovotn@redhat.com>
+In-Reply-To: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+References: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+From: Alon Levy <alevy@redhat.com>
+Date: Thu, 1 Aug 2013 11:53:46 +0200
+Subject: [PATCH 27/35] usb-smartcard-reader: Properly NAK interrupt eps when
+ we've no events
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Alon Levy <alevy@redhat.com>
+Message-id: <1375358029-12968-28-git-send-email-alevy@redhat.com>
+Patchwork-id: 52917
+O-Subject: [RHEL-6.5 RHEL-6.4.z qemu-kvm v6 27/30] usb-smartcard-reader: Properly NAK interrupt eps when we've no events
+Bugzilla: 917860
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+From: Hans de Goede <hdegoede@redhat.com>
+
+When we've no data to return from the interrupt endpoint, return NAK rather
+then a 0 length packet.
+
+CC: Alon Levy <alevy@redhat.com>
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+
+(cherry picked from commit c4020746ff49b2156b4f98672c077d1a3b86fa8b)
+Conflicts:
+	hw/usb-ccid.c
+    upstream moved status into USBPacket, here we still return it.
+---
+ hw/usb-ccid.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/usb-ccid.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/hw/usb-ccid.c b/hw/usb-ccid.c
+index af4674d..0813886 100644
+--- a/hw/usb-ccid.c
++++ b/hw/usb-ccid.c
+@@ -1194,6 +1194,8 @@ static int ccid_handle_data(USBDevice *dev, USBPacket *p)
+                         "handle_data: int_in: notify_slot_change %X, "
+                         "requested len %d\n",
+                         s->bmSlotICCState, len);
++            } else {
++                ret = USB_RET_NAK;
+             }
+             break;
+         default:
+-- 
+1.7.11.7
+

@@ -1,0 +1,437 @@
+From f000f84ec3295efe9b71041f3d40a110c1d2071c Mon Sep 17 00:00:00 2001
+Message-Id: <f000f84ec3295efe9b71041f3d40a110c1d2071c.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:23 -0500
+Subject: [CHANGE 03/29] aio: rename AIOPool to AIOCBInfo
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-4-git-send-email-famz@redhat.com>
+Patchwork-id: 64904
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 03/28] aio: rename AIOPool to AIOCBInfo
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@redhat.com>
+
+Now that AIOPool no longer keeps a freelist, it isn't really a "pool"
+anymore.  Rename it to AIOCBInfo and make it const since it no longer
+needs to be modified.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit d7331bed11f5e65b3b640aab59ab22bc61a4e77d)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+
+	block.c
+Context conflict. We have out of order backport (commit 5e78d1e3a block:
+Improve bdrv_aio_co_cancel_em), which added acb->done.
+
+	block/blkverify.c
+We don't have blkverify in downstream.
+
+	block/curl.c
+Context conflict due to various upstream curl patches not in RHEL.
+
+	block/iscsi.c
+We don't have iscsi in downstream.
+
+	block/rbd.c
+rbd was manually backported so the patch doesn't apply.
+
+	block/sheepdog.c
+We don't have sheepdog in RHEL 6.
+
+	block/win32-aio.c
+We don't have win32-aio in RHEL 6.
+
+	dma-helpers.c
+Due to a superfluous whitespace.
+
+	hw/ide/core.c
+We don't have trim in downstream.
+
+	linux-aio.c
+Upstream linux-aio.c has long changed and didn't have AIOPool by then.
+
+	thread-pool.c
+
+Extra modification:
+
+        block/vdi.c
+Upstream, vdi was converted to coroutine before this change and
+vdi_aio_pool was long gone.
+---
+ block.c            | 23 +++++++++++------------
+ block/blkdebug.c   |  4 ++--
+ block/curl.c       |  4 ++--
+ block/gluster.c    |  6 +++---
+ block/qed.c        |  4 ++--
+ block/rbd.c        |  2 +-
+ block/vdi.c        |  4 ++--
+ dma-helpers.c      |  4 ++--
+ linux-aio.c        |  6 ++----
+ posix-aio-compat.c |  8 +++-----
+ qemu-aio.h         |  8 ++++----
+ 11 files changed, 34 insertions(+), 39 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block.c            | 23 +++++++++++------------
+ block/blkdebug.c   |  4 ++--
+ block/curl.c       |  4 ++--
+ block/gluster.c    |  6 +++---
+ block/qed.c        |  4 ++--
+ block/rbd.c        |  2 +-
+ block/vdi.c        |  4 ++--
+ dma-helpers.c      |  4 ++--
+ linux-aio.c        |  6 ++----
+ posix-aio-compat.c |  8 +++-----
+ qemu-aio.h         |  8 ++++----
+ 11 files changed, 34 insertions(+), 39 deletions(-)
+
+diff --git a/block.c b/block.c
+index 794d446..f05f7e2 100644
+--- a/block.c
++++ b/block.c
+@@ -3829,7 +3829,7 @@ fail:
+ 
+ void bdrv_aio_cancel(BlockDriverAIOCB *acb)
+ {
+-    acb->pool->cancel(acb);
++    acb->aiocb_info->cancel(acb);
+ }
+ 
+ /**************************************************************/
+@@ -3854,7 +3854,7 @@ static void bdrv_aio_cancel_em(BlockDriverAIOCB *blockacb)
+     qemu_aio_release(acb);
+ }
+ 
+-static AIOPool bdrv_em_aio_pool = {
++static const AIOCBInfo bdrv_em_aiocb_info = {
+     .aiocb_size         = sizeof(BlockDriverAIOCBSync),
+     .cancel             = bdrv_aio_cancel_em,
+ };
+@@ -3883,7 +3883,7 @@ static BlockDriverAIOCB *bdrv_aio_rw_vector(BlockDriverState *bs,
+ {
+     BlockDriverAIOCBSync *acb;
+ 
+-    acb = qemu_aio_get(&bdrv_em_aio_pool, bs, cb, opaque);
++    acb = qemu_aio_get(&bdrv_em_aiocb_info, bs, cb, opaque);
+     acb->is_write = is_write;
+     acb->qiov = qiov;
+     acb->bounce = qemu_blockalign(bs, qiov->size);
+@@ -3941,7 +3941,7 @@ static void bdrv_aio_co_cancel_em(BlockDriverAIOCB *blockacb)
+     }
+ }
+ 
+-static AIOPool bdrv_em_co_aio_pool = {
++static const AIOCBInfo bdrv_em_co_aiocb_info = {
+     .aiocb_size         = sizeof(BlockDriverAIOCBCoroutine),
+     .cancel             = bdrv_aio_co_cancel_em,
+ };
+@@ -3989,7 +3989,7 @@ static BlockDriverAIOCB *bdrv_co_aio_rw_vector(BlockDriverState *bs,
+     Coroutine *co;
+     BlockDriverAIOCBCoroutine *acb;
+ 
+-    acb = qemu_aio_get(&bdrv_em_co_aio_pool, bs, cb, opaque);
++    acb = qemu_aio_get(&bdrv_em_co_aiocb_info, bs, cb, opaque);
+     acb->req.sector = sector_num;
+     acb->req.nb_sectors = nb_sectors;
+     acb->req.qiov = qiov;
+@@ -4020,9 +4020,8 @@ BlockDriverAIOCB *bdrv_aio_flush(BlockDriverState *bs,
+     Coroutine *co;
+     BlockDriverAIOCBCoroutine *acb;
+ 
+-    acb = qemu_aio_get(&bdrv_em_co_aio_pool, bs, cb, opaque);
++    acb = qemu_aio_get(&bdrv_em_co_aiocb_info, bs, cb, opaque);
+     acb->done = NULL;
+-
+     co = qemu_coroutine_create(bdrv_aio_flush_co_entry);
+     qemu_coroutine_enter(co, acb);
+ 
+@@ -4048,7 +4047,7 @@ BlockDriverAIOCB *bdrv_aio_discard(BlockDriverState *bs,
+ 
+     trace_bdrv_aio_discard(bs, sector_num, nb_sectors, opaque);
+ 
+-    acb = qemu_aio_get(&bdrv_em_co_aio_pool, bs, cb, opaque);
++    acb = qemu_aio_get(&bdrv_em_co_aiocb_info, bs, cb, opaque);
+     acb->req.sector = sector_num;
+     acb->req.nb_sectors = nb_sectors;
+     acb->done = NULL;
+@@ -4069,13 +4068,13 @@ void bdrv_init_with_whitelist(void)
+     bdrv_init();
+ }
+ 
+-void *qemu_aio_get(AIOPool *pool, BlockDriverState *bs,
++void *qemu_aio_get(const AIOCBInfo *aiocb_info, BlockDriverState *bs,
+                    BlockDriverCompletionFunc *cb, void *opaque)
+ {
+     BlockDriverAIOCB *acb;
+ 
+-    acb = g_slice_alloc(pool->aiocb_size);
+-    acb->pool = pool;
++    acb = g_slice_alloc(aiocb_info->aiocb_size);
++    acb->aiocb_info = aiocb_info;
+     acb->bs = bs;
+     acb->cb = cb;
+     acb->opaque = opaque;
+@@ -4085,7 +4084,7 @@ void *qemu_aio_get(AIOPool *pool, BlockDriverState *bs,
+ void qemu_aio_release(void *p)
+ {
+     BlockDriverAIOCB *acb = p;
+-    g_slice_free1(acb->pool->aiocb_size, acb);
++    g_slice_free1(acb->aiocb_info->aiocb_size, acb);
+ }
+ 
+ /**************************************************************/
+diff --git a/block/blkdebug.c b/block/blkdebug.c
+index 1459210..affbcde 100644
+--- a/block/blkdebug.c
++++ b/block/blkdebug.c
+@@ -54,7 +54,7 @@ typedef struct BlkdebugAIOCB {
+ 
+ static void blkdebug_aio_cancel(BlockDriverAIOCB *blockacb);
+ 
+-static AIOPool blkdebug_aio_pool = {
++static const AIOCBInfo blkdebug_aiocb_info = {
+     .aiocb_size = sizeof(BlkdebugAIOCB),
+     .cancel     = blkdebug_aio_cancel,
+ };
+@@ -339,7 +339,7 @@ static BlockDriverAIOCB *inject_error(BlockDriverState *bs,
+         return NULL;
+     }
+ 
+-    acb = qemu_aio_get(&blkdebug_aio_pool, bs, cb, opaque);
++    acb = qemu_aio_get(&blkdebug_aiocb_info, bs, cb, opaque);
+     acb->ret = -error;
+ 
+     bh = qemu_bh_new(error_callback_bh, acb);
+diff --git a/block/curl.c b/block/curl.c
+index 3807aa9..647805f 100644
+--- a/block/curl.c
++++ b/block/curl.c
+@@ -404,7 +404,7 @@ static void curl_aio_cancel(BlockDriverAIOCB *blockacb)
+     // Do we have to implement canceling? Seems to work without...
+ }
+ 
+-static AIOPool curl_aio_pool = {
++static const AIOCBInfo curl_aiocb_info = {
+     .aiocb_size         = sizeof(CURLAIOCB),
+     .cancel             = curl_aio_cancel,
+ };
+@@ -419,7 +419,7 @@ static BlockDriverAIOCB *curl_aio_readv(BlockDriverState *bs,
+     size_t end;
+     CURLState *state;
+ 
+-    acb = qemu_aio_get(&curl_aio_pool, bs, cb, opaque);
++    acb = qemu_aio_get(&curl_aiocb_info, bs, cb, opaque);
+     if (!acb)
+         return NULL;
+ 
+diff --git a/block/gluster.c b/block/gluster.c
+index 3662335..dc1c1eb 100644
+--- a/block/gluster.c
++++ b/block/gluster.c
+@@ -493,7 +493,7 @@ static void qemu_gluster_aio_cancel(BlockDriverAIOCB *blockacb)
+     }
+ }
+ 
+-static AIOPool gluster_aio_pool = {
++static const AIOCBInfo gluster_aiocb_info = {
+     .aiocb_size = sizeof(GlusterAIOCB),
+     .cancel = qemu_gluster_aio_cancel,
+ };
+@@ -531,7 +531,7 @@ static BlockDriverAIOCB *qemu_gluster_aio_rw(BlockDriverState *bs,
+     size = nb_sectors * BDRV_SECTOR_SIZE;
+     s->qemu_aio_count++;
+ 
+-    acb = qemu_aio_get(&gluster_aio_pool, bs, cb, opaque);
++    acb = qemu_aio_get(&gluster_aiocb_info, bs, cb, opaque);
+     acb->size = size;
+     acb->ret = 0;
+     acb->finished = NULL;
+@@ -589,7 +589,7 @@ static BlockDriverAIOCB *qemu_gluster_aio_flush(BlockDriverState *bs,
+     GlusterAIOCB *acb;
+     BDRVGlusterState *s = bs->opaque;
+ 
+-    acb = qemu_aio_get(&gluster_aio_pool, bs, cb, opaque);
++    acb = qemu_aio_get(&gluster_aiocb_info, bs, cb, opaque);
+     acb->size = 0;
+     acb->ret = 0;
+     acb->finished = NULL;
+diff --git a/block/qed.c b/block/qed.c
+index eaed67f..697a0da 100644
+--- a/block/qed.c
++++ b/block/qed.c
+@@ -31,7 +31,7 @@ static void qed_aio_cancel(BlockDriverAIOCB *blockacb)
+     }
+ }
+ 
+-static AIOPool qed_aio_pool = {
++static const AIOCBInfo qed_aiocb_info = {
+     .aiocb_size         = sizeof(QEDAIOCB),
+     .cancel             = qed_aio_cancel,
+ };
+@@ -1355,7 +1355,7 @@ static BlockDriverAIOCB *qed_aio_setup(BlockDriverState *bs,
+                                        BlockDriverCompletionFunc *cb,
+                                        void *opaque, int flags)
+ {
+-    QEDAIOCB *acb = qemu_aio_get(&qed_aio_pool, bs, cb, opaque);
++    QEDAIOCB *acb = qemu_aio_get(&qed_aiocb_info, bs, cb, opaque);
+ 
+     trace_qed_aio_setup(bs->opaque, acb, sector_num, nb_sectors,
+                         opaque, flags);
+diff --git a/block/rbd.c b/block/rbd.c
+index 2a9327d..337dd70 100644
+--- a/block/rbd.c
++++ b/block/rbd.c
+@@ -583,7 +583,7 @@ static void qemu_rbd_aio_cancel(BlockDriverAIOCB *blockacb)
+     qemu_aio_release(acb);
+ }
+ 
+-static AIOPool rbd_aiocb_info = {
++static const AIOCBInfo rbd_aiocb_info = {
+     .aiocb_size = sizeof(RBDAIOCB),
+     .cancel = qemu_rbd_aio_cancel,
+ };
+diff --git a/block/vdi.c b/block/vdi.c
+index b6aff93..6e7524a 100644
+--- a/block/vdi.c
++++ b/block/vdi.c
+@@ -505,7 +505,7 @@ static void vdi_aio_cancel(BlockDriverAIOCB *blockacb)
+     qemu_aio_release(acb);
+ }
+ 
+-static AIOPool vdi_aio_pool = {
++static AIOCBInfo vdi_aiocb_info = {
+     .aiocb_size = sizeof(VdiAIOCB),
+     .cancel = vdi_aio_cancel,
+ };
+@@ -519,7 +519,7 @@ static VdiAIOCB *vdi_aio_setup(BlockDriverState *bs, int64_t sector_num,
+     logout("%p, %" PRId64 ", %p, %d, %p, %p, %d\n",
+            bs, sector_num, qiov, nb_sectors, cb, opaque, is_write);
+ 
+-    acb = qemu_aio_get(&vdi_aio_pool, bs, cb, opaque);
++    acb = qemu_aio_get(&vdi_aiocb_info, bs, cb, opaque);
+     if (acb) {
+         acb->hd_aiocb = NULL;
+         acb->sector_num = sector_num;
+diff --git a/dma-helpers.c b/dma-helpers.c
+index 8c397af..1e6406e 100644
+--- a/dma-helpers.c
++++ b/dma-helpers.c
+@@ -161,7 +161,7 @@ static void dma_aio_cancel(BlockDriverAIOCB *acb)
+     dma_complete(dbs, 0);
+ }
+ 
+-static AIOPool dma_aio_pool = {
++static const AIOCBInfo dma_aiocb_info = {
+     .aiocb_size         = sizeof(DMAAIOCB),
+     .cancel             = dma_aio_cancel,
+ };
+@@ -171,7 +171,7 @@ static BlockDriverAIOCB *dma_bdrv_io(
+     BlockDriverCompletionFunc *cb, void *opaque,
+     bool to_dev)
+ {
+-    DMAAIOCB *dbs =  qemu_aio_get(&dma_aio_pool, bs, cb, opaque);
++    DMAAIOCB *dbs = qemu_aio_get(&dma_aiocb_info, bs, cb, opaque);
+ 
+     dbs->acb = NULL;
+     dbs->bs = bs;
+diff --git a/linux-aio.c b/linux-aio.c
+index c52a683..8415c9c 100644
+--- a/linux-aio.c
++++ b/linux-aio.c
+@@ -151,7 +151,7 @@ static void laio_cancel(BlockDriverAIOCB *blockacb)
+         qemu_laio_completion_cb(laiocb->ctx);
+ }
+ 
+-static AIOPool laio_pool = {
++static const AIOCBInfo laio_aiocb_info = {
+     .aiocb_size         = sizeof(struct qemu_laiocb),
+     .cancel             = laio_cancel,
+ };
+@@ -165,9 +165,7 @@ BlockDriverAIOCB *laio_submit(BlockDriverState *bs, void *aio_ctx, int fd,
+     struct iocb *iocbs;
+     off_t offset = sector_num * 512;
+ 
+-    laiocb = qemu_aio_get(&laio_pool, bs, cb, opaque);
+-    if (!laiocb)
+-        return NULL;
++    laiocb = qemu_aio_get(&laio_aiocb_info, bs, cb, opaque);
+     laiocb->nbytes = nb_sectors * 512;
+     laiocb->ctx = s;
+     laiocb->ret = -EINPROGRESS;
+diff --git a/posix-aio-compat.c b/posix-aio-compat.c
+index 1b48bc2..07a9952 100644
+--- a/posix-aio-compat.c
++++ b/posix-aio-compat.c
+@@ -590,7 +590,7 @@ static void paio_cancel(BlockDriverAIOCB *blockacb)
+     paio_remove(acb);
+ }
+ 
+-static AIOPool raw_aio_pool = {
++static AIOCBInfo raw_aiocb_info = {
+     .aiocb_size         = sizeof(struct qemu_paiocb),
+     .cancel             = paio_cancel,
+ };
+@@ -601,9 +601,7 @@ BlockDriverAIOCB *paio_submit(BlockDriverState *bs, int fd,
+ {
+     struct qemu_paiocb *acb;
+ 
+-    acb = qemu_aio_get(&raw_aio_pool, bs, cb, opaque);
+-    if (!acb)
+-        return NULL;
++    acb = qemu_aio_get(&raw_aiocb_info, bs, cb, opaque);
+     acb->aio_type = type;
+     acb->aio_fildes = fd;
+     acb->ev_signo = SIGUSR2;
+@@ -629,7 +627,7 @@ BlockDriverAIOCB *paio_ioctl(BlockDriverState *bs, int fd,
+ {
+     struct qemu_paiocb *acb;
+ 
+-    acb = qemu_aio_get(&raw_aio_pool, bs, cb, opaque);
++    acb = qemu_aio_get(&raw_aiocb_info, bs, cb, opaque);
+     if (!acb)
+         return NULL;
+     acb->aio_type = QEMU_AIO_IOCTL;
+diff --git a/qemu-aio.h b/qemu-aio.h
+index ce6c787..4d2bfa3 100644
+--- a/qemu-aio.h
++++ b/qemu-aio.h
+@@ -21,19 +21,19 @@
+ typedef struct BlockDriverAIOCB BlockDriverAIOCB;
+ typedef void BlockDriverCompletionFunc(void *opaque, int ret);
+ 
+-typedef struct AIOPool {
++typedef struct AIOCBInfo {
+     void (*cancel)(BlockDriverAIOCB *acb);
+     size_t aiocb_size;
+-} AIOPool;
++} AIOCBInfo;
+ 
+ struct BlockDriverAIOCB {
+-    AIOPool *pool;
++    const AIOCBInfo *aiocb_info;
+     BlockDriverState *bs;
+     BlockDriverCompletionFunc *cb;
+     void *opaque;
+ };
+ 
+-void *qemu_aio_get(AIOPool *pool, BlockDriverState *bs,
++void *qemu_aio_get(const AIOCBInfo *pool, BlockDriverState *bs,
+                    BlockDriverCompletionFunc *cb, void *opaque);
+ void qemu_aio_release(void *p);
+ 
+-- 
+2.1.0
+

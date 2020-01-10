@@ -1,0 +1,225 @@
+From f799f6e72782781aa9bb59c82f0a16e5f2a9dab8 Mon Sep 17 00:00:00 2001
+Message-Id: <f799f6e72782781aa9bb59c82f0a16e5f2a9dab8.1484162498.git.ymankad@redhat.com>
+In-Reply-To: <6da299cbd22aeea340aaabe3e57b8efc46a477f6.1484162498.git.ymankad@redhat.com>
+References: <6da299cbd22aeea340aaabe3e57b8efc46a477f6.1484162498.git.ymankad@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Mon, 9 Jan 2017 20:20:58 -0500
+Subject: [CHANGE 2/7] qcow2: Support exact L1 table growth
+To: ymankad@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <20170109202103.28932-3-mreitz@redhat.com>
+Patchwork-id: 73225
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 2/7] qcow2: Support exact L1 table growth
+Bugzilla: 1405882
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+
+The L1 table grow operation includes a size calculation that bumps up
+the new L1 table size in order to anticipate the size needs of vmstate
+data.  This helps reduce the number of times that the L1 table has to be
+grown when vmstate data is appended.
+
+This size overhead is not necessary during image creation,
+bdrv_truncate(), or snapshot goto operations.  In fact, existing
+qemu-iotests that exercise table growth are no longer able to trigger it
+because image creation preallocates an L1 table that is too large after
+changes to qcow_create2().
+
+This patch keeps the size calculation but also adds exact growth for
+callers that do not want to inflate the L1 table size unnecessarily.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 72893756e0da74fcb626c52dfff1fc6e9de84f0c)
+
+Conflicts:
+	block/qcow2-cluster.c
+	block/qcow2-snapshot.c
+	block/qcow2.c
+	block/qcow2.h
+	tests/qemu-iotests/108
+	tests/qemu-iotests/108.out
+
+block/ conflicts: Downstream contains some patches already that were
+merged upstream only after this patch.
+
+tests/ conflicts: 0df3de03064db6fdc5001f73d30ca93df25eab63 backported
+test 108, including some changes to actually make it pass with
+downstream qemu. Most of these changes were actually necessary because
+this single patch was missing, so we now have to revert them.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ block/qcow2-cluster.c      | 25 ++++++++++++++++---------
+ block/qcow2-snapshot.c     |  2 +-
+ block/qcow2.c              |  2 +-
+ block/qcow2.h              |  3 ++-
+ tests/qemu-iotests/108     |  8 ++++----
+ tests/qemu-iotests/108.out |  8 ++++----
+ 6 files changed, 28 insertions(+), 20 deletions(-)
+
+diff --git a/block/qcow2-cluster.c b/block/qcow2-cluster.c
+index 2f337fe..0f2cd31 100644
+--- a/block/qcow2-cluster.c
++++ b/block/qcow2-cluster.c
+@@ -28,7 +28,8 @@
+ #include "block_int.h"
+ #include "block/qcow2.h"
+ 
+-int qcow2_grow_l1_table(BlockDriverState *bs, uint64_t min_size)
++int qcow2_grow_l1_table(BlockDriverState *bs, uint64_t min_size,
++                        bool exact_size)
+ {
+     BDRVQcowState *s = bs->opaque;
+     int new_l1_size2, ret, i;
+@@ -37,14 +38,20 @@ int qcow2_grow_l1_table(BlockDriverState *bs, uint64_t min_size)
+     int64_t new_l1_table_offset, new_l1_size;
+     uint8_t data[12];
+ 
+-    new_l1_size = s->l1_size;
+-    if (min_size <= new_l1_size)
++    if (min_size <= s->l1_size)
+         return 0;
+-    if (new_l1_size == 0) {
+-        new_l1_size = 1;
+-    }
+-    while (min_size > new_l1_size) {
+-        new_l1_size = (new_l1_size * 3 + 1) / 2;
++
++    if (exact_size) {
++        new_l1_size = min_size;
++    } else {
++        /* Bump size up to reduce the number of times we have to grow */
++        new_l1_size = s->l1_size;
++        if (new_l1_size == 0) {
++            new_l1_size = 1;
++        }
++        while (min_size > new_l1_size) {
++            new_l1_size = (new_l1_size * 3 + 1) / 2;
++        }
+     }
+ 
+     if (new_l1_size > INT_MAX / sizeof(uint64_t)) {
+@@ -577,7 +584,7 @@ static int get_cluster_table(BlockDriverState *bs, uint64_t offset,
+ 
+     l1_index = offset >> (s->l2_bits + s->cluster_bits);
+     if (l1_index >= s->l1_size) {
+-        ret = qcow2_grow_l1_table(bs, l1_index + 1);
++        ret = qcow2_grow_l1_table(bs, l1_index + 1, false);
+         if (ret < 0) {
+             return ret;
+         }
+diff --git a/block/qcow2-snapshot.c b/block/qcow2-snapshot.c
+index 224d222..4ff5a35 100644
+--- a/block/qcow2-snapshot.c
++++ b/block/qcow2-snapshot.c
+@@ -415,7 +415,7 @@ int qcow2_snapshot_goto(BlockDriverState *bs, const char *snapshot_id)
+      * L1 table of the snapshot. If the snapshot L1 table is smaller, the
+      * current one must be padded with zeros.
+      */
+-    ret = qcow2_grow_l1_table(bs, sn->l1_size);
++    ret = qcow2_grow_l1_table(bs, sn->l1_size, true);
+     if (ret < 0) {
+         goto fail;
+     }
+diff --git a/block/qcow2.c b/block/qcow2.c
+index 12df1d0..6dd9913 100644
+--- a/block/qcow2.c
++++ b/block/qcow2.c
+@@ -1020,7 +1020,7 @@ static int qcow2_truncate(BlockDriverState *bs, int64_t offset)
+     }
+ 
+     new_l1_size = size_to_l1(s, offset);
+-    ret = qcow2_grow_l1_table(bs, new_l1_size);
++    ret = qcow2_grow_l1_table(bs, new_l1_size, true);
+     if (ret < 0) {
+         return ret;
+     }
+diff --git a/block/qcow2.h b/block/qcow2.h
+index e0b5a47..70bfc06 100644
+--- a/block/qcow2.h
++++ b/block/qcow2.h
+@@ -332,7 +332,8 @@ int qcow2_pre_write_overlap_check(BlockDriverState *bs, int ign, int64_t offset,
+                                   int64_t size);
+ 
+ /* qcow2-cluster.c functions */
+-int qcow2_grow_l1_table(BlockDriverState *bs, uint64_t min_size);
++int qcow2_grow_l1_table(BlockDriverState *bs, uint64_t min_size,
++                        bool exact_size);
+ int qcow2_write_l1_entry(BlockDriverState *bs, int l1_index);
+ void qcow2_l2_cache_reset(BlockDriverState *bs);
+ int qcow2_decompress_cluster(BlockDriverState *bs, uint64_t cluster_offset);
+diff --git a/tests/qemu-iotests/108 b/tests/qemu-iotests/108
+index ae6ec20..ee127c1 100755
+--- a/tests/qemu-iotests/108
++++ b/tests/qemu-iotests/108
+@@ -67,21 +67,21 @@ echo
+ 
+ IMGOPTS='cluster_size=512' _make_test_img 64M
+ # Allocate the first 128 kB in the image (first refblock)
+-$QEMU_IO -c 'write 0 0x1a600' "$TEST_IMG" | _filter_qemu_io
++$QEMU_IO -c 'write 0 0x1b200' "$TEST_IMG" | _filter_qemu_io
+ # should be 131072 == 0x20000
+ stat -c '%s' "$TEST_IMG"
+ 
+ # Enter a cluster at 128 kB (0x20000)
+ # XXX: This should be the first free entry in the last L2 table, but we cannot
+ # be certain
+-poke_file "$TEST_IMG" $((0x1d898)) "\x80\x00\x00\x00\x00\x02\x00\x00"
++poke_file "$TEST_IMG" $((0x1ccc8)) "\x80\x00\x00\x00\x00\x02\x00\x00"
+ 
+ # Fill the cluster
+ truncate -s $((0x20200)) "$TEST_IMG"
+ poke_file "$TEST_IMG" "$((128 * 1024))" "$(printf '%512s' '')"
+ 
+ # The data should now appear at this guest offset
+-$QEMU_IO -c 'read -P 32 0x1a600 512' "$TEST_IMG" | _filter_qemu_io
++$QEMU_IO -c 'read -P 32 0x1b200 512' "$TEST_IMG" | _filter_qemu_io
+ 
+ # This cluster is unallocated; fix it
+ _check_test_img -r all
+@@ -89,7 +89,7 @@ _check_test_img -r all
+ # This repair operation must have allocated a new refblock; and that refblock
+ # should not overlap with the unallocated data cluster. If it does, the data
+ # will be damaged, so check it.
+-$QEMU_IO -c 'read -P 32 0x1a600 512' "$TEST_IMG" | _filter_qemu_io
++$QEMU_IO -c 'read -P 32 0x1b200 512' "$TEST_IMG" | _filter_qemu_io
+ 
+ echo
+ echo '=== Repairing refblock beyond the image end ==='
+diff --git a/tests/qemu-iotests/108.out b/tests/qemu-iotests/108.out
+index 0b4e0ac..5774a89 100644
+--- a/tests/qemu-iotests/108.out
++++ b/tests/qemu-iotests/108.out
+@@ -23,10 +23,10 @@ read 65536/65536 bytes at offset 0
+ === Repairing unreferenced data cluster in new refblock area ===
+ 
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
+-wrote 108032/108032 bytes at offset 0
+-105.500 KiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
++wrote 111104/111104 bytes at offset 0
++108.500 KiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+ 131072
+-read 512/512 bytes at offset 108032
++read 512/512 bytes at offset 111104
+ 512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+ ERROR cluster 256 refcount=0 reference=1
+ Rebuilding refcount structure
+@@ -39,7 +39,7 @@ The following inconsistencies were found and repaired:
+ 
+ Double checking the fixed image now...
+ No errors were found on the image.
+-read 512/512 bytes at offset 108032
++read 512/512 bytes at offset 111104
+ 512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+ 
+ === Repairing refblock beyond the image end ===
+-- 
+2.7.4
+

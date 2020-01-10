@@ -1,0 +1,92 @@
+From 20f6a50db6bb0344c377af6f75a0a02c19872a24 Mon Sep 17 00:00:00 2001
+Message-Id: <20f6a50db6bb0344c377af6f75a0a02c19872a24.1456769395.git.jen@redhat.com>
+In-Reply-To: <af9075e3725e0685c2d54d451267d48b16f48b02.1456769395.git.jen@redhat.com>
+References: <af9075e3725e0685c2d54d451267d48b16f48b02.1456769395.git.jen@redhat.com>
+From: =?UTF-8?q?Marc-Andr=C3=A9=20Lureau?= <marcandre.lureau@redhat.com>
+Date: Fri, 26 Feb 2016 14:16:03 -0500
+Subject: [CHANGE 8/8] qga: check utf8-to-utf16 conversion
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Marc-André Lureau <marcandre.lureau@redhat.com>
+Message-id: <1456496163-31004-9-git-send-email-marcandre.lureau@redhat.com>
+Patchwork-id: 69508
+O-Subject: [RHEL-6.8 qemu-kvm PATCH v4 8/8] qga: check utf8-to-utf16 conversion
+Bugzilla: 1174181
+RH-Acked-by: Thomas Huth <thuth@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Marc-André Lureau <marcandre.lureau@redhat.com>
+
+UTF8 to UTF16 conversion can fail for genuine reasons, let's check errors.
+
+Reported-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Marc-André Lureau <marcandre.lureau@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+
+(cherry picked from commit 8021de10131868a8857e64b91cf0a868b76a61d8)
+
+BZ: https://bugzilla.redhat.com/show_bug.cgi?id=1174181
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=10566110
+Upstream-status: 8021de10131868a8857e64b91cf0a868b76a61d8
+
+Signed-off-by: Marc-André Lureau <marcandre.lureau@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ qga/commands-win32.c | 19 ++++++++++++++++---
+ 1 file changed, 16 insertions(+), 3 deletions(-)
+
+diff --git a/qga/commands-win32.c b/qga/commands-win32.c
+index a80045c..aefebde 100644
+--- a/qga/commands-win32.c
++++ b/qga/commands-win32.c
+@@ -418,8 +418,9 @@ void qmp_guest_set_user_password(const char *username,
+     NET_API_STATUS nas;
+     char *rawpasswddata = NULL;
+     size_t rawpasswdlen;
+-    wchar_t *user, *wpass;
++    wchar_t *user = NULL, *wpass = NULL;
+     USER_INFO_1003 pi1003 = { 0, };
++    GError *gerr = NULL;
+ 
+     if (crypted) {
+         error_setg(errp, QERR_UNSUPPORTED);
+@@ -433,8 +434,15 @@ void qmp_guest_set_user_password(const char *username,
+     rawpasswddata = g_renew(char, rawpasswddata, rawpasswdlen + 1);
+     rawpasswddata[rawpasswdlen] = '\0';
+ 
+-    user = g_utf8_to_utf16(username, -1, NULL, NULL, NULL);
+-    wpass = g_utf8_to_utf16(rawpasswddata, -1, NULL, NULL, NULL);
++    user = g_utf8_to_utf16(username, -1, NULL, NULL, &gerr);
++    if (!user) {
++        goto done;
++    }
++
++    wpass = g_utf8_to_utf16(rawpasswddata, -1, NULL, NULL, &gerr);
++    if (!wpass) {
++        goto done;
++    }
+ 
+     pi1003.usri1003_password = wpass;
+     nas = NetUserSetInfo(NULL, user,
+@@ -447,6 +455,11 @@ void qmp_guest_set_user_password(const char *username,
+         g_free(msg);
+     }
+ 
++done:
++    if (gerr) {
++        error_setg(errp, QERR_QGA_COMMAND_FAILED, gerr->message);
++        g_error_free(gerr);
++    }
+     g_free(user);
+     g_free(wpass);
+     g_free(rawpasswddata);
+-- 
+2.1.0
+

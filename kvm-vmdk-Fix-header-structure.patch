@@ -1,0 +1,51 @@
+From 67d165c83f633f3d34bb56388d297674134bf697 Mon Sep 17 00:00:00 2001
+Message-Id: <67d165c83f633f3d34bb56388d297674134bf697.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:49 +0200
+Subject: [PATCH 34/47] vmdk: Fix header structure
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-35-git-send-email-famz@redhat.com>
+Patchwork-id: 51470
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 34/47] vmdk: Fix header structure
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+Commit bb45ded9 swapped gd_offset and rgd_offset. This is wrong.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 7a736bfa4e0a58087054cad68a1d4b3804bbb708)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 9668993..58061d8 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -56,8 +56,8 @@ typedef struct {
+     int64_t desc_offset;
+     int64_t desc_size;
+     int32_t num_gtes_per_gte;
+-    int64_t gd_offset;
+     int64_t rgd_offset;
++    int64_t gd_offset;
+     int64_t grain_offset;
+     char filler[1];
+     char check_bytes[4];
+-- 
+1.7.11.7
+

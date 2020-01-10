@@ -1,0 +1,245 @@
+From e5bc192ac895f50add552e9c0adb2d2d4bc8de7f Mon Sep 17 00:00:00 2001
+Message-Id: <e5bc192ac895f50add552e9c0adb2d2d4bc8de7f.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:46 +0200
+Subject: [PATCH 35/65] chardev: add serial chardev support to chardev-add
+ (qmp)
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-36-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52140
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 35/65] chardev: add serial chardev support to chardev-add (qmp)
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+Similar to file, except that no separate in/out files are supported
+because it's pointless for direct device access.  Also the special
+tty ioctl hooks (pass through linespeed settings etc) are activated
+on Unix.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit d59044ef74d577797d087bc6ffb156cec89ed39a)
+
+Conflicts:
+
+	qemu-char.c
+	qemu-options.hx
+---
+ qapi-schema.json |   17 ++++++++++++++
+ qemu-char.c      |   66 ++++++++++++++++++++++++++++++++++++++++++++----------
+ qemu-options.hx  |    9 ++++----
+ 3 files changed, 75 insertions(+), 17 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema.json | 17 +++++++++++++++
+ qemu-char.c      | 66 +++++++++++++++++++++++++++++++++++++++++++++-----------
+ qemu-options.hx  |  9 ++++----
+ 3 files changed, 75 insertions(+), 17 deletions(-)
+
+diff --git a/qapi-schema.json b/qapi-schema.json
+index 36aefa0..8d4f0b5 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -422,6 +422,22 @@
+                                    'out' : 'str' } }
+ 
+ ##
++# @ChardevPort:
++#
++# Configuration info for device chardevs.
++#
++# @device: The name of the special file for the device,
++#          i.e. /dev/ttyS0 on Unix or COM1: on Windows
++# @type: What kind of device this is.
++#
++# Since: 1.4
++##
++{ 'enum': 'ChardevPortKind', 'data': [ 'serial' ] }
++
++{ 'type': 'ChardevPort', 'data': { 'device' : 'str',
++                                   'type'   : 'ChardevPortKind'} }
++
++##
+ # @ChardevBackend:
+ #
+ # Configuration info for the new chardev backend.
+@@ -431,6 +447,7 @@
+ { 'type': 'ChardevDummy', 'data': { } }
+ 
+ { 'union': 'ChardevBackend', 'data': { 'file' : 'ChardevFile',
++                                       'port' : 'ChardevPort',
+                                        'null' : 'ChardevDummy' } }
+ 
+ ##
+diff --git a/qemu-char.c b/qemu-char.c
+index 1089b0b..2a9fe65 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -1434,25 +1434,27 @@ static void qemu_chr_close_tty(CharDriverState *chr)
+     }
+ }
+ 
++static CharDriverState *qemu_chr_open_tty_fd(int fd)
++{
++    CharDriverState *chr;
++
++    tty_serial_init(fd, 115200, 'N', 8, 1);
++    chr = qemu_chr_open_fd(fd, fd);
++    chr->chr_ioctl = tty_serial_ioctl;
++    chr->chr_close = qemu_chr_close_tty;
++    return chr;
++}
++
+ static CharDriverState *qemu_chr_open_tty(QemuOpts *opts)
+ {
+     const char *filename = qemu_opt_get(opts, "path");
+-    CharDriverState *chr;
+     int fd;
+ 
+     TFR(fd = open(filename, O_RDWR | O_NONBLOCK));
+     if (fd < 0) {
+         return NULL;
+     }
+-    tty_serial_init(fd, 115200, 'N', 8, 1);
+-    chr = qemu_chr_open_fd(fd, fd);
+-    if (!chr) {
+-        close(fd);
+-        return NULL;
+-    }
+-    chr->chr_ioctl = tty_serial_ioctl;
+-    chr->chr_close = qemu_chr_close_tty;
+-    return chr;
++    return qemu_chr_open_tty_fd(fd);
+ }
+ #endif /* __linux__ || __sun__ */
+ 
+@@ -1862,9 +1864,8 @@ static int win_chr_poll(void *opaque)
+     return 0;
+ }
+ 
+-static CharDriverState *qemu_chr_open_win(QemuOpts *opts)
++static CharDriverState *qemu_chr_open_win_path(const char *filename)
+ {
+-    const char *filename = qemu_opt_get(opts, "path");
+     CharDriverState *chr;
+     WinCharState *s;
+ 
+@@ -1883,6 +1884,11 @@ static CharDriverState *qemu_chr_open_win(QemuOpts *opts)
+     return chr;
+ }
+ 
++static CharDriverState *qemu_chr_open_win(QemuOpts *opts)
++{
++    return qemu_chr_open_win_path(qemu_opt_get(opts, "path"));
++}
++
+ static int win_chr_pipe_poll(void *opaque)
+ {
+     CharDriverState *chr = opaque;
+@@ -2787,6 +2793,7 @@ static const struct {
+ #endif
+ #ifdef HAVE_CHARDEV_TTY
+     { .name = "tty",       .open = qemu_chr_open_tty },
++    { .name = "serial",    .open = qemu_chr_open_tty },
+     { .name = "pty",       .open = qemu_chr_open_pty },
+ #endif
+ #ifdef HAVE_CHARDEV_PARPORT
+@@ -2999,6 +3006,17 @@ static CharDriverState *qmp_chardev_open_file(ChardevFile *file, Error **errp)
+     return qemu_chr_open_win_file(out);
+ }
+ 
++static CharDriverState *qmp_chardev_open_port(ChardevPort *port, Error **errp)
++{
++    switch (port->type) {
++    case CHARDEV_PORT_KIND_SERIAL:
++        return qemu_chr_open_win_path(port->device);
++    default:
++        error_setg(errp, "unknown chardev port (%d)", port->type);
++        return NULL;
++    }
++}
++
+ #else /* WIN32 */
+ 
+ static int qmp_chardev_open_file_source(char *src, int flags,
+@@ -3035,6 +3053,27 @@ static CharDriverState *qmp_chardev_open_file(ChardevFile *file, Error **errp)
+     return qemu_chr_open_fd(in, out);
+ }
+ 
++static CharDriverState *qmp_chardev_open_port(ChardevPort *port, Error **errp)
++{
++    int flags, fd;
++
++    switch (port->type) {
++#ifdef HAVE_CHARDEV_TTY
++    case CHARDEV_PORT_KIND_SERIAL:
++        flags = O_RDWR;
++        fd = qmp_chardev_open_file_source(port->device, flags, errp);
++        if (error_is_set(errp)) {
++            return NULL;
++        }
++        socket_set_nonblock(fd);
++        return qemu_chr_open_tty_fd(fd);
++#endif
++    default:
++        error_setg(errp, "unknown chardev port (%d)", port->type);
++        return NULL;
++    }
++}
++
+ #endif /* WIN32 */
+ 
+ ChardevReturn *qmp_chardev_add(const char *id, ChardevBackend *backend,
+@@ -3054,6 +3093,9 @@ ChardevReturn *qmp_chardev_add(const char *id, ChardevBackend *backend,
+     case CHARDEV_BACKEND_KIND_FILE:
+         chr = qmp_chardev_open_file(backend->file, errp);
+         break;
++    case CHARDEV_BACKEND_KIND_PORT:
++        chr = qmp_chardev_open_port(backend->port, errp);
++        break;
+     case CHARDEV_BACKEND_KIND_NULL:
+         chr = qemu_chr_open_null(NULL);
+         break;
+diff --git a/qemu-options.hx b/qemu-options.hx
+index ee8fec1..03c28cb 100644
+--- a/qemu-options.hx
++++ b/qemu-options.hx
+@@ -1309,6 +1309,7 @@ DEF("chardev", HAS_ARG, QEMU_OPTION_chardev,
+ #endif
+ #if defined(__linux__) || defined(__sun__) || defined(__FreeBSD__) \
+         || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
++    "-chardev serial,id=id,path=path\n"
+     "-chardev tty,id=id,path=path\n"
+ #endif
+ #if defined(__linux__) || defined(__FreeBSD__) || defined(__DragonFly__)
+@@ -1470,8 +1471,8 @@ take any options.
+ 
+ Send traffic from the guest to a serial device on the host.
+ 
+-@option{serial} is
+-only available on Windows hosts.
++On Unix hosts serial will actually accept any tty device,
++not only serial lines.
+ 
+ @option{path} specifies the name of the serial device to open.
+ 
+@@ -1493,10 +1494,8 @@ Connect to a local BrlAPI server. @option{braille} does not take any options.
+ 
+ @item -chardev tty ,id=@var{id} ,path=@var{path}
+ 
+-Connect to a local tty device.
+-
+ @option{tty} is only available on Linux, Sun, FreeBSD, NetBSD, OpenBSD and
+-DragonFlyBSD hosts.
++DragonFlyBSD hosts.  It is an alias for -serial.
+ 
+ @option{path} specifies the path to the tty. @option{path} is required.
+ 
+-- 
+1.7.11.7
+

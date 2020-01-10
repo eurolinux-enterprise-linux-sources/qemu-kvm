@@ -1,0 +1,179 @@
+From c605f6b6f6b39178c5dc94988c09ca174043c6d8 Mon Sep 17 00:00:00 2001
+Message-Id: <c605f6b6f6b39178c5dc94988c09ca174043c6d8.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:06 +0200
+Subject: [PATCH 32/65] qemu-char: remove dead/confusing logic with
+ nb_stdio_clients
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <bf232c8ea2439154ad117dee20599d396a601be4.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50810
+O-Subject: [RHEL6.5 qemu-kvm PATCH 32/65] qemu-char: remove dead/confusing logic with nb_stdio_clients
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+This code is very old dating back to 2007.  What is puzzling is that
+STDIO_MAX_CLIENTS was always #define to 1 meaning that all of the code to deal
+with more than one client was unreachable.
+
+Just remove the whole mess of it.
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Message-id: d276bccdbf4e7463020c5f539f61ae3bfbc88d1d.1362505276.git.amit.shah@redhat.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit ed7a154063266a30a31752d3b18d484ddc7f5aa9)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	qemu-char.c
+
+  * Just removed the windows-specific functions instead of resolving all
+conflicts there.
+---
+ qemu-char.c | 78 ++++++-------------------------------------------------------
+ 1 file changed, 7 insertions(+), 71 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 78 ++++++-------------------------------------------------------
+ 1 file changed, 7 insertions(+), 71 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 5726415..838d1d7 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -544,9 +544,6 @@ typedef struct {
+     int max_size;
+ } FDCharDriver;
+ 
+-#define STDIO_MAX_CLIENTS 1
+-static int stdio_nb_clients = 0;
+-
+ static int fd_chr_write(CharDriverState *chr, const uint8_t *buf, int len)
+ {
+     FDCharDriver *s = chr->opaque;
+@@ -591,11 +588,8 @@ static void fd_chr_update_read_handler(CharDriverState *chr)
+     FDCharDriver *s = chr->opaque;
+ 
+     if (s->fd_in >= 0) {
+-        if (display_type == DT_NOGRAPHIC && s->fd_in == 0) {
+-        } else {
+-            qemu_set_fd_handler2(s->fd_in, fd_chr_read_poll,
+-                                 fd_chr_read, NULL, chr);
+-        }
++        qemu_set_fd_handler2(s->fd_in, fd_chr_read_poll,
++                             fd_chr_read, NULL, chr);
+     }
+ }
+ 
+@@ -604,10 +598,7 @@ static void fd_chr_close(struct CharDriverState *chr)
+     FDCharDriver *s = chr->opaque;
+ 
+     if (s->fd_in >= 0) {
+-        if (display_type == DT_NOGRAPHIC && s->fd_in == 0) {
+-        } else {
+-            qemu_set_fd_handler2(s->fd_in, NULL, NULL, NULL, NULL);
+-        }
++        qemu_set_fd_handler2(s->fd_in, NULL, NULL, NULL, NULL);
+     }
+ 
+     qemu_free(s);
+@@ -672,53 +663,6 @@ static CharDriverState *qemu_chr_open_pipe(QemuOpts *opts)
+     return qemu_chr_open_fd(fd_in, fd_out);
+ }
+ 
+-
+-/* for STDIO, we handle the case where several clients use it
+-   (nographic mode) */
+-
+-#define TERM_FIFO_MAX_SIZE 1
+-
+-static uint8_t term_fifo[TERM_FIFO_MAX_SIZE];
+-static int term_fifo_size;
+-
+-static int stdio_read_poll(void *opaque)
+-{
+-    CharDriverState *chr = opaque;
+-
+-    /* try to flush the queue if needed */
+-    if (term_fifo_size != 0 && qemu_chr_be_can_write(chr) > 0) {
+-        qemu_chr_be_write(chr, term_fifo, 1);
+-        term_fifo_size = 0;
+-    }
+-    /* see if we can absorb more chars */
+-    if (term_fifo_size == 0)
+-        return 1;
+-    else
+-        return 0;
+-}
+-
+-static void stdio_read(void *opaque)
+-{
+-    int size;
+-    uint8_t buf[1];
+-    CharDriverState *chr = opaque;
+-
+-    size = read(0, buf, 1);
+-    if (size == 0) {
+-        /* stdin has been closed. Remove it from the active list.  */
+-        qemu_set_fd_handler2(0, NULL, NULL, NULL, NULL);
+-        qemu_chr_be_event(chr, CHR_EVENT_CLOSED);
+-        return;
+-    }
+-    if (size > 0) {
+-        if (qemu_chr_be_can_write(chr) > 0) {
+-            qemu_chr_be_write(chr, buf, 1);
+-        } else if (term_fifo_size == 0) {
+-            term_fifo[term_fifo_size++] = buf[0];
+-        }
+-    }
+-}
+-
+ /* init terminal so that we can grab keys */
+ static struct termios oldtty;
+ static int old_fd0_flags;
+@@ -755,8 +699,6 @@ static void qemu_chr_set_echo_stdio(CharDriverState *chr, bool echo)
+ static void qemu_chr_close_stdio(struct CharDriverState *chr)
+ {
+     term_exit();
+-    stdio_nb_clients--;
+-    qemu_set_fd_handler2(0, NULL, NULL, NULL, NULL);
+     fd_chr_close(chr);
+ }
+ 
+@@ -764,20 +706,14 @@ static CharDriverState *qemu_chr_open_stdio(QemuOpts *opts)
+ {
+     CharDriverState *chr;
+ 
+-    if (stdio_nb_clients >= STDIO_MAX_CLIENTS)
+-        return NULL;
+-    if (stdio_nb_clients == 0) {
+-        old_fd0_flags = fcntl(0, F_GETFL);
+-        tcgetattr (0, &oldtty);
+-        fcntl(0, F_SETFL, O_NONBLOCK);
+-        atexit(term_exit);
+-    }
++    old_fd0_flags = fcntl(0, F_GETFL);
++    tcgetattr (0, &oldtty);
++    fcntl(0, F_SETFL, O_NONBLOCK);
++    atexit(term_exit);
+ 
+     chr = qemu_chr_open_fd(0, 1);
+     chr->chr_close = qemu_chr_close_stdio;
+     chr->chr_set_echo = qemu_chr_set_echo_stdio;
+-    qemu_set_fd_handler2(0, stdio_read_poll, stdio_read, NULL, chr);
+-    stdio_nb_clients++;
+     stdio_allow_signal = qemu_opt_get_bool(opts, "signal",
+                                            display_type != DT_NOGRAPHIC);
+     qemu_chr_fe_set_echo(chr, false);
+-- 
+1.7.11.7
+

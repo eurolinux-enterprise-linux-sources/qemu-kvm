@@ -1,0 +1,69 @@
+From ef665282e68ee288351b4c464b739abb3b1e1836 Mon Sep 17 00:00:00 2001
+From: Michael S. Tsirkin <mst@redhat.com>
+Date: Wed, 14 May 2014 10:38:13 -0500
+Subject: [PATCH 19/20] virtio: validate config_len on load
+
+RH-Author: Michael S. Tsirkin <mst@redhat.com>
+Message-id: <1400063309-8932-1-git-send-email-mst@redhat.com>
+Patchwork-id: 58879
+O-Subject: [PATCH qemu-kvm RHEL6.6] virtio: validate config_len on load
+Bugzilla: 1095780
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Xiao Wang <jasowang@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Malformed input can have config_len in migration stream
+exceed the array size allocated on destination, the
+result will be heap overflow.
+
+To fix, that config_len matches on both sides.
+
+CVE-2014-0182
+
+Reported-by: "Dr. David Alan Gilbert" <dgilbert@redhat.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+(cherry picked from commit a890a2f9137ac3cf5b607649e66a6f3a5512d8dc)
+
+Bugzilla: 1095780
+Brew build: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7453342
+Tested: lightly on developer's box
+---
+ hw/virtio.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/virtio.c |    8 +++++++-
+ 1 files changed, 7 insertions(+), 1 deletions(-)
+
+diff --git a/hw/virtio.c b/hw/virtio.c
+index 14d2ee6..eb66eef 100644
+--- a/hw/virtio.c
++++ b/hw/virtio.c
+@@ -799,6 +799,7 @@ int virtio_load_with_features(VirtIODevice *vdev, QEMUFile *f,
+                               uint32_t extra_features)
+ {
+     int i, ret;
++    int32_t config_len;
+     uint32_t num;
+     uint32_t features;
+     uint32_t supported_features;
+@@ -828,7 +829,12 @@ int virtio_load_with_features(VirtIODevice *vdev, QEMUFile *f,
+     if (vdev->set_features)
+         vdev->set_features(vdev, features);
+     vdev->guest_features = features;
+-    vdev->config_len = qemu_get_be32(f);
++    config_len = qemu_get_be32(f);
++    if (config_len != vdev->config_len) {
++        error_report("Unexpected config length 0x%x. Expected 0x%zx",
++                     config_len, vdev->config_len);
++        return -1;
++    }
+     qemu_get_buffer(f, vdev->config, vdev->config_len);
+ 
+     num = qemu_get_be32(f);
+-- 
+1.7.1
+

@@ -1,0 +1,105 @@
+From ec7036c4487e7c2da38f3b4abb68c118fc3959ec Mon Sep 17 00:00:00 2001
+Message-Id: <ec7036c4487e7c2da38f3b4abb68c118fc3959ec.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:30 -0500
+Subject: [CHANGE 10/29] linux-aio: Convert laio_aiocb_info.cancel to
+ .cancel_async
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-11-git-send-email-famz@redhat.com>
+Patchwork-id: 64911
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 10/28] linux-aio: Convert laio_aiocb_info.cancel to .cancel_async
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Just call io_cancel (2), if it fails, it means the request is not
+canceled, so the event loop will eventually call
+qemu_laio_process_completion.
+
+In qemu_laio_process_completion, change to call the cb unconditionally.
+It is required by bdrv_aio_cancel_async.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 771b64daf9c73be98d223d3ab101a61f02cac277)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	block/linux-aio.c
+Conflict due to file renaming.
+---
+ linux-aio.c | 29 ++++++++---------------------
+ 1 file changed, 8 insertions(+), 21 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ linux-aio.c | 29 ++++++++---------------------
+ 1 file changed, 8 insertions(+), 21 deletions(-)
+
+diff --git a/linux-aio.c b/linux-aio.c
+index 8415c9c..fecbb87 100644
+--- a/linux-aio.c
++++ b/linux-aio.c
+@@ -70,9 +70,8 @@ static void qemu_laio_process_completion(struct qemu_laio_state *s,
+                 ret = -EINVAL;
+             }
+         }
+-
+-        laiocb->common.cb(laiocb->common.opaque, ret);
+     }
++    laiocb->common.cb(laiocb->common.opaque, ret);
+ 
+     qemu_aio_release(laiocb);
+ }
+@@ -126,34 +125,22 @@ static void laio_cancel(BlockDriverAIOCB *blockacb)
+     struct io_event event;
+     int ret;
+ 
+-    if (laiocb->ret != -EINPROGRESS)
++    if (laiocb->ret != -EINPROGRESS) {
+         return;
+-
+-    /*
+-     * Note that as of Linux 2.6.31 neither the block device code nor any
+-     * filesystem implements cancellation of AIO request.
+-     * Thus the polling loop below is the normal code path.
+-     */
++    }
+     ret = io_cancel(laiocb->ctx->ctx, &laiocb->iocb, &event);
+-    if (ret == 0) {
+-        laiocb->ret = -ECANCELED;
++    laiocb->ret = -ECANCELED;
++    if (ret != 0) {
++        /* iocb is not cancelled, cb will be called by the event loop later */
+         return;
+     }
+ 
+-    /*
+-     * We have to wait for the iocb to finish.
+-     *
+-     * The only way to get the iocb status update is by polling the io context.
+-     * We might be able to do this slightly more optimal by removing the
+-     * O_NONBLOCK flag.
+-     */
+-    while (laiocb->ret == -EINPROGRESS)
+-        qemu_laio_completion_cb(laiocb->ctx);
++    laiocb->common.cb(laiocb->common.opaque, laiocb->ret);
+ }
+ 
+ static const AIOCBInfo laio_aiocb_info = {
+     .aiocb_size         = sizeof(struct qemu_laiocb),
+-    .cancel             = laio_cancel,
++    .cancel_async       = laio_cancel,
+ };
+ 
+ BlockDriverAIOCB *laio_submit(BlockDriverState *bs, void *aio_ctx, int fd,
+-- 
+2.1.0
+

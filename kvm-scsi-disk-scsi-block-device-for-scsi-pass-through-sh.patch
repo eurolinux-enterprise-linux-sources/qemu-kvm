@@ -1,0 +1,75 @@
+From 47c801d7db44fda275293757caa77de1ca4e08c1 Mon Sep 17 00:00:00 2001
+Message-Id: <47c801d7db44fda275293757caa77de1ca4e08c1.1372244120.git.minovotn@redhat.com>
+In-Reply-To: <24977988cb53a0f50e2996977c2221c5a358a4b8.1372244120.git.minovotn@redhat.com>
+References: <24977988cb53a0f50e2996977c2221c5a358a4b8.1372244120.git.minovotn@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Wed, 19 Jun 2013 13:17:21 +0200
+Subject: [PATCH 10/12] scsi-disk: scsi-block device for scsi pass-through
+ should not be removable
+
+RH-Author: Pavel Hrdina <phrdina@redhat.com>
+Message-id: <b8ce7a1ae5fe3b70687e6971ccadf8447808b459.1371646058.git.phrdina@redhat.com>
+Patchwork-id: 52004
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 2/2] scsi-disk: scsi-block device for scsi pass-through should not be removable
+Bugzilla: 890011
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Michal Novotny <minovotn@redhat.com>
+
+This patch adds a new SCSI_DISK_F_NO_REMOVABLE_DEVOPS feature. By this
+feature we can set that the scsi-block (scsi pass-through) device will still
+be removable from the guest side, but from monitor it cannot be removed.
+
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 18e673b8f350e1d789b8a50d209eb4a4252ebbda)
+---
+ hw/scsi-disk.c | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/scsi-disk.c | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/hw/scsi-disk.c b/hw/scsi-disk.c
+index bdb106a..bbbe016 100644
+--- a/hw/scsi-disk.c
++++ b/hw/scsi-disk.c
+@@ -57,7 +57,8 @@ typedef struct SCSIDiskReq {
+     BlockAcctCookie acct;
+ } SCSIDiskReq;
+ 
+-#define SCSI_DISK_F_REMOVABLE   0
++#define SCSI_DISK_F_REMOVABLE             0
++#define SCSI_DISK_F_NO_REMOVABLE_DEVOPS   2
+ 
+ struct SCSIDiskState
+ {
+@@ -1730,7 +1731,8 @@ static int scsi_initfn(SCSIDevice *dev)
+         return -1;
+     }
+ 
+-    if (s->features & (1 << SCSI_DISK_F_REMOVABLE)) {
++    if ((s->features & (1 << SCSI_DISK_F_REMOVABLE)) &&
++            !(s->features & (1 << SCSI_DISK_F_NO_REMOVABLE_DEVOPS))) {
+         bdrv_set_dev_ops(s->qdev.conf.bs, &scsi_disk_removable_block_ops, s);
+     } else {
+         bdrv_set_dev_ops(s->qdev.conf.bs, &scsi_disk_block_ops, s);
+@@ -1865,6 +1867,12 @@ static int scsi_block_initfn(SCSIDevice *dev)
+     } else {
+         s->qdev.blocksize = 512;
+     }
++
++    /* Makes the scsi-block device not removable by using HMP and QMP eject
++     * command.
++     */
++    s->features |= (1 << SCSI_DISK_F_NO_REMOVABLE_DEVOPS);
++
+     return scsi_initfn(&s->qdev);
+ }
+ 
+-- 
+1.7.11.7
+

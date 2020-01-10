@@ -1,0 +1,72 @@
+From 67af725c607335121c7bc0b6e04c5e4e96774e98 Mon Sep 17 00:00:00 2001
+Message-Id: <67af725c607335121c7bc0b6e04c5e4e96774e98.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:06:14 +0200
+Subject: [PATCH 63/65] chardev: add memory (ringbuf) support to qapi
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-64-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52134
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 63/65] chardev: add memory (ringbuf) support to qapi
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+This patch adds 'memory' support to qapi and also switches over
+the memory chardev initialization to the new qapi code path.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 1da48c658a26d0c1444d05d8d3a545d311e01026)
+
+Conflicts:
+
+	qemu-char.c
+
+[ rhel6: qapi bits only, no ringbuf in rhel6 ]
+---
+ qapi-schema.json |   14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema.json | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/qapi-schema.json b/qapi-schema.json
+index 24c30f4..a763e17 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -519,6 +519,17 @@
+                                  '*rows'   : 'int' } }
+ 
+ ##
++# @ChardevRingbuf:
++#
++# Configuration info for memory chardevs
++#
++# @size: #optional Ringbuffer size, must be power of two, default is 65536
++#
++# Since: 1.5
++##
++{ 'type': 'ChardevRingbuf', 'data': { '*size'  : 'int' } }
++
++##
+ # @ChardevBackend:
+ #
+ # Configuration info for the new chardev backend.
+@@ -541,7 +552,8 @@
+                                        'console': 'ChardevDummy',
+                                        'spicevmc' : 'ChardevSpiceChannel',
+                                        'spiceport' : 'ChardevSpicePort',
+-                                       'vc'     : 'ChardevVC' } }
++                                       'vc'     : 'ChardevVC',
++                                       'memory' : 'ChardevRingbuf' } }
+ 
+ ##
+ # @ChardevReturn:
+-- 
+1.7.11.7
+

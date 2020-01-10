@@ -1,0 +1,176 @@
+From 27bffbb2a38e08d78c8be794c9fa128240475f57 Mon Sep 17 00:00:00 2001
+Message-Id: <27bffbb2a38e08d78c8be794c9fa128240475f57.1376572530.git.minovotn@redhat.com>
+In-Reply-To: <1ab1cadd348058496d2f900c3d4ac4b7c325d3e6.1376572530.git.minovotn@redhat.com>
+References: <1ab1cadd348058496d2f900c3d4ac4b7c325d3e6.1376572530.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 12 Aug 2013 15:17:07 +0200
+Subject: [PATCH 03/11] dump: populate guest_phys_blocks
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1376320628-11255-4-git-send-email-lersek@redhat.com>
+Patchwork-id: 53156
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 3/4] dump: populate guest_phys_blocks
+Bugzilla: 989585
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Radim Krcmar <rkrcmar@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+
+While the machine is paused, in guest_phys_blocks_append() we register a
+one-shot CPUPhysMemoryClient, solely for the initial collection of the
+valid guest-physical memory ranges that happens at client registration
+time.
+
+For each range that is reported to guest_phys_blocks_set_memory(), we
+attempt to merge the range with the preceding one.
+
+Ranges can only be joined if they are contiguous in both guest-physical
+address space, and contiguous in host virtual address space.
+
+The "maximal" ranges that remain in the end constitute the guest-physical
+memory map that the dump will be based on.
+
+Manual port of upstream commit c5d7f60f0614250bd925071e25220ce5958f75d0.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ memory_mapping.h |    1 +
+ dump.c           |    2 +-
+ memory_mapping.c |   79 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 81 insertions(+), 1 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ dump.c           |  2 +-
+ memory_mapping.c | 79 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ memory_mapping.h |  1 +
+ 3 files changed, 81 insertions(+), 1 deletion(-)
+
+diff --git a/dump.c b/dump.c
+index 42d8ebb..87f6b85 100644
+--- a/dump.c
++++ b/dump.c
+@@ -745,7 +745,7 @@ static int dump_init(DumpState *s, int fd, bool paging, bool has_filter,
+     s->length = length;
+ 
+     guest_phys_blocks_init(&s->guest_phys_blocks);
+-    /* FILL LIST */
++    guest_phys_blocks_append(&s->guest_phys_blocks);
+ 
+     s->start = get_start_block(s);
+     if (s->start == -1) {
+diff --git a/memory_mapping.c b/memory_mapping.c
+index 9b55746..aaddd68 100644
+--- a/memory_mapping.c
++++ b/memory_mapping.c
+@@ -11,10 +11,14 @@
+  *
+  */
+ 
++#include <glib.h>
++
+ #include "cpu.h"
+ #include "cpu-all.h"
+ #include "memory_mapping.h"
+ 
++//#define DEBUG_GUEST_PHYS_REGION_ADD
++
+ static void memory_mapping_list_add_mapping_sorted(MemoryMappingList *list,
+                                                    MemoryMapping *mapping)
+ {
+@@ -182,6 +186,81 @@ void guest_phys_blocks_init(GuestPhysBlockList *list)
+     QTAILQ_INIT(&list->head);
+ }
+ 
++typedef struct GuestPhysClient {
++    GuestPhysBlockList *list;
++    CPUPhysMemoryClient client;
++} GuestPhysClient;
++
++static void guest_phys_blocks_set_memory(struct CPUPhysMemoryClient *client,
++                                         target_phys_addr_t target_start,
++                                         ram_addr_t size,
++                                         ram_addr_t ram_addr)
++{
++    GuestPhysClient *g;
++    target_phys_addr_t target_end;
++    uint8_t *host_addr;
++    GuestPhysBlock *predecessor;
++
++    /* we only care about RAM */
++    if ((ram_addr & ~TARGET_PAGE_MASK) != 0) {
++        return;
++    }
++
++    g           = container_of(client, GuestPhysClient, client);
++    target_end  = target_start + size;
++    host_addr   = qemu_get_ram_ptr(ram_addr);
++    predecessor = NULL;
++
++    /* find continuity in guest physical address space */
++    if (!QTAILQ_EMPTY(&g->list->head)) {
++        target_phys_addr_t predecessor_size;
++
++        predecessor = QTAILQ_LAST(&g->list->head, GuestPhysBlockHead);
++        predecessor_size = predecessor->target_end - predecessor->target_start;
++
++        /* the memory API guarantees monotonically increasing traversal */
++        g_assert(predecessor->target_end <= target_start);
++
++        /* we want continuity in both guest-physical and host-virtual memory */
++        if (predecessor->target_end < target_start ||
++            predecessor->host_addr + predecessor_size != host_addr) {
++            predecessor = NULL;
++        }
++    }
++
++    if (predecessor == NULL) {
++        /* isolated mapping, allocate it and add it to the list */
++        GuestPhysBlock *block = g_malloc0(sizeof *block);
++
++        block->target_start = target_start;
++        block->target_end   = target_end;
++        block->host_addr    = host_addr;
++
++        QTAILQ_INSERT_TAIL(&g->list->head, block, next);
++        ++g->list->num;
++    } else {
++        /* expand predecessor until @target_end; predecessor's start doesn't
++         * change
++         */
++        predecessor->target_end = target_end;
++    }
++
++#ifdef DEBUG_GUEST_PHYS_REGION_ADD
++    fprintf(stderr, "%s: target_start=" TARGET_FMT_plx " target_end="
++            TARGET_FMT_plx ": %s (count: %u)\n", __FUNCTION__, target_start,
++            target_end, predecessor ? "joined" : "added", g->list->num);
++#endif
++}
++
++void guest_phys_blocks_append(GuestPhysBlockList *list)
++{
++    GuestPhysClient g = { 0 };
++
++    g.list = list;
++    g.client.set_memory = &guest_phys_blocks_set_memory;
++    cpu_register_phys_memory_client(&g.client);
++    cpu_unregister_phys_memory_client(&g.client);
++}
+ 
+ #if defined(CONFIG_HAVE_GET_MEMORY_MAPPING)
+ 
+diff --git a/memory_mapping.h b/memory_mapping.h
+index 36d82e9..2a2d232 100644
+--- a/memory_mapping.h
++++ b/memory_mapping.h
+@@ -66,6 +66,7 @@ void memory_mapping_list_init(MemoryMappingList *list);
+ 
+ void guest_phys_blocks_free(GuestPhysBlockList *list);
+ void guest_phys_blocks_init(GuestPhysBlockList *list);
++void guest_phys_blocks_append(GuestPhysBlockList *list);
+ 
+ /*
+  * Return value:
+-- 
+1.7.11.7
+

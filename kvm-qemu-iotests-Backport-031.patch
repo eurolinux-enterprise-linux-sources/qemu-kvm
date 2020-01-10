@@ -1,0 +1,186 @@
+From 50bfe7a719a48458c25f39ee118708fd0f66b40f Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:44 -0500
+Subject: [CHANGE 22/31] qemu-iotests: Backport 031
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-23-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60376
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 22/29] qemu-iotests: Backport 031
+Bugzilla: 1122410
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+RHEL 6 doesn't support v3 images, remove that part.
+
+It also doesn't include feature table header extensions, modify the
+expected output accordingly.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ tests/qemu-iotests/031     |   4 +-
+ tests/qemu-iotests/031.out | 113 +--------------------------------------------
+ 2 files changed, 3 insertions(+), 114 deletions(-)
+
+diff --git a/tests/qemu-iotests/031 b/tests/qemu-iotests/031
+index 2a77ba8..1d82559 100755
+--- a/tests/qemu-iotests/031
++++ b/tests/qemu-iotests/031
+@@ -48,10 +48,10 @@ CLUSTER_SIZE=65536
+ 
+ # qcow2.py output depends on the exact options used, so override the command
+ # line here as an exception
+-for IMGOPTS in "compat=0.10" "compat=1.1"; do
++for x in "compat=0.10"; do
+ 
+     echo
+-    echo ===== Testing with -o $IMGOPTS =====
++    echo ===== Testing with -o $x =====
+     echo
+     echo === Create image with unknown header extension ===
+     echo
+diff --git a/tests/qemu-iotests/031.out b/tests/qemu-iotests/031.out
+index a943344..8fd3768 100644
+--- a/tests/qemu-iotests/031.out
++++ b/tests/qemu-iotests/031.out
+@@ -53,11 +53,6 @@ refcount_order            4
+ header_length             72
+ 
+ Header extension:
+-magic                     0x6803f857
+-length                    144
+-data                      <binary>
+-
+-Header extension:
+ magic                     0x12345678
+ length                    31
+ data                      'This is a test header extension'
+@@ -68,7 +63,7 @@ No errors were found on the image.
+ 
+ magic                     0x514649fb
+ version                   2
+-backing_file_offset       0x128
++backing_file_offset       0x90
+ backing_file_size         0x17
+ cluster_bits              16
+ size                      67108864
+@@ -91,112 +86,6 @@ length                    11
+ data                      'host_device'
+ 
+ Header extension:
+-magic                     0x6803f857
+-length                    144
+-data                      <binary>
+-
+-Header extension:
+-magic                     0x12345678
+-length                    31
+-data                      'This is a test header extension'
+-
+-
+-===== Testing with -o compat=1.1 =====
+-
+-=== Create image with unknown header extension ===
+-
+-Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
+-magic                     0x514649fb
+-version                   3
+-backing_file_offset       0x0
+-backing_file_size         0x0
+-cluster_bits              16
+-size                      67108864
+-crypt_method              0
+-l1_size                   1
+-l1_table_offset           0x30000
+-refcount_table_offset     0x10000
+-refcount_table_clusters   1
+-nb_snapshots              0
+-snapshot_offset           0x0
+-incompatible_features     0x0
+-compatible_features       0x0
+-autoclear_features        0x0
+-refcount_order            4
+-header_length             104
+-
+-Header extension:
+-magic                     0x12345678
+-length                    31
+-data                      'This is a test header extension'
+-
+-No errors were found on the image.
+-
+-=== Rewrite header with no backing file ===
+-
+-magic                     0x514649fb
+-version                   3
+-backing_file_offset       0x0
+-backing_file_size         0x0
+-cluster_bits              16
+-size                      67108864
+-crypt_method              0
+-l1_size                   1
+-l1_table_offset           0x30000
+-refcount_table_offset     0x10000
+-refcount_table_clusters   1
+-nb_snapshots              0
+-snapshot_offset           0x0
+-incompatible_features     0x0
+-compatible_features       0x0
+-autoclear_features        0x0
+-refcount_order            4
+-header_length             104
+-
+-Header extension:
+-magic                     0x6803f857
+-length                    144
+-data                      <binary>
+-
+-Header extension:
+-magic                     0x12345678
+-length                    31
+-data                      'This is a test header extension'
+-
+-No errors were found on the image.
+-
+-=== Add a backing file and format ===
+-
+-magic                     0x514649fb
+-version                   3
+-backing_file_offset       0x148
+-backing_file_size         0x17
+-cluster_bits              16
+-size                      67108864
+-crypt_method              0
+-l1_size                   1
+-l1_table_offset           0x30000
+-refcount_table_offset     0x10000
+-refcount_table_clusters   1
+-nb_snapshots              0
+-snapshot_offset           0x0
+-incompatible_features     0x0
+-compatible_features       0x0
+-autoclear_features        0x0
+-refcount_order            4
+-header_length             104
+-
+-Header extension:
+-magic                     0xe2792aca
+-length                    11
+-data                      'host_device'
+-
+-Header extension:
+-magic                     0x6803f857
+-length                    144
+-data                      <binary>
+-
+-Header extension:
+ magic                     0x12345678
+ length                    31
+ data                      'This is a test header extension'
+-- 
+1.9.3
+

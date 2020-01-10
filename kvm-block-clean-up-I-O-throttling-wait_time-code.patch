@@ -1,0 +1,69 @@
+From 11c51b7c9070f70040c5042297aabbfe22e409e5 Mon Sep 17 00:00:00 2001
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 21 Jun 2013 06:20:09 +0200
+Subject: [PATCH 13/21] block: clean up I/O throttling wait_time code
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1371795611-7208-14-git-send-email-famz@redhat.com>
+Patchwork-id: 52087
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 13/15] block: clean up I/O throttling wait_time code
+Bugzilla: 956825
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@redhat.com>
+
+The wait_time variable is in seconds.  Reflect this in a comment and use
+NANOSECONDS_PER_SECOND instead of BLOCK_IO_SLICE_TIME * 10 (which
+happens to have the right value).
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Tested-By: Benoit Canet <benoit@irqsave.net>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 0775437fafc5c733564645a22f75490770bf41f7)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block.c |    6 +++---
+ 1 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/block.c b/block.c
+index ff4b682..b7ffa7b 100644
+--- a/block.c
++++ b/block.c
+@@ -3653,7 +3653,7 @@ static bool bdrv_exceed_bps_limits(BlockDriverState *bs, int nb_sectors,
+                 BLOCK_IO_SLICE_TIME;
+     bs->slice_end += extension;
+     if (wait) {
+-        *wait = wait_time * BLOCK_IO_SLICE_TIME * 10;
++        *wait = wait_time * NANOSECONDS_PER_SECOND;
+     }
+ 
+     return true;
+@@ -3694,7 +3694,7 @@ static bool bdrv_exceed_iops_limits(BlockDriverState *bs, bool is_write,
+         return false;
+     }
+ 
+-    /* Calc approx time to dispatch */
++    /* Calc approx time to dispatch, in seconds */
+     wait_time = (ios_base + 1) / iops_limit;
+     if (wait_time > elapsed_time) {
+         wait_time = wait_time - elapsed_time;
+@@ -3705,7 +3705,7 @@ static bool bdrv_exceed_iops_limits(BlockDriverState *bs, bool is_write,
+     /* Exceeded current slice, extend it by another slice time */
+     bs->slice_end += BLOCK_IO_SLICE_TIME;
+     if (wait) {
+-        *wait = wait_time * BLOCK_IO_SLICE_TIME * 10;
++        *wait = wait_time * NANOSECONDS_PER_SECOND;
+     }
+ 
+     return true;
+-- 
+1.7.1
+

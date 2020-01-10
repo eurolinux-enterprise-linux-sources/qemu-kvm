@@ -1,0 +1,78 @@
+From 2f21aba0c2467b81c074579f7b137b30f46a7df9 Mon Sep 17 00:00:00 2001
+Message-Id: <2f21aba0c2467b81c074579f7b137b30f46a7df9.1429847625.git.jen@redhat.com>
+In-Reply-To: <67fe78a504035b7baf527bbd4726c75b0a1f8ba4.1429847625.git.jen@redhat.com>
+References: <67fe78a504035b7baf527bbd4726c75b0a1f8ba4.1429847625.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Wed, 22 Apr 2015 03:17:52 -0500
+Subject: [CHANGE 3/7] virtio-blk: remove dead variable in
+ virtio_blk_handle_scsi
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429672676-18444-2-git-send-email-famz@redhat.com>
+Patchwork-id: 64861
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v4 1/5] virtio-blk: remove dead variable in virtio_blk_handle_scsi
+Bugzilla: 1006871
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+
+From: Christoph Hellwig <hch@lst.de>
+
+As pointed out by clang size is only ever written to, but never actually
+used.
+
+Signed-off-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 4277906d281e7fd04817782777b90f6d122f4443)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ hw/virtio-blk.c | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/virtio-blk.c | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/hw/virtio-blk.c b/hw/virtio-blk.c
+index 298864a..b575e1d 100644
+--- a/hw/virtio-blk.c
++++ b/hw/virtio-blk.c
+@@ -155,7 +155,7 @@ static VirtIOBlockReq *virtio_blk_get_request(VirtIOBlock *s)
+ static void virtio_blk_handle_scsi(VirtIOBlockReq *req)
+ {
+     struct sg_io_hdr hdr;
+-    int ret, size = 0;
++    int ret;
+     int status;
+     int i;
+ 
+@@ -192,7 +192,6 @@ static void virtio_blk_handle_scsi(VirtIOBlockReq *req)
+      * before the regular inhdr.
+      */
+     req->scsi = (void *)req->elem.in_sg[req->elem.in_num - 2].iov_base;
+-    size = sizeof(*req->in) + sizeof(*req->scsi);
+ 
+     memset(&hdr, 0, sizeof(struct sg_io_hdr));
+     hdr.interface_id = 'S';
+@@ -224,7 +223,6 @@ static void virtio_blk_handle_scsi(VirtIOBlockReq *req)
+             hdr.dxfer_len += req->elem.in_sg[i].iov_len;
+ 
+         hdr.dxferp = req->elem.in_sg;
+-        size += hdr.dxfer_len;
+     } else {
+         /*
+          * Some SCSI commands don't actually transfer any data.
+@@ -234,7 +232,6 @@ static void virtio_blk_handle_scsi(VirtIOBlockReq *req)
+ 
+     hdr.sbp = req->elem.in_sg[req->elem.in_num - 3].iov_base;
+     hdr.mx_sb_len = req->elem.in_sg[req->elem.in_num - 3].iov_len;
+-    size += hdr.mx_sb_len;
+ 
+     ret = bdrv_ioctl(req->dev->bs, SG_IO, &hdr);
+     if (ret) {
+-- 
+2.1.0
+

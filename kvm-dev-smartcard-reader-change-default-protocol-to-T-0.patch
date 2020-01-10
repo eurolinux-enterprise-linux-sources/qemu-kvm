@@ -1,0 +1,70 @@
+From e395c469b4edb2ab82f29bf6e254d99507130631 Mon Sep 17 00:00:00 2001
+Message-Id: <e395c469b4edb2ab82f29bf6e254d99507130631.1375955382.git.minovotn@redhat.com>
+In-Reply-To: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+References: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+From: Alon Levy <alevy@redhat.com>
+Date: Thu, 1 Aug 2013 11:53:41 +0200
+Subject: [PATCH 22/35] dev-smartcard-reader: change default protocol to T=0
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Alon Levy <alevy@redhat.com>
+Message-id: <1375358029-12968-23-git-send-email-alevy@redhat.com>
+Patchwork-id: 52912
+O-Subject: [RHEL-6.5 RHEL-6.4.z qemu-kvm v6 22/30] dev-smartcard-reader: change default protocol to T=0
+Bugzilla: 917860
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+We don't support T=1 so we shouldn't advertise it by default.
+
+Two independent changes:
+* Default ATR
+ sets T=0. This gets overwritten by the client provided ATR later.
+* Class descriptor
+ changes dwAdvertise dwProtocols.PPPP to 0x1 and dwProtocols.RRRR=0 per spec.
+
+Signed-off-by: Alon Levy <alevy@redhat.com>
+Reviewed-by: Marc-André Lureau <mlureau@redhat.com>
+(cherry picked from commit d7d218ef02d87c637d20d64da8f575d434ff6f78)
+
+Conflicts:
+	hw/usb/dev-smartcard-reader.c
+---
+ hw/usb-ccid.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/usb-ccid.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/hw/usb-ccid.c b/hw/usb-ccid.c
+index faeec79..fee71f4 100644
+--- a/hw/usb-ccid.c
++++ b/hw/usb-ccid.c
+@@ -388,8 +388,8 @@ static const uint8_t qemu_ccid_config_descriptor[] = {
+                      */
+         0x07,       /* u8  bVoltageSupport; 01h - 5.0v, 02h - 3.0, 03 - 1.8 */
+ 
+-        0x03, 0x00, /* u32 dwProtocols; RRRR PPPP. RRRR = 0000h.*/
+-        0x00, 0x00, /* PPPP: 0001h = Protocol T=0, 0002h = Protocol T=1 */
++        0x00, 0x00, /* u32 dwProtocols; RRRR PPPP. RRRR = 0000h.*/
++        0x01, 0x00, /* PPPP: 0001h = Protocol T=0, 0002h = Protocol T=1 */
+                     /* u32 dwDefaultClock; in kHZ (0x0fa0 is 4 MHz) */
+         0xa0, 0x0f, 0x00, 0x00,
+                     /* u32 dwMaximumClock; */
+@@ -932,7 +932,7 @@ static const CCID_ProtocolDataStructure defaultProtocolDataStructure = {
+ 
+ static void ccid_reset_parameters(USBCCIDState *s)
+ {
+-   s->bProtocolNum = 1; /* T=1 */
++   s->bProtocolNum = 0; /* T=0 */
+    s->abProtocolDataStructure = defaultProtocolDataStructure;
+ }
+ 
+-- 
+1.7.11.7
+

@@ -1,0 +1,68 @@
+From b70f4d58f29c3fd56772204203a180ddbc6115a6 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Wed, 16 Jul 2014 17:31:33 +0200
+Subject: [PATCH 43/44] block: Create proper size file for disk mirror
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1405531894-6801-2-git-send-email-kwolf@redhat.com>
+Patchwork-id: 59930
+O-Subject: [RHEL-6.6/6.5.z qemu-kvm PATCH 1/2] block: Create proper size file for disk mirror
+Bugzilla: 1092117
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Vishvananda Ishaya <vishvananda@gmail.com>
+
+The qmp monitor command to mirror a disk was passing -1 for size
+along with the disk's backing file. This size of the resulting disk
+is the size of the backing file, which is incorrect if the disk
+has been resized. Therefore we should always pass in the size of
+the current disk.
+
+Signed-off-by: Vishvananda Ishaya <vishvananda@gmail.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 8689907266b649b757c2203d9652cbe928a3ae0b)
+
+Conflicts:
+	blockdev.c
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ blockdev.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ blockdev.c |    6 +++---
+ 1 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/blockdev.c b/blockdev.c
+index 9689679..61d237f 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -1041,10 +1041,10 @@ void qmp_transaction(BlockdevActionList *dev_list, Error **errp)
+             goto delete_and_fail;
+         }
+ 
++        bdrv_get_geometry(states->old_bs, &size);
++        size *= 512;
+         if (full && mode != NEW_IMAGE_MODE_EXISTING) {
+             assert(format && drv);
+-            bdrv_get_geometry(states->old_bs, &size);
+-            size *= 512;
+             bdrv_img_create(new_image_file, format,
+                             NULL, NULL, NULL, size, flags, &local_err);
+         } else {
+@@ -1056,7 +1056,7 @@ void qmp_transaction(BlockdevActionList *dev_list, Error **errp)
+                 bdrv_img_create(new_image_file, format,
+                                 source->filename,
+                                 source->drv->format_name,
+-                                NULL, -1, flags, &local_err);
++                                NULL, size, flags, &local_err);
+                 break;
+             default:
+                 error_setg(&local_err, "%s: invalid NewImageMode %u",
+-- 
+1.7.1
+

@@ -1,0 +1,218 @@
+From bd05648104dddbf3286ea3aa6ba07eb0734e4d77 Mon Sep 17 00:00:00 2001
+Message-Id: <bd05648104dddbf3286ea3aa6ba07eb0734e4d77.1366117835.git.minovotn@redhat.com>
+In-Reply-To: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+References: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+From: Amos Kong <akong@redhat.com>
+Date: Thu, 20 Dec 2012 05:08:49 +0100
+Subject: [PATCH 03/19] virtio-net: stop/start bh when appropriate
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1355980129-15121-1-git-send-email-akong@redhat.com>
+Patchwork-id: 45245
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] virtio-net: stop/start bh when appropriate
+Bugzilla: 843797
+RH-Acked-by: Vlad Yasevich <vyasevic@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+
+From: Michael S. Tsirkin <mst@redhat.com>
+
+Bugzilla: 843797
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=5210967
+Test: tested in localhost
+
+When shutdown guest, alarm_timer already quits before network cleanup,
+but alarm_timer is still used when stop vhost backend, it caused qemu
+crash.
+
+This problem was fixed in upstream 783e7706, if the tx_timer is not
+active, qemu will not setup tx_timer in virtio_net_set_status().
+Backport following patch to fix this issue.
+
+    commit 783e7706937fe15523b609b545587a028a2bdd03
+    Author: Michael S. Tsirkin <mst@redhat.com>
+    Date:   Mon Nov 22 19:52:30 2010 +0200
+
+        virtio-net: stop/start bh when appropriate
+
+        Avoid sending out packets, and modifying
+        memory, when VM is stopped.
+        Add assert statements to verify this does not happen.
+
+        Avoid scheduling bh when vhost-net is started.
+
+        Stop bh when driver disabled bus mastering
+        (we must not access memory after this).
+
+        Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+        Tested-by: Jason Wang <jasowang@redhat.com>
+
+Conflicts:
+    hw/virtio-net.c
+
+Upstream commit 85cf2a8d moved vm_running to VirtIONet struct, it's
+backported to internal. Fixed conflicts of n->vm_running.
+Trivial fix to make internal consistent with Upstream commit 32993698
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+---
+ hw/virtio-net.c |   70 ++++++++++++++++++++++++++++++++++++++++--------------
+ 1 files changed, 52 insertions(+), 18 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/virtio-net.c | 70 ++++++++++++++++++++++++++++++++++++++++++---------------
+ 1 file changed, 52 insertions(+), 18 deletions(-)
+
+diff --git a/hw/virtio-net.c b/hw/virtio-net.c
+index abea7c2..e56f6fc 100644
+--- a/hw/virtio-net.c
++++ b/hw/virtio-net.c
+@@ -98,9 +98,14 @@ static void virtio_net_set_config(VirtIODevice *vdev, const uint8_t *config)
+     }
+ }
+ 
+-static void virtio_net_set_status(struct VirtIODevice *vdev, uint8_t status)
++static bool virtio_net_started(VirtIONet *n, uint8_t status)
++{
++    return (status & VIRTIO_CONFIG_S_DRIVER_OK) &&
++        (n->status & VIRTIO_NET_S_LINK_UP) && n->vdev.vm_running;
++}
++
++static void virtio_net_vhost_status(VirtIONet *n, uint8_t status)
+ {
+-    VirtIONet *n = to_virtio_net(vdev);
+     if (!n->nic->nc.peer) {
+         return;
+     }
+@@ -111,10 +116,8 @@ static void virtio_net_set_status(struct VirtIODevice *vdev, uint8_t status)
+     if (!tap_get_vhost_net(n->nic->nc.peer)) {
+         return;
+     }
+-    if (!!n->vhost_started == ((status & VIRTIO_CONFIG_S_DRIVER_OK) &&
+-                               (n->status & VIRTIO_NET_S_LINK_UP) &&
+-                               n->vdev.vm_running &&
+-                               !n->nic->nc.peer->link_down)) {
++    if (!!n->vhost_started == virtio_net_started(n, status) &&
++                              !n->nic->nc.peer->link_down) {
+         return;
+     }
+     if (!n->vhost_started) {
+@@ -122,7 +125,7 @@ static void virtio_net_set_status(struct VirtIODevice *vdev, uint8_t status)
+         if (!vhost_net_query(tap_get_vhost_net(n->nic->nc.peer), &n->vdev)) {
+             return;
+         }
+-        r = vhost_net_start(tap_get_vhost_net(n->nic->nc.peer), vdev);
++        r = vhost_net_start(tap_get_vhost_net(n->nic->nc.peer), &n->vdev);
+         if (r < 0) {
+             fprintf(stderr, "unable to start vhost net: %d: "
+                     "falling back on userspace virtio\n", -r);
+@@ -135,6 +138,32 @@ static void virtio_net_set_status(struct VirtIODevice *vdev, uint8_t status)
+     }
+ }
+ 
++static void virtio_net_set_status(struct VirtIODevice *vdev, uint8_t status)
++{
++    VirtIONet *n = to_virtio_net(vdev);
++
++    virtio_net_vhost_status(n, status);
++
++    if (!n->tx_waiting) {
++        return;
++    }
++
++    if (virtio_net_started(n, status) && !n->vhost_started) {
++        if (n->tx_timer) {
++            qemu_mod_timer(n->tx_timer,
++                           qemu_get_clock(vm_clock) + n->tx_timeout);
++        } else {
++            qemu_bh_schedule(n->tx_bh);
++        }
++    } else {
++        if (n->tx_timer) {
++            qemu_del_timer(n->tx_timer);
++        } else {
++            qemu_bh_cancel(n->tx_bh);
++        }
++    }
++}
++
+ static void virtio_net_set_link_status(VLANClientState *nc)
+ {
+     VirtIONet *n = DO_UPCAST(NICState, nc, nc)->opaque;
+@@ -680,11 +709,12 @@ static int32_t virtio_net_flush_tx(VirtIONet *n, VirtQueue *vq)
+ {
+     VirtQueueElement elem;
+     int32_t num_packets = 0;
+-
+     if (!(n->vdev.status & VIRTIO_CONFIG_S_DRIVER_OK)) {
+         return num_packets;
+     }
+ 
++    assert(n->vdev.vm_running);
++
+     if (n->async_tx.elem.out_num) {
+         virtio_queue_set_notification(n->tx_vq, 0);
+         return num_packets;
+@@ -743,6 +773,12 @@ static void virtio_net_handle_tx_timer(VirtIODevice *vdev, VirtQueue *vq)
+ {
+     VirtIONet *n = to_virtio_net(vdev);
+ 
++    /* This happens when device was stopped but VCPU wasn't. */
++    if (!n->vdev.vm_running) {
++        n->tx_waiting = 1;
++        return;
++    }
++
+     if (n->tx_waiting) {
+         virtio_queue_set_notification(vq, 1);
+         qemu_del_timer(n->tx_timer);
+@@ -763,14 +799,19 @@ static void virtio_net_handle_tx_bh(VirtIODevice *vdev, VirtQueue *vq)
+     if (unlikely(n->tx_waiting)) {
+         return;
+     }
++    n->tx_waiting = 1;
++    /* This happens when device was stopped but VCPU wasn't. */
++    if (!n->vdev.vm_running) {
++        return;
++    }
+     virtio_queue_set_notification(vq, 0);
+     qemu_bh_schedule(n->tx_bh);
+-    n->tx_waiting = 1;
+ }
+ 
+ static void virtio_net_tx_timer(void *opaque)
+ {
+     VirtIONet *n = opaque;
++    assert(n->vdev.vm_running);
+ 
+     n->tx_waiting = 0;
+ 
+@@ -787,6 +828,8 @@ static void virtio_net_tx_bh(void *opaque)
+     VirtIONet *n = opaque;
+     int32_t ret;
+ 
++    assert(n->vdev.vm_running);
++
+     n->tx_waiting = 0;
+ 
+     /* Just in case the driver is not ready on more */
+@@ -936,15 +979,6 @@ static int virtio_net_load(QEMUFile *f, void *opaque, int version_id)
+     }
+     n->mac_table.first_multi = i;
+ 
+-    if (n->tx_waiting) {
+-        if (n->tx_timer) {
+-            qemu_mod_timer(n->tx_timer,
+-                           qemu_get_clock(vm_clock) + n->tx_timeout);
+-        } else {
+-            qemu_bh_schedule(n->tx_bh);
+-        }
+-    }
+-
+     /* nc.link_down can't be migrated, so infer link_down according
+      * to link status bit in n->status */
+     n->nic->nc.link_down = (n->status & VIRTIO_NET_S_LINK_UP) == 0;
+-- 
+1.7.11.7
+

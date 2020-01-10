@@ -1,0 +1,50 @@
+From 609a4f100fe68bff457f5dfee6751ed6635f7c0d Mon Sep 17 00:00:00 2001
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 20 May 2014 10:37:37 +0200
+Subject: [PATCH 05/26] add msos-desc compat prop
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1400582257-1744-7-git-send-email-kraxel@redhat.com>
+Patchwork-id: 58964
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 6/6] add msos-desc compat prop
+Bugzilla: 949547
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+---
+ hw/pc.c | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ hw/pc.c |   10 +++++++---
+ 1 files changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/hw/pc.c b/hw/pc.c
+index 3ffc330..8ef52fb 100644
+--- a/hw/pc.c
++++ b/hw/pc.c
+@@ -1623,12 +1623,16 @@ static void rhel_common_init(const char *type1_version,
+                      strlen(buf) + 1, buf);
+ }
+ 
+-#define PC_RHEL6_5_COMPAT
+-
++#define PC_RHEL6_5_COMPAT \
++        {\
++            .driver   = "USB",\
++            .property = "msos-desc",\
++            .value    = "off",\
++        }
+ 
+ #define PC_RHEL6_4_COMPAT \
+         PC_RHEL6_5_COMPAT \
+-        {\
++        ,{\
+             .driver   = "virtio-scsi-pci",\
+             .property = "vectors",\
+             .value    = stringify(2),\
+-- 
+1.7.1
+

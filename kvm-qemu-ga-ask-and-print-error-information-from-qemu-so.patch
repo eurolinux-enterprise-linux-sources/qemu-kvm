@@ -1,0 +1,71 @@
+From 1833f0273ccd60bbc3742edd9ba9352833964778 Mon Sep 17 00:00:00 2001
+Message-Id: <1833f0273ccd60bbc3742edd9ba9352833964778.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:27:37 +0200
+Subject: [PATCH 072/114] qemu-ga: ask and print error information from
+ qemu-sockets
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-15-git-send-email-lersek@redhat.com>
+Patchwork-id: 51113
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 14/56] qemu-ga: ask and print error information from qemu-sockets
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Reviewed-by: Luiz Capitulino <lcapitulino@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 90119816e36ba019650214e7efeccdac1d4a9e32)
+
+RHEL-6 note: unix_listen() doesn't report errors via Error yet, work it
+around. A later backport should fix this.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ v2: added RHEL-6 note and its subject code
+
+ qga/channel-posix.c |   14 +++++++++++++-
+ 1 files changed, 13 insertions(+), 1 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/channel-posix.c | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/qga/channel-posix.c b/qga/channel-posix.c
+index e22eee6..e345baf 100644
+--- a/qga/channel-posix.c
++++ b/qga/channel-posix.c
+@@ -181,11 +181,23 @@ static gboolean ga_channel_open(GAChannel *c, const gchar *path, GAChannelMethod
+         break;
+     }
+     case GA_CHANNEL_UNIX_LISTEN: {
+-        int fd = unix_listen(path, NULL, strlen(path), NULL);
++        Error *local_err = NULL;
++        int fd = unix_listen(path, NULL, strlen(path), &local_err);
++        if (local_err != NULL) {
++            g_critical("%s", error_get_pretty(local_err));
++            error_free(local_err);
++            return false;
++        }
++
++        /* FIXME: keep the following "if" temporarily in RHEL-6, in order to
++         * avoid error reporting / logic regression due to out-of-order
++         * backports.
++         */
+         if (fd == -1) {
+             g_critical("error opening path: %s", strerror(errno));
+             return false;
+         }
++
+         ga_channel_listen_add(c, fd, true);
+         break;
+     }
+-- 
+1.7.11.7
+

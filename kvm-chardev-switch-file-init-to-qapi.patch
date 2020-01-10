@@ -1,0 +1,116 @@
+From a71f7583a145489273219b705eaf71f948454736 Mon Sep 17 00:00:00 2001
+Message-Id: <a71f7583a145489273219b705eaf71f948454736.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:06:03 +0200
+Subject: [PATCH 52/65] chardev: switch file init to qapi
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-53-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52164
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 52/65] chardev: switch file init to qapi
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+This patch switches over the 'file' chardev initialization
+to the new qapi code path.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 846e2e49388aa42e030af3d5dd60a6009b80a369)
+
+Conflicts:
+
+	qemu-char.c
+---
+ qemu-char.c |   40 +++++++++++++++-------------------------
+ 1 file changed, 15 insertions(+), 25 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 40 +++++++++++++++-------------------------
+ 1 file changed, 15 insertions(+), 25 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index b4df193..b13a8e9 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -869,17 +869,6 @@ static CharDriverState *qemu_chr_open_fd(int fd_in, int fd_out)
+     return chr;
+ }
+ 
+-static CharDriverState *qemu_chr_open_file_out(QemuOpts *opts)
+-{
+-    int fd_out;
+-
+-    TFR(fd_out = qemu_open(qemu_opt_get(opts, "path"),
+-                      O_WRONLY | O_TRUNC | O_CREAT | O_BINARY, 0666));
+-    if (fd_out < 0)
+-        return NULL;
+-    return qemu_chr_open_fd(-1, fd_out);
+-}
+-
+ static CharDriverState *qemu_chr_open_pipe(QemuOpts *opts)
+ {
+     int fd_in, fd_out;
+@@ -1995,18 +1984,6 @@ static CharDriverState *qemu_chr_open_win_con(QemuOpts *opts)
+     return qemu_chr_open_win_file(GetStdHandle(STD_OUTPUT_HANDLE));
+ }
+ 
+-static CharDriverState *qemu_chr_open_win_file_out(QemuOpts *opts)
+-{
+-    const char *file_out = qemu_opt_get(opts, "path");
+-    HANDLE fd_out;
+-
+-    fd_out = CreateFile(file_out, GENERIC_WRITE, FILE_SHARE_READ, NULL,
+-                        OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+-    if (fd_out == INVALID_HANDLE_VALUE)
+-        return NULL;
+-
+-    return qemu_chr_open_win_file(fd_out);
+-}
+ #endif /* !_WIN32 */
+ 
+ 
+@@ -2808,6 +2785,19 @@ static CharDriverState *qemu_chr_open_pp(QemuOpts *opts)
+ 
+ #endif
+ 
++static void qemu_chr_parse_file_out(QemuOpts *opts, ChardevBackend *backend,
++                                    Error **errp)
++{
++    const char *path = qemu_opt_get(opts, "path");
++
++    if (path == NULL) {
++        error_setg(errp, "chardev: file: no filename given");
++        return;
++    }
++    backend->file = g_new0(ChardevFile, 1);
++    backend->file->out = g_strdup(path);
++}
++
+ typedef struct CharDriver {
+     const char *name;
+     /* old, pre qapi */
+@@ -3309,14 +3299,14 @@ static void register_types(void)
+     register_char_driver_qapi("null", CHARDEV_BACKEND_KIND_NULL, NULL);
+     register_char_driver("socket", qemu_chr_open_socket);
+     register_char_driver("udp", qemu_chr_open_udp);
++    register_char_driver_qapi("file", CHARDEV_BACKEND_KIND_FILE,
++                              qemu_chr_parse_file_out);
+ #ifdef _WIN32
+-    register_char_driver("file", qemu_chr_open_win_file_out);
+     register_char_driver("pipe", qemu_chr_open_win_pipe);
+     register_char_driver("console", qemu_chr_open_win_con);
+     register_char_driver("serial", qemu_chr_open_win);
+     register_char_driver("stdio", qemu_chr_open_win_stdio);
+ #else
+-    register_char_driver("file", qemu_chr_open_file_out);
+     register_char_driver("pipe", qemu_chr_open_pipe);
+     register_char_driver("stdio", qemu_chr_open_stdio);
+ #endif
+-- 
+1.7.11.7
+

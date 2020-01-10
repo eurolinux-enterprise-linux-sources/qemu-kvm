@@ -1,0 +1,59 @@
+From 9dd72e04762d688b63d03856f5e9e83bc472f2c9 Mon Sep 17 00:00:00 2001
+Message-Id: <9dd72e04762d688b63d03856f5e9e83bc472f2c9.1380723420.git.minovotn@redhat.com>
+In-Reply-To: <68de4f1434a46df7d1b6e59cb348f11c92dbf17c.1380723420.git.minovotn@redhat.com>
+References: <68de4f1434a46df7d1b6e59cb348f11c92dbf17c.1380723420.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Thu, 26 Sep 2013 02:02:46 +0200
+Subject: [PATCH 03/13] block: better error message for read only format name
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1380160966-22656-1-git-send-email-famz@redhat.com>
+Patchwork-id: 54535
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] block: better error message for read only format name
+Bugzilla: 999788
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Michal Novotny <minovotn@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=999788
+Brew:     http://brewweb.devel.redhat.com/brew/taskinfo?taskID=6330221
+Upstream: Merged
+
+When user tries to use read-only whitelist format in the command line
+option, failure message was "'foo' invalid format". It might be invalid
+only for writable, but valid for read-only, so it is confusing. Give the
+user easier to understand information.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 7780d47211bde838c7f7e9330608e5397219066e)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ blockdev.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ blockdev.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/blockdev.c b/blockdev.c
+index bb33df2..31eba97 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -490,7 +490,11 @@ DriveInfo *drive_init(QemuOpts *opts, int default_to_scsi)
+         }
+         drv = bdrv_find_whitelisted_format(buf, ro);
+         if (!drv) {
+-            error_report("'%s' invalid format", buf);
++            if (!ro && bdrv_find_whitelisted_format(buf, !ro)) {
++                error_report("'%s' can be only used as read-only device.", buf);
++            } else {
++                error_report("'%s' invalid format", buf);
++            }
+             return NULL;
+         }
+     }
+-- 
+1.7.11.7
+

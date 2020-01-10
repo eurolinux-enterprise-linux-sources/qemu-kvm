@@ -1,0 +1,212 @@
+From 276ddced7c9181cce17d0ff9eb080f99dcfe0ac3 Mon Sep 17 00:00:00 2001
+Message-Id: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Tue, 13 Aug 2013 16:49:08 +0200
+Subject: [PATCH 01/22] migration: add migrate_set_state tracepoint
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1376412551-32226-2-git-send-email-stefanha@redhat.com>
+Patchwork-id: 53272
+O-Subject: [PATCH RHEL6.5 qemu-kvm v2 1/4] migration: add migrate_set_state tracepoint
+Bugzilla: 903429
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: Kazuya Saito <saito.kazuya@jp.fujitsu.com>
+
+Signed-off-by: Kazuya Saito <saito.kazuya@jp.fujitsu.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+(cherry picked from commit c09e5bb1d88ef38986bac7c6ed59dbd732cc4771)
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Conflicts:
+  migration.c
+  We add trace_migrate_set_state() calls where s->state = MIG_STATE_foo
+  is assigned.  These locations are different in RHEL but it's a
+  straightforward conflict resolution.
+
+  trace-events
+  Git is confused by the surrounding changes in the file but the actual
+  migrate_set_state() trace event is unchanged from upstream.
+---
+ migration-exec.c | 2 ++
+ migration-fd.c   | 2 ++
+ migration-tcp.c  | 2 ++
+ migration-unix.c | 2 ++
+ migration.c      | 8 ++++++++
+ trace-events     | 3 +++
+ 6 files changed, 19 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ migration-exec.c | 2 ++
+ migration-fd.c   | 2 ++
+ migration-tcp.c  | 2 ++
+ migration-unix.c | 2 ++
+ migration.c      | 8 ++++++++
+ trace-events     | 3 +++
+ 6 files changed, 19 insertions(+)
+
+diff --git a/migration-exec.c b/migration-exec.c
+index dc2b62f..1c7c2ae 100644
+--- a/migration-exec.c
++++ b/migration-exec.c
+@@ -20,6 +20,7 @@
+ #include "sysemu.h"
+ #include "buffered_file.h"
+ #include "block.h"
++#include "trace.h"
+ 
+ //#define DEBUG_MIGRATION_EXEC
+ 
+@@ -99,6 +100,7 @@ MigrationState *exec_start_outgoing_migration(Monitor *mon,
+     s->mig_state.shared = inc;
+ 
+     s->state = MIG_STATE_ACTIVE;
++    trace_migrate_set_state(MIG_STATE_ACTIVE);
+     s->mon = NULL;
+     s->bandwidth_limit = bandwidth_limit;
+ 
+diff --git a/migration-fd.c b/migration-fd.c
+index 0f0bdc4..54684d9 100644
+--- a/migration-fd.c
++++ b/migration-fd.c
+@@ -20,6 +20,7 @@
+ #include "buffered_file.h"
+ #include "block.h"
+ #include "qemu_socket.h"
++#include "trace.h"
+ 
+ //#define DEBUG_MIGRATION_FD
+ 
+@@ -105,6 +106,7 @@ MigrationState *fd_start_outgoing_migration(Monitor *mon,
+     s->mig_state.shared = inc;
+ 
+     s->state = MIG_STATE_ACTIVE;
++    trace_migrate_set_state(MIG_STATE_ACTIVE);
+     s->mon = NULL;
+     s->bandwidth_limit = bandwidth_limit;
+ 
+diff --git a/migration-tcp.c b/migration-tcp.c
+index 7e46755..475219c 100644
+--- a/migration-tcp.c
++++ b/migration-tcp.c
+@@ -18,6 +18,7 @@
+ #include "sysemu.h"
+ #include "buffered_file.h"
+ #include "block.h"
++#include "trace.h"
+ 
+ //#define DEBUG_MIGRATION_TCP
+ 
+@@ -87,6 +88,7 @@ MigrationState *tcp_start_outgoing_migration(Monitor *mon,
+     s->mig_state.shared = inc;
+ 
+     s->state = MIG_STATE_ACTIVE;
++    trace_migrate_set_state(MIG_STATE_ACTIVE);
+     s->mon = NULL;
+     s->bandwidth_limit = bandwidth_limit;
+ 
+diff --git a/migration-unix.c b/migration-unix.c
+index 57232c0..c645d94 100644
+--- a/migration-unix.c
++++ b/migration-unix.c
+@@ -18,6 +18,7 @@
+ #include "sysemu.h"
+ #include "buffered_file.h"
+ #include "block.h"
++#include "trace.h"
+ 
+ //#define DEBUG_MIGRATION_UNIX
+ 
+@@ -102,6 +103,7 @@ MigrationState *unix_start_outgoing_migration(Monitor *mon,
+     s->mig_state.shared = inc;
+ 
+     s->state = MIG_STATE_ACTIVE;
++    trace_migrate_set_state(MIG_STATE_ACTIVE);
+     s->mon = NULL;
+     s->bandwidth_limit = bandwidth_limit;
+     s->fd = qemu_socket(PF_UNIX, SOCK_STREAM, 0);
+diff --git a/migration.c b/migration.c
+index 0d7fa00..07c3d96 100644
+--- a/migration.c
++++ b/migration.c
+@@ -20,6 +20,7 @@
+ #include "qemu_socket.h"
+ #include "block-migration.h"
+ #include "qemu-objects.h"
++#include "trace.h"
+ 
+ //#define DEBUG_MIGRATION
+ 
+@@ -329,6 +330,7 @@ void migrate_fd_error(FdMigrationState *s)
+ {
+     DPRINTF("setting error state\n");
+     s->state = MIG_STATE_ERROR;
++    trace_migrate_set_state(MIG_STATE_ERROR);
+     migrate_fd_cleanup(s);
+     notifier_list_notify(&migration_state_notifiers, NULL);
+ }
+@@ -346,6 +348,7 @@ int migrate_fd_cleanup(FdMigrationState *s)
+         if (qemu_fclose(s->file) != 0) {
+             ret = -1;
+             s->state = MIG_STATE_ERROR;
++            trace_migrate_set_state(MIG_STATE_ERROR);
+         }
+         s->file = NULL;
+     } else {
+@@ -448,6 +451,7 @@ void migrate_fd_put_ready(void *opaque)
+                 vm_start();
+             }
+             s->state = MIG_STATE_ERROR;
++            trace_migrate_set_state(MIG_STATE_ERROR);
+         }
+ 	STOP_MIGRATION_CLOCK();
+ 	DPRINTF("ended after %lu milliseconds\n", stop);
+@@ -457,11 +461,13 @@ void migrate_fd_put_ready(void *opaque)
+                 vm_start();
+             }
+             s->state = MIG_STATE_ERROR;
++            trace_migrate_set_state(MIG_STATE_ERROR);
+         }
+         if (s->state == MIG_STATE_ACTIVE) {
+             int64_t end_time = qemu_get_clock(rt_clock);
+ 
+             s->state = MIG_STATE_COMPLETED;
++            trace_migrate_set_state(MIG_STATE_COMPLETED);
+             runstate_set(RUN_STATE_POSTMIGRATE);
+             s->mig_state.total_time = end_time - s->mig_state.total_time;
+             s->mig_state.downtime = end_time - start_time;
+@@ -486,6 +492,7 @@ void migrate_fd_cancel(MigrationState *mig_state)
+     DPRINTF("cancelling migration\n");
+ 
+     s->state = MIG_STATE_CANCELLED;
++    trace_migrate_set_state(MIG_STATE_CANCELLED);
+     qemu_savevm_state_cancel(s->mon, s->file);
+     migrate_fd_cleanup(s);
+     notifier_list_notify(&migration_state_notifiers, NULL);
+@@ -499,6 +506,7 @@ void migrate_fd_release(MigrationState *mig_state)
+    
+     if (s->state == MIG_STATE_ACTIVE) {
+         s->state = MIG_STATE_CANCELLED;
++        trace_migrate_set_state(MIG_STATE_CANCELLED);
+         migrate_fd_cleanup(s);
+         notifier_list_notify(&migration_state_notifiers, NULL);
+     }
+diff --git a/trace-events b/trace-events
+index 071c659..f0ba3da 100644
+--- a/trace-events
++++ b/trace-events
+@@ -302,3 +302,6 @@ disable monitor_protocol_event_throttle(uint32_t event, uint64_t rate) "event=%d
+ disable hbitmap_iter_skip_words(const void *hb, void *hbi, uint64_t pos, unsigned long cur) "hb %p hbi %p pos %"PRId64" cur 0x%lx" 
+ disable hbitmap_reset(void *hb, uint64_t start, uint64_t count, uint64_t sbit, uint64_t ebit) "hb %p items %"PRIu64",%"PRIu64" bits %"PRIu64"..%"PRIu64
+ disable hbitmap_set(void *hb, uint64_t start, uint64_t count, uint64_t sbit, uint64_t ebit) "hb %p items %"PRIu64",%"PRIu64" bits %"PRIu64"..%"PRIu64
++
++# migration.c
++disable migrate_set_state(int new_state) "new state %d"
+-- 
+1.7.11.7
+

@@ -1,0 +1,91 @@
+From 0e24354029312900198b276045b33b980385f5cd Mon Sep 17 00:00:00 2001
+From: Eduardo Habkost <ehabkost@redhat.com>
+Date: Thu, 19 Jun 2014 20:18:54 +0200
+Subject: [PATCH 24/26] target-i386: Broadwell CPU model
+
+RH-Author: Eduardo Habkost <ehabkost@redhat.com>
+Message-id: <1403209134-15870-1-git-send-email-ehabkost@redhat.com>
+Patchwork-id: 59294
+O-Subject: [RHEL6.6 qemu-kvm PATCH] target-i386: Broadwell CPU model
+Bugzilla: 1100380
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Igor Mammedov <imammedo@redhat.com>
+RH-Acked-by: Bandan Das <bsd@redhat.com>
+
+Bugzilla: 1100380
+Brew scratch build: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7602064
+Upstream status: submitted (with a few differences, see below)
+  (Message-Id: <1403035900-31820-1-git-send-email-ehabkost@redhat.com>)
+
+This adds a new CPU model named "Broadwell". It has all the features from
+Haswell, plus PREFETCHW, RDSEED, ADX.
+
+PREFETCHW was already supported as "3dnowprefetch".
+
+RDSEED and ADX are being added by the kernel patches for bz#1097017.
+
+Differences from the CPU model submitted upstream:
+ * Removed feature SMAP (won't be implemented on RHEL-6.6)
+ * Removed feature RDTSCP (it was never present in RHEL-6)
+
+The upstream differences will require compat code on RHEL-7.1. A BZ was
+opened for that: https://bugzilla.redhat.com/show_bug.cgi?id=1111351
+
+Signed-off-by: Eduardo Habkost <ehabkost@redhat.com>
+---
+ target-i386/cpuid.c | 34 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 34 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ target-i386/cpuid.c |   34 ++++++++++++++++++++++++++++++++++
+ 1 files changed, 34 insertions(+), 0 deletions(-)
+
+diff --git a/target-i386/cpuid.c b/target-i386/cpuid.c
+index de1a620..0fe5024 100644
+--- a/target-i386/cpuid.c
++++ b/target-i386/cpuid.c
+@@ -637,6 +637,40 @@ static x86_def_t builtin_x86_defs[] = {
+         .model_id = "Intel Core Processor (Haswell)",
+     },
+     {
++        .name = "Broadwell",
++        .level = 0xd,
++        .vendor1 = CPUID_VENDOR_INTEL_1,
++        .vendor2 = CPUID_VENDOR_INTEL_2,
++        .vendor3 = CPUID_VENDOR_INTEL_3,
++        .family = 6,
++        .model = 61,
++        .stepping = 2,
++        .features =
++            CPUID_SSE2 | CPUID_SSE | CPUID_FXSR | CPUID_MMX |
++            CPUID_CLFLUSH | CPUID_PSE36 | CPUID_PAT | CPUID_CMOV | CPUID_MCA |
++            CPUID_PGE | CPUID_MTRR | CPUID_SEP | CPUID_APIC | CPUID_CX8 |
++            CPUID_MCE | CPUID_PAE | CPUID_MSR | CPUID_TSC | CPUID_PSE |
++            CPUID_DE | CPUID_FP87,
++        .ext_features =
++            CPUID_EXT_AVX | CPUID_EXT_XSAVE | CPUID_EXT_AES |
++            CPUID_EXT_POPCNT | CPUID_EXT_X2APIC | CPUID_EXT_SSE42 |
++            CPUID_EXT_SSE41 | CPUID_EXT_CX16 | CPUID_EXT_SSSE3 |
++            CPUID_EXT_PCLMULQDQ | CPUID_EXT_SSE3 |
++            CPUID_EXT_TSC_DEADLINE_TIMER | CPUID_EXT_FMA | CPUID_EXT_MOVBE |
++            CPUID_EXT_PCID,
++        .ext2_features =
++            CPUID_EXT2_LM | CPUID_EXT2_NX | CPUID_EXT2_SYSCALL,
++        .ext3_features =
++            CPUID_EXT3_LAHF_LM | CPUID_EXT3_3DNOWPREFETCH,
++        .cpuid_7_0_ebx_features =
++            CPUID_7_0_EBX_FSGSBASE | CPUID_7_0_EBX_BMI1 |
++            CPUID_7_0_EBX_HLE | CPUID_7_0_EBX_AVX2 | CPUID_7_0_EBX_SMEP |
++            CPUID_7_0_EBX_BMI2 | CPUID_7_0_EBX_ERMS | CPUID_7_0_EBX_INVPCID |
++            CPUID_7_0_EBX_RTM | CPUID_7_0_EBX_RDSEED | CPUID_7_0_EBX_ADX,
++        .xlevel = 0x8000000A,
++        .model_id = "Intel Core Processor (Broadwell)",
++    },
++    {
+         .name = "Opteron_G1",
+         .level = 5,
+         .vendor1 = CPUID_VENDOR_AMD_1,
+-- 
+1.7.1
+

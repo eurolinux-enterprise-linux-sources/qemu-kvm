@@ -1,0 +1,76 @@
+From cd4f4f210b2440260e8f45452cc139955de413a4 Mon Sep 17 00:00:00 2001
+Message-Id: <cd4f4f210b2440260e8f45452cc139955de413a4.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:22:12 -0500
+Subject: [CHANGE 29/42] qcow2: Reuse refcount table in calculate_refcounts()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-30-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64493
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 29/39] qcow2: Reuse refcount table in calculate_refcounts()
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1129892
+
+We will later call calculate_refcounts multiple times, so reuse the
+refcount table if possible.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Benoît Canet <benoit.canet@nodalink.com>
+Reviewed-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 9696df219a71c6608f058ade8873d6d0b4e352fe)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-refcount.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-refcount.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/block/qcow2-refcount.c b/block/qcow2-refcount.c
+index c40c711..79f9da5 100644
+--- a/block/qcow2-refcount.c
++++ b/block/qcow2-refcount.c
+@@ -1476,10 +1476,12 @@ static int calculate_refcounts(BlockDriverState *bs, BdrvCheckResult *res,
+     QCowSnapshot *sn;
+     int ret;
+ 
+-    *refcount_table = g_try_new0(uint16_t, *nb_clusters);
+-    if (*nb_clusters && *refcount_table == NULL) {
+-        res->check_errors++;
+-        return -ENOMEM;
++    if (!*refcount_table) {
++        *refcount_table = g_try_new0(uint16_t, *nb_clusters);
++        if (*nb_clusters && *refcount_table == NULL) {
++            res->check_errors++;
++            return -ENOMEM;
++        }
+     }
+ 
+     /* header */
+@@ -1594,7 +1596,7 @@ int qcow2_check_refcounts(BlockDriverState *bs, BdrvCheckResult *res,
+ {
+     BDRVQcowState *s = bs->opaque;
+     int64_t size, highest_cluster, nb_clusters;
+-    uint16_t *refcount_table;
++    uint16_t *refcount_table = NULL;
+     int ret;
+ 
+     size = bdrv_getlength(bs->file);
+-- 
+2.1.0
+

@@ -1,0 +1,51 @@
+From 3cb2fcdafe3a69053fe05c211deaf0b1ea07a9c5 Mon Sep 17 00:00:00 2001
+Message-Id: <3cb2fcdafe3a69053fe05c211deaf0b1ea07a9c5.1374754301.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:17 +0200
+Subject: [PATCH 06/65] qapi: add "unix" to the set of reserved words
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-7-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52155
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 06/65] qapi: add "unix" to the set of reserved words
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+It is #defined to 1.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 1057725f6629fc2771a294a92ce8eedb92c86fe8)
+---
+ scripts/qapi.py |    4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ scripts/qapi.py | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/scripts/qapi.py b/scripts/qapi.py
+index dcba733..26c8826 100644
+--- a/scripts/qapi.py
++++ b/scripts/qapi.py
+@@ -145,7 +145,9 @@ def c_var(name, protect=True):
+     # GCC http://gcc.gnu.org/onlinedocs/gcc-4.7.1/gcc/C-Extensions.html
+     # excluding _.*
+     gcc_words = set(['asm', 'typeof'])
+-    if protect and (name in c89_words | c99_words | c11_words | gcc_words):
++    # namespace pollution:
++    polluted_words = set(['unix'])
++    if protect and (name in c89_words | c99_words | c11_words | gcc_words | polluted_words):
+         return "q_" + name
+     return name.replace('-', '_').lstrip("*")
+ 
+-- 
+1.7.11.7
+

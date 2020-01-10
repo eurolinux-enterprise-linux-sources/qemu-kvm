@@ -1,0 +1,102 @@
+From a6bd724fffa607e19f49904cb6ec9b7a4ffc6388 Mon Sep 17 00:00:00 2001
+Message-Id: <a6bd724fffa607e19f49904cb6ec9b7a4ffc6388.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:21:48 -0500
+Subject: [CHANGE 05/42] qcow2: Refactor qcow2_free_any_clusters
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-6-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64468
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 05/39] qcow2: Refactor qcow2_free_any_clusters
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+BZ: 1129892
+
+Zero clusters will add another cluster type. Refactor the open-coded
+cluster type detection into a switch of QCOW2_CLUSTER_* options so that
+the detection is in a single place. This makes it easier to add new
+cluster types.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit c7a4c37a0f768f7ad50f64414d578436019e1e96)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-refcount.c | 41 ++++++++++++++++++++++-------------------
+ 1 file changed, 22 insertions(+), 19 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-refcount.c | 41 ++++++++++++++++++++++-------------------
+ 1 file changed, 22 insertions(+), 19 deletions(-)
+
+diff --git a/block/qcow2-refcount.c b/block/qcow2-refcount.c
+index dbb26d6..4edb736 100644
+--- a/block/qcow2-refcount.c
++++ b/block/qcow2-refcount.c
+@@ -662,31 +662,34 @@ void qcow2_free_clusters(BlockDriverState *bs,
+ }
+ 
+ /*
+- * free_any_clusters
+- *
+- * free clusters according to its type: compressed or not
+- *
++ * Free a cluster using its L2 entry (handles clusters of all types, e.g.
++ * normal cluster, compressed cluster, etc.)
+  */
+-
+ void qcow2_free_any_clusters(BlockDriverState *bs,
+-    uint64_t cluster_offset, int nb_clusters)
++    uint64_t l2_entry, int nb_clusters)
+ {
+     BDRVQcowState *s = bs->opaque;
+ 
+-    /* free the cluster */
+-
+-    if (cluster_offset & QCOW_OFLAG_COMPRESSED) {
+-        int nb_csectors;
+-        nb_csectors = ((cluster_offset >> s->csize_shift) &
+-                       s->csize_mask) + 1;
+-        qcow2_free_clusters(bs,
+-            (cluster_offset & s->cluster_offset_mask) & ~511,
+-            nb_csectors * 512);
+-        return;
++    switch (qcow2_get_cluster_type(l2_entry)) {
++    case QCOW2_CLUSTER_COMPRESSED:
++        {
++            int nb_csectors;
++            nb_csectors = ((l2_entry >> s->csize_shift) &
++                           s->csize_mask) + 1;
++            qcow2_free_clusters(bs,
++                (l2_entry & s->cluster_offset_mask) & ~511,
++                nb_csectors * 512);
++        }
++        break;
++    case QCOW2_CLUSTER_NORMAL:
++        qcow2_free_clusters(bs, l2_entry & L2E_OFFSET_MASK,
++                            nb_clusters << s->cluster_bits);
++        break;
++    case QCOW2_CLUSTER_UNALLOCATED:
++        break;
++    default:
++        abort();
+     }
+-
+-    qcow2_free_clusters(bs, cluster_offset & L2E_OFFSET_MASK,
+-                        nb_clusters << s->cluster_bits);
+ }
+ 
+ 
+-- 
+2.1.0
+

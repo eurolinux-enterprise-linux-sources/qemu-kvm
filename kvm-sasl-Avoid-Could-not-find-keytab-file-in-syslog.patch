@@ -1,0 +1,66 @@
+From 51f5ab83b13bc65651b4228cedf32c9381730dfd Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 17 Mar 2014 19:36:11 +0100
+Subject: [PATCH 2/2] sasl: Avoid 'Could not find keytab file' in syslog
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1395084971-705-1-git-send-email-lersek@redhat.com>
+Patchwork-id: 58116
+O-Subject: [RHEL-6.6 qemu-kvm PATCH] sasl: Avoid 'Could not find keytab file' in syslog
+Bugzilla: 1018434
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Cole Robinson <crobinso@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1018434
+Brew:     https://brewweb.devel.redhat.com/taskinfo?taskID=7213259
+
+The "keytab" specification in "qemu.sasl" only makes sense if "gssapi" is
+selected in "mech_list". Even if the latter is not done (ie. "gssapi" is
+not selected), the cyrus-sasl library tries to open the specified keytab
+file, although nothing has a use for it outside the gssapi backend.
+
+Since the default keytab file "/etc/qemu/krb5.tab" is usually absent, the
+cyrus-sasl library emits a warning to syslog at startup, which tends to
+annoy users (who didn't ask for gssapi in the first place).
+
+Comment out the keytab specification per default.
+
+"qemu-doc.texi" already correctly explains how to use "mech_list: gssapi"
+together with "keytab:".
+
+See also:
+- upstream libvirt commit fe772f24,
+- Red Hat Bugzilla <https://bugzilla.redhat.com/show_bug.cgi?id=1018434>.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+ACKed-By: Cole Robinson <crobinso@redhat.com>
+Signed-off-by: Michael Tokarev <mjt@tls.msk.ru>
+(cherry picked from commit dfb3804d478bce02350bdf87534dc7dd3d1ded51)
+---
+ qemu.sasl | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ qemu.sasl |    4 +++-
+ 1 files changed, 3 insertions(+), 1 deletions(-)
+
+diff --git a/qemu.sasl b/qemu.sasl
+index cf19cf8..a99b462 100644
+--- a/qemu.sasl
++++ b/qemu.sasl
+@@ -22,7 +22,9 @@ mech_list: digest-md5
+ # Some older builds of MIT kerberos on Linux ignore this option &
+ # instead need KRB5_KTNAME env var.
+ # For modern Linux, and other OS, this should be sufficient
+-keytab: /etc/qemu/krb5.tab
++#
++# There is no default value here, uncomment if you need this
++#keytab: /etc/qemu/krb5.tab
+ 
+ # If using digest-md5 for username/passwds, then this is the file
+ # containing the passwds. Use 'saslpasswd2 -a qemu [username]'
+-- 
+1.7.1
+

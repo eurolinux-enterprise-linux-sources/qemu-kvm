@@ -1,0 +1,79 @@
+From 56a3d5af927be34e94ff356648cbf0213552afd3 Mon Sep 17 00:00:00 2001
+Message-Id: <56a3d5af927be34e94ff356648cbf0213552afd3.1376572530.git.minovotn@redhat.com>
+In-Reply-To: <1ab1cadd348058496d2f900c3d4ac4b7c325d3e6.1376572530.git.minovotn@redhat.com>
+References: <1ab1cadd348058496d2f900c3d4ac4b7c325d3e6.1376572530.git.minovotn@redhat.com>
+From: Markus Armbruster <armbru@redhat.com>
+Date: Wed, 14 Aug 2013 15:12:53 +0200
+Subject: [PATCH 11/11] block: fix null-pointer bug on error case in block
+ commit
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1376493173-5884-4-git-send-email-armbru@redhat.com>
+Patchwork-id: 53412
+O-Subject: [PATCH 6.5 qemu-kvm 3/3] block: fix null-pointer bug on error case in block commit
+Bugzilla: 880990
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Jeff Cody <jcody@redhat.com>
+
+This is a bug that was caught by a coverity run by Markus.  In
+the error case when we errored out to exit_restore_open early in the
+function, 'overlay_bs' was still NULL at that point, although it is
+used to look up flags and perform a bdrv_reopen().
+
+Move the overlay_bs lookup to where it is needed, and check for NULL
+before restoring the flags.  Also get rid of the unneeded parameter
+initialization.
+
+Reported-By: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 6d759117d3fd28e38c49c56c9de206cc718d32fa)
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+---
+ block/commit.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/commit.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/block/commit.c b/block/commit.c
+index 68c89e6..26eafcc 100644
+--- a/block/commit.c
++++ b/block/commit.c
+@@ -92,7 +92,7 @@ static void coroutine_fn commit_run(void *opaque)
+     BlockDriverState *active = s->active;
+     BlockDriverState *top = s->top;
+     BlockDriverState *base = s->base;
+-    BlockDriverState *overlay_bs = NULL;
++    BlockDriverState *overlay_bs;
+     int64_t sector_num, end;
+     int ret = 0;
+     int n = 0;
+@@ -119,8 +119,6 @@ static void coroutine_fn commit_run(void *opaque)
+         }
+     }
+ 
+-    overlay_bs = bdrv_find_overlay(active, top);
+-
+     end = s->common.len >> BDRV_SECTOR_BITS;
+     buf = qemu_blockalign(top, COMMIT_BUFFER_SIZE);
+ 
+@@ -183,7 +181,8 @@ exit_restore_reopen:
+     if (s->base_flags != bdrv_get_flags(base)) {
+         bdrv_reopen(base, s->base_flags, NULL);
+     }
+-    if (s->orig_overlay_flags != bdrv_get_flags(overlay_bs)) {
++    overlay_bs = bdrv_find_overlay(active, top);
++    if (overlay_bs && s->orig_overlay_flags != bdrv_get_flags(overlay_bs)) {
+         bdrv_reopen(overlay_bs, s->orig_overlay_flags, NULL);
+     }
+ 
+-- 
+1.7.11.7
+

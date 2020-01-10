@@ -1,0 +1,187 @@
+From 804007aaad8804ddf42f092b66bcf533f2fa99a9 Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Sat, 22 Mar 2014 03:30:53 +0100
+Subject: [PATCH 02/30] qapi: generate list struct and visit_list for enum
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1395459071-19118-2-git-send-email-lersek@redhat.com>
+Patchwork-id: 58211
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 01/19] qapi: generate list struct and visit_list for enum
+Bugzilla: 1035162
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Amos Kong <akong@redhat.com>
+
+Currently, if we define an 'enum' and use it in one command's
+data, list struct for enum could not be generated, but it's
+used in qmp function.
+
+For example: KeyCodesList could not be generated.
+>>> qapi-schema.json:
+{ 'enum': 'KeyCodes',
+  'data': [ 'shift', 'alt' ... ] }
+{ 'command': 'sendkey',
+  'data': { 'keys': ['KeyCodes'], '*hold-time': 'int' } }
+
+>>> qmp-command.h:
+void qmp_sendkey(KeyCodesList * keys, bool has_hold_time, int64_t
+hold_time, Error **errp);
+
+This patch lets qapi generate list struct and visit_list for enum.
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit b9c4b48d50057b6aee7c70879b240ff76f39c85b)
+
+RHEL-6 note:
+
+Since it's always extremely scary to touch the qapi generator, I created a
+cross-reference between RHEL-6 and upstream commits that touch the files
+"scripts/qapi-types.py" and "scripts/qapi-visit.py" (any one of them). The
+following list is ordered by the upstream commit "serial number", ie. the
+up# field:
+
+subject                                                          down#  downhash  up#  uphash
+---------------------------------------------------------------  -----  --------  ---  -------
+qapi: add qapi-types.py code generator                           01     197a85d   01   fb3182c
+qapi: add qapi-visit.py code generator                           02     37bcd64   02   06d64c6
+qapi: add code generation support for middle mode                03     d8d511a   03   776574d
+qapi: generate qapi_free_* functions for *List types             04     5db9665   04   75b96ac
+qapi: modify visitor code generation for list iteration          05     a560be0   05   e1bc2f7
+qapi: Don't use c_var() on enum strings                          06     885cad0   06   d2a80d6
+qapi: Automatically generate a _MAX value for enums              07     73e27e3   07   303b54b
+qapi: allow a 'gen' key to suppress code generation              08     dc6205f   08   5dbee47
+Fix qapi code generation wrt parallel build                      09     b44869f   09   8d3bc51
+Fix qapi code generation fix                                     10     56312c7   10   19bf7c8
+qapi: complete implementation of unions                          11     6b9b549   11   dc8fb6d
+qapi: add c_fun to escape function names                         12     5e58df2   12   c9da228
+qapi: shortcut visits on errors                                  13     3a356c0   13   b6f0474
+qapi: allow freeing partially-allocated objects                  14     1b7c9ac   14   69b5007
+qapi: untangle next_list                                         15     9e69a7b   15   3a86a0f
+qapi: fix error propagation                                      16     9f92807   16   d195325
+qapi: qapi-types.h: don't include qapi/qapi-types-core.h         -      -         17   b68a847
+qapi: generate correct enum names for camel case enums           17     419fc51   18   f01f594
+qapi: don't convert enum strings to lowercase                    18     01c6969   19   ac4ff70
+qapi: generate list struct and visit_list for enum               20     NEW       20   b9c4b48
+qapi: Fix potential NULL pointer segfault                        21     NEW       21   227ccf6
+qapi: do not protect enum values from namespace pollution        19     b4eb443   22   eda50a6
+qapi-types.h: Don't include qemu-common.h                        -      -         23   da4fea0
+qapi: move inclusions of qemu-common.h from headers to .c files  -      -         24   79ee7df
+qapi: move include files to include/qobject/                     -      -         25   7b1b5d1
+qapi: qapi-types.py, native list support                         -      -         26   c0afa9c
+qapi: qapi-visit.py, fix list handling for union types           -      -         27   c664aef
+qapi: qapi-visit.py, native list support                         -      -         28   7c946bc
+qapi: pad GenericList value fields to 64 bits                    -      -         29   a678e26
+qapi-types.py: Implement 'base' for unions                       -      -         30   e2503f5
+qapi-visit.py: Split off generate_visit_struct_fields()          -      -         31   d131c89
+qapi-visit.py: Implement 'base' for unions                       -      -         32   0aef92b
+qapi: Flat unions with arbitrary discriminator                   -      -         33   50f2bdc
+qapi: Anonymous unions                                           -      -         34   69dd62d
+qapi-types.py: Split off generate_struct_fields()                -      -         35   0153703
+qapi-types.py: Fix enum struct sizes on i686                     -      -         36   02dc4bf
+qapi-types/visit.py: Pass whole expr dict for structs            -      -         37   14d3630
+qapi-types/visit.py: Inheritance for structs                     -      -         38   622f557
+Adjust qapi-visit for python-2.4.3                               -      -         39   7b75d9d
+
+We are in pretty good shape. Thus far we only skipped upstream b68a847,
+and backported only eda50a6 out of order.
+
+This patch, and the next one (which I'm including just because it's so
+easy), are marked with NEW in the downhash column. The table shows that
+these two backports happen in order, and that they (together with the
+earlier, out-of-order backport of eda50a6) actually restore a global
+ordering, in sync with upstream.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ scripts/qapi-types.py | 16 +++++++++++++++-
+ scripts/qapi-visit.py | 14 +++++++++++++-
+ 2 files changed, 28 insertions(+), 2 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ scripts/qapi-types.py |   16 +++++++++++++++-
+ scripts/qapi-visit.py |   14 +++++++++++++-
+ 2 files changed, 28 insertions(+), 2 deletions(-)
+
+diff --git a/scripts/qapi-types.py b/scripts/qapi-types.py
+index 53fa0f6..86cb96b 100644
+--- a/scripts/qapi-types.py
++++ b/scripts/qapi-types.py
+@@ -28,6 +28,16 @@ typedef struct %(name)sList
+ ''',
+                  name=name)
+ 
++def generate_fwd_enum_struct(name, members):
++    return mcgen('''
++typedef struct %(name)sList
++{
++    %(name)s value;
++    struct %(name)sList *next;
++} %(name)sList;
++''',
++                 name=name)
++
+ def generate_struct(structname, fieldname, members):
+     ret = mcgen('''
+ struct %(name)s
+@@ -275,7 +285,8 @@ for expr in exprs:
+     if expr.has_key('type'):
+         ret += generate_fwd_struct(expr['type'], expr['data'])
+     elif expr.has_key('enum'):
+-        ret += generate_enum(expr['enum'], expr['data'])
++        ret += generate_enum(expr['enum'], expr['data']) + "\n"
++        ret += generate_fwd_enum_struct(expr['enum'], expr['data'])
+         fdef.write(generate_enum_lookup(expr['enum'], expr['data']))
+     elif expr.has_key('union'):
+         ret += generate_fwd_struct(expr['union'], expr['data']) + "\n"
+@@ -299,6 +310,9 @@ for expr in exprs:
+         fdef.write(generate_type_cleanup(expr['union'] + "List") + "\n")
+         ret += generate_type_cleanup_decl(expr['union'])
+         fdef.write(generate_type_cleanup(expr['union']) + "\n")
++    elif expr.has_key('enum'):
++        ret += generate_type_cleanup_decl(expr['enum'] + "List")
++        fdef.write(generate_type_cleanup(expr['enum'] + "List") + "\n")
+     else:
+         continue
+     fdecl.write(ret)
+diff --git a/scripts/qapi-visit.py b/scripts/qapi-visit.py
+index efb44b7..e98f7a5 100644
+--- a/scripts/qapi-visit.py
++++ b/scripts/qapi-visit.py
+@@ -217,6 +217,16 @@ void visit_type_%(name)sList(Visitor *m, %(name)sList ** obj, const char *name,
+ 
+     return ret
+ 
++def generate_enum_declaration(name, members, genlist=True):
++    ret = ""
++    if genlist:
++        ret += mcgen('''
++void visit_type_%(name)sList(Visitor *m, %(name)sList ** obj, const char *name, Error **errp);
++''',
++                     name=name)
++
++    return ret
++
+ def generate_decl_enum(name, members, genlist=True):
+     return mcgen('''
+ 
+@@ -335,10 +345,12 @@ for expr in exprs:
+         ret += generate_declaration(expr['union'], expr['data'])
+         fdecl.write(ret)
+     elif expr.has_key('enum'):
+-        ret = generate_visit_enum(expr['enum'], expr['data'])
++        ret = generate_visit_list(expr['enum'], expr['data'])
++        ret += generate_visit_enum(expr['enum'], expr['data'])
+         fdef.write(ret)
+ 
+         ret = generate_decl_enum(expr['enum'], expr['data'])
++        ret += generate_enum_declaration(expr['enum'], expr['data'])
+         fdecl.write(ret)
+ 
+ fdecl.write('''
+-- 
+1.7.1
+

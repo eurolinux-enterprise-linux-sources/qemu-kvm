@@ -1,0 +1,74 @@
+From fd7881b0288cc731f0f0472c5fb7ea18d4959cff Mon Sep 17 00:00:00 2001
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Thu, 10 Jul 2014 23:24:18 +0200
+Subject: [PATCH 18/44] block: vhdx code movement - move vhdx_close() above vhdx_open()
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <9e9834ff5425b0a080a2fcdfd6ada9df1e2a1433.1405033137.git.jcody@redhat.com>
+Patchwork-id: 59754
+O-Subject: [RHEL6-6 qemu-kvm PATCH v2 09/24] block: vhdx code movement - move vhdx_close() above vhdx_open()
+Bugzilla: 1063559
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit c46415afc2c99ea052f52f9d68ed9a78799f2c10)
+
+Conflicts:
+	block/vhdx.c
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ block/vhdx.c | 22 +++++++++++-----------
+ 1 file changed, 11 insertions(+), 11 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block/vhdx.c |   22 +++++++++++-----------
+ 1 files changed, 11 insertions(+), 11 deletions(-)
+
+diff --git a/block/vhdx.c b/block/vhdx.c
+index 5742541..5a489b6 100644
+--- a/block/vhdx.c
++++ b/block/vhdx.c
+@@ -794,6 +794,17 @@ exit:
+ }
+ 
+ 
++static void vhdx_close(BlockDriverState *bs)
++{
++    BDRVVHDXState *s = bs->opaque;
++    qemu_vfree(s->headers[0]);
++    qemu_vfree(s->headers[1]);
++    qemu_vfree(s->bat);
++    qemu_vfree(s->parent_entries);
++    migrate_del_blocker(s->migration_blocker);
++    error_free(s->migration_blocker);
++}
++
+ static int vhdx_open(BlockDriverState *bs, int flags)
+ {
+     BDRVVHDXState *s = bs->opaque;
+@@ -1050,17 +1061,6 @@ static coroutine_fn int vhdx_co_writev(BlockDriverState *bs, int64_t sector_num,
+ }
+ 
+ 
+-static void vhdx_close(BlockDriverState *bs)
+-{
+-    BDRVVHDXState *s = bs->opaque;
+-    qemu_vfree(s->headers[0]);
+-    qemu_vfree(s->headers[1]);
+-    qemu_vfree(s->bat);
+-    qemu_vfree(s->parent_entries);
+-    migrate_del_blocker(s->migration_blocker);
+-    error_free(s->migration_blocker);
+-}
+-
+ static BlockDriver bdrv_vhdx = {
+     .format_name            = "vhdx",
+     .instance_size          = sizeof(BDRVVHDXState),
+-- 
+1.7.1
+

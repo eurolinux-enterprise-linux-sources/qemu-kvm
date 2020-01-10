@@ -1,0 +1,128 @@
+From 7f4b0945cc8057fe7bb862903157d171da8638a5 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:38 -0500
+Subject: [CHANGE 16/31] qemu-iotests: Modify scripts to run with
+ qemu-kvm-rhel6
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-17-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60367
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 16/29] qemu-iotests: Modify scripts to run with qemu-kvm-rhel6
+Bugzilla: 1122410
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ tests/qemu-iotests/common.env  |  7 +++++++
+ tests/qemu-iotests/common.qemu |  4 ++--
+ tests/qemu-iotests/common.rc   | 10 ++++++----
+ tests/qemu-iotests/iotests.py  | 10 +++++-----
+ 4 files changed, 20 insertions(+), 11 deletions(-)
+ create mode 100644 tests/qemu-iotests/common.env
+
+diff --git a/tests/qemu-iotests/common.env b/tests/qemu-iotests/common.env
+new file mode 100644
+index 0000000..6bc9eaf
+--- /dev/null
++++ b/tests/qemu-iotests/common.env
+@@ -0,0 +1,7 @@
++# Automatically generated in upstream
++#
++# A static configuration will be good enough for the RHEL 6 tree and doesn't
++# require modifying the configure script, but keeps things local to the
++# qemu-iotests directory.
++
++export PYTHON='python -B'
+diff --git a/tests/qemu-iotests/common.qemu b/tests/qemu-iotests/common.qemu
+index ee7ebb4..7bef074 100644
+--- a/tests/qemu-iotests/common.qemu
++++ b/tests/qemu-iotests/common.qemu
+@@ -145,7 +145,7 @@ function _launch_qemu()
+         comm="-monitor stdio"
+     else
+         local qemu_comm_method="qmp"
+-        comm="-monitor none -qmp stdio"
++        comm="-qmp stdio"
+     fi
+ 
+     fifo_out=${QEMU_FIFO_OUT}_${_QEMU_HANDLE}
+@@ -153,7 +153,7 @@ function _launch_qemu()
+     mkfifo "${fifo_out}"
+     mkfifo "${fifo_in}"
+ 
+-    "${QEMU}" -nographic -serial none ${comm} -machine accel=qtest "${@}" 2>&1 \
++    "${QEMU}" -nographic -serial none ${comm} "${@}" 2>&1 \
+                                                                 >"${fifo_out}" \
+                                                                 <"${fifo_in}" &
+     QEMU_PID[${_QEMU_HANDLE}]=$!
+diff --git a/tests/qemu-iotests/common.rc b/tests/qemu-iotests/common.rc
+index e0ea7e3..55e5efc 100644
+--- a/tests/qemu-iotests/common.rc
++++ b/tests/qemu-iotests/common.rc
+@@ -89,9 +89,11 @@ _optstr_add()
+ 
+ _set_default_imgopts()
+ {
+-    if [ "$IMGFMT" == "qcow2" ] && ! (echo "$IMGOPTS" | grep "compat=" > /dev/null); then
+-        IMGOPTS=$(_optstr_add "$IMGOPTS" "compat=1.1")
+-    fi
++    # RHEL 6 doesn't support qcow2 v3
++    # if [ "$IMGFMT" == "qcow2" ] && ! (echo "$IMGOPTS" | grep "compat=" > /dev/null); then
++    # IMGOPTS=$(_optstr_add "$IMGOPTS" "compat=1.1")
++    # fi
++    true
+ }
+ 
+ _use_sample_img()
+@@ -217,7 +219,7 @@ _check_test_img()
+ {
+     $QEMU_IMG check "$@" -f $IMGFMT "$TEST_IMG" 2>&1 | _filter_testdir | \
+         sed -e '/allocated.*fragmented.*compressed clusters/d' \
+-            -e 's/qemu-img: This image format does not support checks/No errors were found on the image./' \
++            -e 's/This image format does not support checks/No errors were found on the image./' \
+             -e '/Image end offset: [0-9]\+/d'
+ }
+ 
+diff --git a/tests/qemu-iotests/iotests.py b/tests/qemu-iotests/iotests.py
+index 39a4cfc..c0b190f 100644
+--- a/tests/qemu-iotests/iotests.py
++++ b/tests/qemu-iotests/iotests.py
+@@ -21,7 +21,7 @@ import re
+ import subprocess
+ import string
+ import unittest
+-import sys; sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'scripts', 'qmp'))
++import sys; sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'QMP'))
+ import qmp
+ import struct
+ 
+@@ -83,9 +83,7 @@ class VM(object):
+         self._qemu_log_path = os.path.join(test_dir, 'qemu-log.%d' % os.getpid())
+         self._args = qemu_args + ['-chardev',
+                      'socket,id=mon,path=' + self._monitor_path,
+-                     '-mon', 'chardev=mon,mode=control',
+-                     '-qtest', 'stdio', '-machine', 'accel=qtest',
+-                     '-display', 'none', '-vga', 'none']
++                     '-mon', 'chardev=mon,mode=control', '-nographic']
+         self._num_drives = 0
+ 
+     # This can be used to add an unused monitor instance.
+@@ -239,7 +237,9 @@ class QMPTestCase(unittest.TestCase):
+ 
+     def cancel_and_wait(self, drive='drive0', force=False, resume=False):
+         '''Cancel a block job and wait for it to finish, returning the event'''
+-        result = self.vm.qmp('block-job-cancel', device=drive, force=force)
++        # RHEL 6 doesn't support the force option
++        assert force == False
++        result = self.vm.qmp('block-job-cancel', device=drive)
+         self.assert_qmp(result, 'return', {})
+ 
+         if resume:
+-- 
+1.9.3
+

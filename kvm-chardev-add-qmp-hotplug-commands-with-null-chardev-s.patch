@@ -1,0 +1,241 @@
+From 1d2190aaed2e401b63a663c86d1a6fe20b4cb6cf Mon Sep 17 00:00:00 2001
+Message-Id: <1d2190aaed2e401b63a663c86d1a6fe20b4cb6cf.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:44 +0200
+Subject: [PATCH 33/65] chardev: add qmp hotplug commands, with null chardev
+ support
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-34-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52160
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 33/65] chardev: add qmp hotplug commands, with null chardev support
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+Add chardev-add and chardev-remove qmp commands.  Hotplugging
+a null chardev is supported for now, more will be added later.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit f1a1a35638bf045a2b158c0cb23d92ef39c06792)
+
+Conflicts:
+
+	qapi-schema.json
+	qemu-char.c
+	qmp-commands.hx
+
+[ rhel6: adapt to old monitor bits ]
+---
+ qapi-schema.json |   49 +++++++++++++++++++++++++++++++++++++++++++++++
+ qemu-char.c      |   55 +++++++++++++++++++++++++++++++++++++++++++++++++++++
+ qemu-monitor.hx  |   56 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 160 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema.json | 49 +++++++++++++++++++++++++++++++++++++++++++++++++
+ qemu-char.c      | 55 +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ qemu-monitor.hx  | 56 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 160 insertions(+)
+
+diff --git a/qapi-schema.json b/qapi-schema.json
+index 9ea8977..a2fda87 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -408,3 +408,52 @@
+     'unix': 'UnixSocketAddress',
+     'fd': 'String' } }
+ 
++##
++# @ChardevBackend:
++#
++# Configuration info for the new chardev backend.
++#
++# Since: 1.4
++##
++{ 'type': 'ChardevDummy', 'data': { } }
++
++{ 'union': 'ChardevBackend', 'data': { 'null' : 'ChardevDummy' } }
++
++##
++# @ChardevReturn:
++#
++# Return info about the chardev backend just created.
++#
++# Since: 1.4
++##
++{ 'type' : 'ChardevReturn', 'data': { } }
++
++##
++# @chardev-add:
++#
++# Add a file chardev
++#
++# @id: the chardev's ID, must be unique
++# @backend: backend type and parameters
++#
++# Returns: chardev info.
++#
++# Since: 1.4
++##
++{ 'command': 'chardev-add', 'data': {'id'      : 'str',
++                                     'backend' : 'ChardevBackend' },
++  'returns': 'ChardevReturn' }
++
++##
++# @chardev-remove:
++#
++# Remove a chardev
++#
++# @id: the chardev's ID, must exist and not be in use
++#
++# Returns: Nothing on success
++#
++# Since: 1.4
++##
++{ 'command': 'chardev-remove', 'data': {'id': 'str'} }
++
+diff --git a/qemu-char.c b/qemu-char.c
+index a25af56..9ef1dad 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -32,6 +32,8 @@
+ #include "hw/baum.h"
+ #include "hw/msmouse.h"
+ #include "qemu-objects.h"
++#include "qapi-visit.h"
++#include "qmp-commands.h"
+ 
+ #include <unistd.h>
+ #include <fcntl.h>
+@@ -2976,3 +2978,56 @@ CharDriverState *qemu_chr_find(const char *name)
+     }
+     return NULL;
+ }
++
++ChardevReturn *qmp_chardev_add(const char *id, ChardevBackend *backend,
++                               Error **errp)
++{
++    ChardevReturn *ret = g_new0(ChardevReturn, 1);
++    CharDriverState *chr = NULL;
++
++    chr = qemu_chr_find(id);
++    if (chr) {
++        error_setg(errp, "Chardev '%s' already exists", id);
++        g_free(ret);
++        return NULL;
++    }
++
++    switch (backend->kind) {
++    case CHARDEV_BACKEND_KIND_NULL:
++        chr = qemu_chr_open_null(NULL);
++        break;
++    default:
++        error_setg(errp, "unknown chardev backend (%d)", backend->kind);
++        break;
++    }
++
++    if (chr == NULL && !error_is_set(errp)) {
++        error_setg(errp, "Failed to create chardev");
++    }
++    if (chr) {
++        chr->label = g_strdup(id);
++        chr->avail_connections = 1;
++        QTAILQ_INSERT_TAIL(&chardevs, chr, next);
++        return ret;
++    } else {
++        g_free(ret);
++        return NULL;
++    }
++}
++
++void qmp_chardev_remove(const char *id, Error **errp)
++{
++    CharDriverState *chr;
++
++    chr = qemu_chr_find(id);
++    if (NULL == chr) {
++        error_setg(errp, "Chardev '%s' not found", id);
++        return;
++    }
++    if (chr->chr_can_read || chr->chr_read ||
++        chr->chr_event || chr->handler_opaque) {
++        error_setg(errp, "Chardev '%s' is busy", id);
++        return;
++    }
++    qemu_chr_delete(chr);
++}
+diff --git a/qemu-monitor.hx b/qemu-monitor.hx
+index d22da85..28c2a07 100644
+--- a/qemu-monitor.hx
++++ b/qemu-monitor.hx
+@@ -2374,6 +2374,62 @@ If streaming is not active on this device, DeviceNotActive
+ If cancellation already in progress, DeviceInUse
+ EQMP
+ 
++    {
++        .name       = "chardev-add",
++        .args_type  = "id:s,backend:q",
++        .params     = "id backend",
++        .help       = "add chardev backend",
++        .user_print = monitor_user_noop,
++        .mhandler.cmd_new = qmp_marshal_input_chardev_add,
++    },
++
++SQMP
++chardev-add
++-----------
++
++Add a chardev.
++
++Arguments:
++
++- "id": the chardev's ID, must be unique (json-string)
++- "backend": chardev backend type + parameters
++
++Example:
++
++-> { "execute" : "chardev-add",
++     "arguments" : { "id" : "foo",
++                     "backend" : { "type" : "null", "data" : {} } } }
++<- { "return": {} }
++
++EQMP
++
++    {
++        .name       = "chardev-remove",
++        .args_type  = "id:s",
++        .params     = "id",
++        .help       = "remove chardev backend",
++        .user_print = monitor_user_noop,
++        .mhandler.cmd_new = qmp_marshal_input_chardev_remove,
++    },
++
++
++SQMP
++chardev-remove
++--------------
++
++Remove a chardev.
++
++Arguments:
++
++- "id": the chardev's ID, must exist and not be in use (json-string)
++
++Example:
++
++-> { "execute": "chardev-remove", "arguments": { "id" : "foo" } }
++<- { "return": {} }
++
++EQMP
++
+ HXCOMM Keep the 'info' command at the end!
+ HXCOMM This is required for the QMP documentation layout.
+ 
+-- 
+1.7.11.7
+

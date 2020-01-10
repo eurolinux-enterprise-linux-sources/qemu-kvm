@@ -1,0 +1,152 @@
+From cb0b0160b176da27549bde92fdf311e6df29c72a Mon Sep 17 00:00:00 2001
+Message-Id: <cb0b0160b176da27549bde92fdf311e6df29c72a.1374754301.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:29 +0200
+Subject: [PATCH 18/65] qemu-sockets: add error propagation to inet_dgram_opts
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-19-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52119
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 18/65] qemu-sockets: add error propagation to inet_dgram_opts
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Before:
+
+    $ qemu-system-x86_64 -monitor udp:localhost:631@localhost:631
+    inet_dgram_opts: bind(ipv4,127.0.0.1,631): OK
+    inet_dgram_opts failed
+    chardev: opening backend "udp" failed
+
+After:
+
+    $ x86_64-softmmu/qemu-system-x86_64 -monitor udp:localhost:631@localhost:631
+    qemu-system-x86_64: -monitor udp:localhost:631@localhost:631: Failed to bind socket: Address already in use
+    chardev: opening backend "udp" failed
+
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 4f085c822947068c785be8c1f27d1ad4e3215149)
+
+[ rhel6: use error_setg_errno instead of error_set_errno ]
+[ rhel6: Laszlo figured upstream commit 39b38459 sneaked in ]
+
+Conflicts:
+
+	qemu-sockets.c
+---
+ qemu-char.c    |    1 -
+ qemu-sockets.c |   36 +++++++++---------------------------
+ 2 files changed, 9 insertions(+), 28 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c    |  1 -
+ qemu-sockets.c | 36 +++++++++---------------------------
+ 2 files changed, 9 insertions(+), 28 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 2dc3e8d..1ab71fc 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -2130,7 +2130,6 @@ static CharDriverState *qemu_chr_open_udp(QemuOpts *opts)
+ 
+     fd = inet_dgram_opts(opts, NULL);
+     if (fd < 0) {
+-        fprintf(stderr, "inet_dgram_opts failed\n");
+         goto return_err;
+     }
+ 
+diff --git a/qemu-sockets.c b/qemu-sockets.c
+index d068b57..cb6e63b 100644
+--- a/qemu-sockets.c
++++ b/qemu-sockets.c
+@@ -398,8 +398,6 @@ int inet_dgram_opts(QemuOpts *opts, Error **errp)
+     struct addrinfo ai, *peer = NULL, *local = NULL;
+     const char *addr;
+     const char *port;
+-    char uaddr[INET6_ADDRSTRLEN+1];
+-    char uport[33];
+     int sock = -1, rc;
+ 
+     /* lookup peer addr */
+@@ -414,7 +412,7 @@ int inet_dgram_opts(QemuOpts *opts, Error **errp)
+         addr = "localhost";
+     }
+     if (port == NULL || strlen(port) == 0) {
+-        fprintf(stderr, "inet_dgram: port not specified\n");
++        error_setg(errp, "remote port not specified");
+         return -1;
+     }
+ 
+@@ -424,8 +422,8 @@ int inet_dgram_opts(QemuOpts *opts, Error **errp)
+         ai.ai_family = PF_INET6;
+ 
+     if (0 != (rc = getaddrinfo(addr, port, &ai, &peer))) {
+-        fprintf(stderr,"getaddrinfo(%s,%s): %s\n", addr, port,
+-                gai_strerror(rc));
++        error_setg(errp, "address resolution failed for %s:%s: %s", addr, port,
++                   gai_strerror(rc));
+ 	return -1;
+     }
+ 
+@@ -444,44 +442,28 @@ int inet_dgram_opts(QemuOpts *opts, Error **errp)
+         port = "0";
+ 
+     if (0 != (rc = getaddrinfo(addr, port, &ai, &local))) {
+-        fprintf(stderr,"getaddrinfo(%s,%s): %s\n", addr, port,
+-                gai_strerror(rc));
+-        return -1;
++        error_setg(errp, "address resolution failed for %s:%s: %s", addr, port,
++                   gai_strerror(rc));
++        goto err;
+     }
+ 
+     /* create socket */
+     sock = qemu_socket(peer->ai_family, peer->ai_socktype, peer->ai_protocol);
+     if (sock < 0) {
+-        fprintf(stderr,"%s: socket(%s): %s\n", __FUNCTION__,
+-                inet_strfamily(peer->ai_family), strerror(errno));
++        error_setg_errno(errp, errno, "socket create failed");
+         goto err;
+     }
+     setsockopt(sock,SOL_SOCKET,SO_REUSEADDR,(void*)&on,sizeof(on));
+ 
+     /* bind socket */
+-    if (getnameinfo((struct sockaddr*)local->ai_addr,local->ai_addrlen,
+-                    uaddr,INET6_ADDRSTRLEN,uport,32,
+-                    NI_NUMERICHOST | NI_NUMERICSERV) != 0) {
+-        fprintf(stderr, "%s: getnameinfo: oops\n", __FUNCTION__);
+-        goto err;
+-    }
+     if (bind(sock, local->ai_addr, local->ai_addrlen) < 0) {
+-        fprintf(stderr,"%s: bind(%s,%s,%d): OK\n", __FUNCTION__,
+-                inet_strfamily(local->ai_family), uaddr, inet_getport(local));
++        error_setg_errno(errp, errno, "socket bind failed");
+         goto err;
+     }
+ 
+     /* connect to peer */
+-    if (getnameinfo((struct sockaddr*)peer->ai_addr, peer->ai_addrlen,
+-                    uaddr, INET6_ADDRSTRLEN, uport, 32,
+-                    NI_NUMERICHOST | NI_NUMERICSERV) != 0) {
+-        fprintf(stderr, "%s: getnameinfo: oops\n", __FUNCTION__);
+-        goto err;
+-    }
+     if (connect(sock,peer->ai_addr,peer->ai_addrlen) < 0) {
+-        fprintf(stderr, "%s: connect(%s,%s,%s,%s): %s\n", __FUNCTION__,
+-                inet_strfamily(peer->ai_family),
+-                peer->ai_canonname, uaddr, uport, strerror(errno));
++        error_setg_errno(errp, errno, "socket connect failed");
+         goto err;
+     }
+ 
+-- 
+1.7.11.7
+

@@ -1,0 +1,108 @@
+From b9900cb7f41ab9b51816d970c4b9e992b6faa8ea Mon Sep 17 00:00:00 2001
+Message-Id: <b9900cb7f41ab9b51816d970c4b9e992b6faa8ea.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:22 -0500
+Subject: [CHANGE 02/29] aio: use g_slice_alloc() for AIOCB pooling
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-3-git-send-email-famz@redhat.com>
+Patchwork-id: 64903
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 02/28] aio: use g_slice_alloc() for AIOCB pooling
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@redhat.com>
+
+AIO control blocks are frequently acquired and released because each aio
+request involves at least one AIOCB.  Therefore, we pool them to avoid
+heap allocation overhead.
+
+The problem with the freelist approach in AIOPool is thread-safety.  If
+we want BlockDriverStates to associate with AioContexts that execute in
+multiple threads, then a global freelist becomes a problem.
+
+This patch drops the freelist and instead uses g_slice_alloc() which is
+tuned for per-thread fixed-size object pools.  qemu_aio_get() and
+qemu_aio_release() are now thread-safe.
+
+Note that the change from g_malloc0() to g_slice_alloc() should be safe
+since the freelist reuse case doesn't zero the AIOCB either.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit d37c975fb134e1b16f09b4e6545e2c0591fb6455)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block.c    | 15 ++++-----------
+ qemu-aio.h |  2 --
+ 2 files changed, 4 insertions(+), 13 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block.c    | 15 ++++-----------
+ qemu-aio.h |  2 --
+ 2 files changed, 4 insertions(+), 13 deletions(-)
+
+diff --git a/block.c b/block.c
+index 99600ea..794d446 100644
+--- a/block.c
++++ b/block.c
+@@ -4074,13 +4074,8 @@ void *qemu_aio_get(AIOPool *pool, BlockDriverState *bs,
+ {
+     BlockDriverAIOCB *acb;
+ 
+-    if (pool->free_aiocb) {
+-        acb = pool->free_aiocb;
+-        pool->free_aiocb = acb->next;
+-    } else {
+-        acb = g_malloc0(pool->aiocb_size);
+-        acb->pool = pool;
+-    }
++    acb = g_slice_alloc(pool->aiocb_size);
++    acb->pool = pool;
+     acb->bs = bs;
+     acb->cb = cb;
+     acb->opaque = opaque;
+@@ -4089,10 +4084,8 @@ void *qemu_aio_get(AIOPool *pool, BlockDriverState *bs,
+ 
+ void qemu_aio_release(void *p)
+ {
+-    BlockDriverAIOCB *acb = (BlockDriverAIOCB *)p;
+-    AIOPool *pool = acb->pool;
+-    acb->next = pool->free_aiocb;
+-    pool->free_aiocb = acb;
++    BlockDriverAIOCB *acb = p;
++    g_slice_free1(acb->pool->aiocb_size, acb);
+ }
+ 
+ /**************************************************************/
+diff --git a/qemu-aio.h b/qemu-aio.h
+index dda97c7..ce6c787 100644
+--- a/qemu-aio.h
++++ b/qemu-aio.h
+@@ -24,7 +24,6 @@ typedef void BlockDriverCompletionFunc(void *opaque, int ret);
+ typedef struct AIOPool {
+     void (*cancel)(BlockDriverAIOCB *acb);
+     size_t aiocb_size;
+-    BlockDriverAIOCB *free_aiocb;
+ } AIOPool;
+ 
+ struct BlockDriverAIOCB {
+@@ -32,7 +31,6 @@ struct BlockDriverAIOCB {
+     BlockDriverState *bs;
+     BlockDriverCompletionFunc *cb;
+     void *opaque;
+-    BlockDriverAIOCB *next;
+ };
+ 
+ void *qemu_aio_get(AIOPool *pool, BlockDriverState *bs,
+-- 
+2.1.0
+

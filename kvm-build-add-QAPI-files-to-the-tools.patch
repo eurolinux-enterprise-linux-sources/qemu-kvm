@@ -1,0 +1,68 @@
+From 1b2b573c6a5864c87e05b85f9daf61e00d3d8e65 Mon Sep 17 00:00:00 2001
+Message-Id: <1b2b573c6a5864c87e05b85f9daf61e00d3d8e65.1374754301.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:24 +0200
+Subject: [PATCH 13/65] build: add QAPI files to the tools
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-14-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52113
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 13/65] build: add QAPI files to the tools
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+We need them because qemu-sockets will soon be using SocketAddress.
+
+Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 69758c22e0814f77c7a286ce65a68270ce71284e)
+
+Conflicts:
+
+	Makefile
+	Makefile.objs
+---
+ Makefile |    8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ Makefile | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 597bd13..51e26d1 100644
+--- a/Makefile
++++ b/Makefile
+@@ -193,10 +193,10 @@ trace-dtrace.o: trace-dtrace.dtrace $(GENERATED_HEADERS)
+ qemu-img.o: qemu-img-cmds.h
+ qemu-img.o qemu-tool.o qemu-nbd.o qemu-io.o: $(GENERATED_HEADERS)
+ 
+-TOOLS_OBJ=qemu-tool.o qerror.o $(shared-obj-y) $(trace-obj-y)
++TOOLS_OBJ=qemu-tool.o qerror.o $(shared-obj-y) $(trace-obj-y) \
++	$(qapi-obj-y) $(rhel_rhev_qapi_visit.o) $(rhel_rhev_qapi_types.o)
+ 
+-qemu-img$(EXESUF): qemu-img.o $(TOOLS_OBJ) $(qapi-obj-y) \
+-                              $(rhel_rhev_qapi_visit.o) $(rhel_rhev_qapi_types.o)
++qemu-img$(EXESUF): qemu-img.o $(TOOLS_OBJ)
+ 
+ qemu-nbd$(EXESUF): qemu-nbd.o $(TOOLS_OBJ)
+ 
+@@ -321,7 +321,7 @@ $(QGALIB_GEN): $(GENERATED_HEADERS)
+ $(QGALIB) qemu-ga.o: $(QGALIB_GEN) $(qapi-obj-y)
+ 
+ 
+-qemu-ga$(EXESUF): qemu-ga.o $(qga-obj-y) $(qapi-obj-y) $(trace-obj-y) $(qobject-obj-y) $(version-obj-y) $(addprefix $(qapi-dir)/, qga-qapi-visit.o qga-qapi-types.o qga-qmp-marshal.o)
++qemu-ga$(EXESUF): qemu-ga.o $(qga-obj-y) $(qapi-obj-y) $(rhel_rhev_qapi_visit.o) $(rhel_rhev_qapi_types.o) $(trace-obj-y) $(qobject-obj-y) $(version-obj-y) $(addprefix $(qapi-dir)/, qga-qapi-visit.o qga-qapi-types.o qga-qmp-marshal.o)
+ 
+ QEMULIBS=libhw32 libhw64 libuser
+ 
+-- 
+1.7.11.7
+

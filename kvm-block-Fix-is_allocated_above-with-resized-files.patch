@@ -1,0 +1,51 @@
+From b15696782de44c0c8e883bfbf3cb03bb6ab9352e Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:24 -0500
+Subject: [CHANGE 02/31] block: Fix is_allocated_above with resized files
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-3-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60360
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 02/29] block: Fix is_allocated_above with resized files
+Bugzilla: 1122992
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+From: Vishvananda Ishaya <vishvananda@gmail.com>
+
+In an image chain, if the base image is smaller than the current
+image, we need to make sure to use the current images count of
+unallocated blocks once we get to the end of the base image. Without
+this change the code will return 0 blocks when it gets to the end
+of the base image and mirror_run will fail its assertion.
+
+Signed-off-by: Vishvananda Ishaya <vishvananda@gmail.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 63ba17d39f1a8d262b31ea6a07dd3eb45d5a41e2)
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ block.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/block.c b/block.c
+index 6b9230d..2506e52 100644
+--- a/block.c
++++ b/block.c
+@@ -2925,7 +2925,9 @@ int bdrv_is_allocated_above(BlockDriverState *top,
+          *
+          * [sector_num+x, nr_sectors] allocated.
+          */
+-        if (n > pnum_inter) {
++        if (n > pnum_inter &&
++            (intermediate == top ||
++             sector_num + pnum_inter < intermediate->total_sectors)) {
+             n = pnum_inter;
+         }
+ 
+-- 
+1.9.3
+

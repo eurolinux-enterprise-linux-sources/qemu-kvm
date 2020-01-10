@@ -1,0 +1,152 @@
+From 05afe7224a3251ee1e9a117a156b2e1b6a71da89 Mon Sep 17 00:00:00 2001
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Mon, 14 Apr 2014 21:36:39 +0200
+Subject: [PATCH 28/30] block: fix snapshot on QED
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <4f2c8cedf305f312c223337666fefac14c4156b1.1397511134.git.jcody@redhat.com>
+Patchwork-id: 58475
+O-Subject: [RHEL6 qemu-kvm PATCH] block: fix snapshot on QED
+Bugzilla: 1012244
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+QED's opaque data includes a pointer back to the BlockDriverState.
+This breaks when bdrv_append shuffles data between bs_new and bs_top.
+To avoid this, add a "rebind" function that tells the driver about
+the new relationship between the BlockDriverState and its opaque.
+
+The patch also adds rebind to VVFAT for completeness, even though
+it is not used with live snapshots.
+
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Reviewed-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit e023b2e244ddcc25308309d20c6bfd037897b10c)
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+
+RHEL6 Info:
+BZ 1012244
+Brew (RHEL): http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7347249
+Brew (RHEV): http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7347273
+
+git-backport-diff:
+[----] : patches are identical
+[####] : number of functional differences between upstream/downstream patch
+[down] : patch is downstream-only
+The flags [FC] indicate (F)unctional and (C)ontextual differences, respectively
+
+001/1:[----] [-C] 'block: fix snapshot on QED'
+
+ block.c       | 10 ++++++++++
+ block/qed.c   |  7 +++++++
+ block/vvfat.c |  7 +++++++
+ block_int.h   |  1 +
+ 4 files changed, 25 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block.c       |   10 ++++++++++
+ block/qed.c   |    7 +++++++
+ block/vvfat.c |    7 +++++++
+ block_int.h   |    1 +
+ 4 files changed, 25 insertions(+), 0 deletions(-)
+
+diff --git a/block.c b/block.c
+index 2aa3b36..abae182 100644
+--- a/block.c
++++ b/block.c
+@@ -1131,6 +1131,13 @@ void bdrv_make_anon(BlockDriverState *bs)
+     bs->device_name[0] = '\0';
+ }
+ 
++static void bdrv_rebind(BlockDriverState *bs)
++{
++    if (bs->drv && bs->drv->bdrv_rebind) {
++        bs->drv->bdrv_rebind(bs);
++    }
++}
++
+ /*
+  * Add new bs contents at the top of an image chain while the chain is
+  * live, while keeping required fields on the top layer.
+@@ -1232,6 +1239,9 @@ void bdrv_append(BlockDriverState *bs_new, BlockDriverState *bs_top)
+     bs_new->block_timer       = NULL;
+     bs_new->slice_start       = 0;
+     bs_new->slice_end         = 0;
++
++    bdrv_rebind(bs_new);
++    bdrv_rebind(bs_top);
+ }
+ 
+ void bdrv_delete(BlockDriverState *bs)
+diff --git a/block/qed.c b/block/qed.c
+index 454600a..474aee4 100644
+--- a/block/qed.c
++++ b/block/qed.c
+@@ -376,6 +376,12 @@ static void qed_cancel_need_check_timer(BDRVQEDState *s)
+     qemu_del_timer(s->need_check_timer);
+ }
+ 
++static void bdrv_qed_rebind(BlockDriverState *bs)
++{
++    BDRVQEDState *s = bs->opaque;
++    s->bs = bs;
++}
++
+ static int bdrv_qed_open(BlockDriverState *bs, int flags)
+ {
+     BDRVQEDState *s = bs->opaque;
+@@ -1595,6 +1601,7 @@ static BlockDriver bdrv_qed = {
+     .create_options           = qed_create_options,
+ 
+     .bdrv_probe               = bdrv_qed_probe,
++    .bdrv_rebind              = bdrv_qed_rebind,
+     .bdrv_open                = bdrv_qed_open,
+     .bdrv_close               = bdrv_qed_close,
+     .bdrv_reopen_prepare      = bdrv_qed_reopen_prepare,
+diff --git a/block/vvfat.c b/block/vvfat.c
+index d0e6f82..a825e96 100644
+--- a/block/vvfat.c
++++ b/block/vvfat.c
+@@ -995,6 +995,12 @@ static BDRVVVFATState *vvv = NULL;
+ static int enable_write_target(BDRVVVFATState *s);
+ static int is_consistent(BDRVVVFATState *s);
+ 
++static void vvfat_rebind(BlockDriverState *bs)
++{
++    BDRVVVFATState *s = bs->opaque;
++    s->bs = bs;
++}
++
+ static int vvfat_open(BlockDriverState *bs, const char* dirname, int flags)
+ {
+     BDRVVVFATState *s = bs->opaque;
+@@ -2863,6 +2869,7 @@ static BlockDriver bdrv_vvfat = {
+     .format_name	= "vvfat",
+     .instance_size	= sizeof(BDRVVVFATState),
+     .bdrv_file_open	= vvfat_open,
++    .bdrv_rebind	= vvfat_rebind,
+     .bdrv_read          = vvfat_co_read,
+     .bdrv_write         = vvfat_co_write,
+     .bdrv_close		= vvfat_close,
+diff --git a/block_int.h b/block_int.h
+index a6cb355..199d15b 100644
+--- a/block_int.h
++++ b/block_int.h
+@@ -140,6 +140,7 @@ struct BlockDriver {
+     int (*bdrv_write)(BlockDriverState *bs, int64_t sector_num,
+                       const uint8_t *buf, int nb_sectors);
+     void (*bdrv_close)(BlockDriverState *bs);
++    void (*bdrv_rebind)(BlockDriverState *bs);
+     int (*bdrv_create)(const char *filename, QEMUOptionParameter *options);
+     int (*bdrv_set_key)(BlockDriverState *bs, const char *key);
+     int (*bdrv_make_empty)(BlockDriverState *bs);
+-- 
+1.7.1
+

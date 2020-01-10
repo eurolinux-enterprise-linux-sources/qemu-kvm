@@ -1,0 +1,92 @@
+From 99b0f8ab78ba68a9b25e201d270684b587fbd2d4 Mon Sep 17 00:00:00 2001
+Message-Id: <99b0f8ab78ba68a9b25e201d270684b587fbd2d4.1376387172.git.minovotn@redhat.com>
+In-Reply-To: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+References: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Thu, 8 Aug 2013 06:09:41 +0200
+Subject: [PATCH 11/13] vmdk: Allow reading variable size descriptor files
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1375942181-5262-12-git-send-email-famz@redhat.com>
+Patchwork-id: 53076
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 11/11] vmdk: Allow reading variable size descriptor files
+Bugzilla: 994804
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: Evgeny Budilovsky <evgeny.budilovsky@ravellosystems.com>
+
+the hard-coded 2k buffer on the stack won't allow reading big descriptor
+files which can be generated when storing big images. For example 500G
+vmdk splitted to 2G chunks.
+
+Signed-off-by: Evgeny Budilovsky <evgeny.budilovsky@ravellosystems.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 0bed087df24c7b3fae366f239b9d150de3309416)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 27 ++++++++++++++++++++-------
+ 1 file changed, 20 insertions(+), 7 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 27 ++++++++++++++++++++-------
+ 1 file changed, 20 insertions(+), 7 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index a4e37c2..be9f1c5 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -765,27 +765,40 @@ static int vmdk_open_desc_file(BlockDriverState *bs, int flags,
+                                uint64_t desc_offset)
+ {
+     int ret;
+-    char buf[2048];
++    char *buf = NULL;
+     char ct[128];
+     BDRVVmdkState *s = bs->opaque;
++    int64_t size;
+ 
+-    ret = bdrv_pread(bs->file, desc_offset, buf, sizeof(buf));
++    size = bdrv_getlength(bs->file);
++    if (size < 0) {
++        return -EINVAL;
++    }
++
++    size = MIN(size, 1 << 20);  /* avoid unbounded allocation */
++    buf = g_malloc0(size + 1);
++
++    ret = bdrv_pread(bs->file, desc_offset, buf, size);
+     if (ret < 0) {
+-        return ret;
++        goto exit;
+     }
+-    buf[2047] = '\0';
+     if (vmdk_parse_description(buf, "createType", ct, sizeof(ct))) {
+-        return -EMEDIUMTYPE;
++        ret = -EMEDIUMTYPE;
++        goto exit;
+     }
+     if (strcmp(ct, "monolithicFlat") &&
+         strcmp(ct, "twoGbMaxExtentSparse") &&
+         strcmp(ct, "twoGbMaxExtentFlat")) {
+         fprintf(stderr,
+                 "VMDK: Not supported image type \"%s\""".\n", ct);
+-        return -ENOTSUP;
++        ret = -ENOTSUP;
++        goto exit;
+     }
+     s->desc_offset = 0;
+-    return vmdk_parse_extents(buf, bs, bs->file->filename);
++    ret = vmdk_parse_extents(buf, bs, bs->file->filename);
++exit:
++    g_free(buf);
++    return ret;
+ }
+ 
+ static int vmdk_open(BlockDriverState *bs, int flags)
+-- 
+1.7.11.7
+

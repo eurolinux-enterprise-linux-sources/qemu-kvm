@@ -1,0 +1,143 @@
+From fdd6d019c2ce48d77c180c082f4268819b80711a Mon Sep 17 00:00:00 2001
+Message-Id: <fdd6d019c2ce48d77c180c082f4268819b80711a.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:22:00 -0500
+Subject: [CHANGE 17/42] iotests: Add more tests for qcow2 corruption
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-18-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64480
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 17/39] iotests: Add more tests for qcow2 corruption
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1129892
+
+Add tests for unaligned L1/L2/reftable entries and non-fatal corruption
+reports.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Message-id: 1409926039-29044-6-git-send-email-mreitz@redhat.com
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 5b0ed2be883238f52567ba2635ea38f34e8eb90d)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	tests/qemu-iotests/060
+	tests/qemu-iotests/060.out
+
+Conflicts due to different corruption messages and because there is no
+qmeu-io -c discard downstream.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ tests/qemu-iotests/060     | 38 ++++++++++++++++++++++++++++++++++++--
+ tests/qemu-iotests/060.out | 31 +++++++++++++++++++++++++++++++
+ 2 files changed, 67 insertions(+), 2 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ tests/qemu-iotests/060     | 38 ++++++++++++++++++++++++++++++++++++--
+ tests/qemu-iotests/060.out | 31 +++++++++++++++++++++++++++++++
+ 2 files changed, 67 insertions(+), 2 deletions(-)
+
+diff --git a/tests/qemu-iotests/060 b/tests/qemu-iotests/060
+index 0ab0c46..64d6c0a 100755
+--- a/tests/qemu-iotests/060
++++ b/tests/qemu-iotests/060
+@@ -121,9 +121,43 @@ echo "=== Testing unallocated image header ==="
+ echo
+ _make_test_img 64M
+ # Create L1/L2
+-$QEMU_IO -c "$OPEN_RW" -c "write 0 64k" | _filter_qemu_io
++$QEMU_IO -c "write 0 64k" "$TEST_IMG" | _filter_qemu_io
+ poke_file "$TEST_IMG" "$rb_offset" "\x00\x00"
+-$QEMU_IO -c "$OPEN_RW" -c "write 64k 64k" | _filter_qemu_io
++$QEMU_IO -c "write 64k 64k" "$TEST_IMG" | _filter_qemu_io
++
++echo
++echo "=== Testing unaligned L1 entry ==="
++echo
++_make_test_img 64M
++$QEMU_IO -c "write 0 64k" "$TEST_IMG" | _filter_qemu_io
++# This will be masked with ~(512 - 1) = ~0x1ff, so whether the lower 9 bits are
++# aligned or not does not matter
++poke_file "$TEST_IMG" "$l1_offset" "\x80\x00\x00\x00\x00\x04\x2a\x00"
++$QEMU_IO -c "read 0 64k" "$TEST_IMG" | _filter_qemu_io
++
++echo
++echo "=== Testing unaligned L2 entry ==="
++echo
++_make_test_img 64M
++$QEMU_IO -c "write 0 64k" "$TEST_IMG" | _filter_qemu_io
++poke_file "$TEST_IMG" "$l2_offset" "\x80\x00\x00\x00\x00\x05\x2a\x00"
++$QEMU_IO -c "read 0 64k" "$TEST_IMG" | _filter_qemu_io
++
++echo
++echo "=== Testing unaligned reftable entry ==="
++echo
++_make_test_img 64M
++poke_file "$TEST_IMG" "$rt_offset" "\x00\x00\x00\x00\x00\x02\x2a\x00"
++$QEMU_IO -c "write 0 64k" "$TEST_IMG" | _filter_qemu_io
++
++echo
++echo "=== Testing read-only corruption report ==="
++echo
++_make_test_img 64M
++$QEMU_IO -c "write 0 64k" "$TEST_IMG" | _filter_qemu_io
++poke_file "$TEST_IMG" "$l2_offset" "\x80\x00\x00\x00\x00\x05\x2a\x00"
++# Should only emit a single error message
++$QEMU_IO -c "$OPEN_RO" -c "read 0 64k" -c "read 0 64k" | _filter_qemu_io
+ 
+ # success, all done
+ echo "*** done"
+diff --git a/tests/qemu-iotests/060.out b/tests/qemu-iotests/060.out
+index 734034f..13d7790 100644
+--- a/tests/qemu-iotests/060.out
++++ b/tests/qemu-iotests/060.out
+@@ -48,4 +48,35 @@ wrote 65536/65536 bytes at offset 0
+ 64 KiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+ qcow2: Image is corrupt (further access will be prevented): Preventing invalid write on metadata (overlaps with qcow2_header); please use qemu-img check -r. Further corruption events will be suppressed
+ write failed: Input/output error
++
++=== Testing unaligned L1 entry ===
++
++Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
++wrote 65536/65536 bytes at offset 0
++64 KiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
++qcow2: Image is corrupt (further access will be prevented): L2 table offset 0x42a00 unaligned (L1 index: 0); please use qemu-img check -r. Further corruption events will be suppressed
++read failed: Input/output error
++
++=== Testing unaligned L2 entry ===
++
++Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
++wrote 65536/65536 bytes at offset 0
++64 KiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
++qcow2: Image is corrupt (further access will be prevented): Data cluster offset 0x52a00 unaligned (L2 offset: 0x40000, L2 index: 0); please use qemu-img check -r. Further corruption events will be suppressed
++read failed: Input/output error
++
++=== Testing unaligned reftable entry ===
++
++Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
++qcow2: Image is corrupt (further access will be prevented): Refblock offset 0x22a00 unaligned (reftable index: 0); please use qemu-img check -r. Further corruption events will be suppressed
++write failed: Input/output error
++
++=== Testing read-only corruption report ===
++
++Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
++wrote 65536/65536 bytes at offset 0
++64 KiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
++qcow2: Image is corrupt: Data cluster offset 0x52a00 unaligned (L2 offset: 0x40000, L2 index: 0); please use qemu-img check -r. Further non-fatal corruption events will be suppressed
++read failed: Input/output error
++read failed: Input/output error
+ *** done
+-- 
+2.1.0
+

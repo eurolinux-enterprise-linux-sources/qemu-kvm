@@ -1,0 +1,184 @@
+From 3bd19fc5383b26b925af8fafd40e3d67396930ea Mon Sep 17 00:00:00 2001
+Message-Id: <3bd19fc5383b26b925af8fafd40e3d67396930ea.1424280081.git.jen@redhat.com>
+In-Reply-To: <54163d537ed24926effb0783707492d2988ecbe8.1424280081.git.jen@redhat.com>
+References: <54163d537ed24926effb0783707492d2988ecbe8.1424280081.git.jen@redhat.com>
+From: Marcelo Tosatti <mtosatti@redhat.com>
+Date: Fri, 6 Feb 2015 19:40:48 -0500
+Subject: [CHANGE 3/8] mc146818rtc: add rtc-reset-reinjection QMP command
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Marcelo Tosatti <mtosatti@redhat.com>
+Message-id: <20150206194048.GA25212@amt.cnet>
+Patchwork-id: 63738
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2] mc146818rtc: add rtc-reset-reinjection QMP command
+Bugzilla: 1190248
+RH-Acked-by: Eduardo Habkost <ehabkost@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+(upstream commit ID f2ae8abf1fa003e7ec6ee22cc3871924422a01d0)
+
+It is necessary to reset RTC interrupt reinjection backlog if
+guest time is synchronized via a different mechanism, such as
+QGA's guest-set-time command.
+
+Failing to do so causes both corrections to be applied (summed),
+resulting in an incorrect guest time.
+
+Signed-off-by: Marcelo Tosatti <mtosatti@redhat.com>
+Reviewed-by: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+BZ: 1190248
+
+---
+ hw/mc146818rtc.c |   24 +++++++++++++++++++++++-
+ monitor.c        |    8 ++++++++
+ qapi-schema.json |   13 +++++++++++++
+ qemu-monitor.hx  |   25 +++++++++++++++++++++++++
+ 4 files changed, 69 insertions(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/mc146818rtc.c | 24 +++++++++++++++++++++++-
+ monitor.c        |  8 ++++++++
+ qapi-schema.json | 13 +++++++++++++
+ qemu-monitor.hx  | 25 +++++++++++++++++++++++++
+ 4 files changed, 69 insertions(+), 1 deletion(-)
+
+diff --git a/hw/mc146818rtc.c b/hw/mc146818rtc.c
+index 119315d..096ac77 100644
+--- a/hw/mc146818rtc.c
++++ b/hw/mc146818rtc.c
+@@ -27,6 +27,7 @@
+ #include "pc.h"
+ #include "isa.h"
+ #include "hpet_emul.h"
++#include "qmp-commands.h"
+ 
+ //#define DEBUG_CMOS
+ 
+@@ -86,6 +87,7 @@ struct RTCState {
+     QEMUTimer *second_timer2;
+     Notifier suspend_notifier;
+     Notifier clock_reset_notifier;
++    QLIST_ENTRY(RTCState) link;
+ };
+ 
+ /* set CMOS shutdown status register (index 0xF) as S3_resume(0xFE)
+@@ -109,6 +111,20 @@ static void rtc_irq_raise(qemu_irq irq)
+         qemu_irq_raise(irq);
+ }
+ 
++static QLIST_HEAD(, RTCState) rtc_devices =
++    QLIST_HEAD_INITIALIZER(rtc_devices);
++
++#ifdef TARGET_I386
++void qmp_rtc_reset_reinjection(Error **errp)
++{
++    RTCState *s;
++
++    QLIST_FOREACH(s, &rtc_devices, link) {
++        s->irq_coalesced = 0;
++    }
++}
++#endif
++
+ static void rtc_set_time(RTCState *s);
+ static void rtc_copy_date(RTCState *s);
+ 
+@@ -648,11 +664,17 @@ static int rtc_initfn(ISADevice *dev)
+ RTCState *rtc_init(int base_year)
+ {
+     ISADevice *dev;
++    RTCState *s;
+ 
+     dev = isa_create("mc146818rtc");
+     qdev_prop_set_int32(&dev->qdev, "base_year", base_year);
+     qdev_init_nofail(&dev->qdev);
+-    return DO_UPCAST(RTCState, dev, dev);
++
++    s = DO_UPCAST(RTCState, dev, dev);
++
++    QLIST_INSERT_HEAD(&rtc_devices, s, link);
++
++    return s;
+ }
+ 
+ static ISADeviceInfo mc146818rtc_info = {
+diff --git a/monitor.c b/monitor.c
+index 4a3375e..b6f5c8b 100644
+--- a/monitor.c
++++ b/monitor.c
+@@ -5230,3 +5230,11 @@ int monitor_read_bdrv_key_start(Monitor *mon, BlockDriverState *bs,
+ 
+     return err;
+ }
++
++#ifndef TARGET_I386
++void qmp_rtc_reset_reinjection(Error **errp)
++{
++    error_setg(errp, "The feature rtc-reset-reinjection is not enabled");
++}
++#endif
++
+diff --git a/qapi-schema.json b/qapi-schema.json
+index 5ecd874..83918a8 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -921,3 +921,16 @@
+ # Since: 0.14.0
+ ##
+ { 'command': 'query-pci', 'returns': ['PciInfo'] }
++
++##
++# @rtc-reset-reinjection
++#
++# This command will reset the RTC interrupt reinjection backlog.
++# Can be used if another mechanism to synchronize guest time
++# is in effect, for example QEMU guest agent's guest-set-time
++# command.
++#
++# Since: 2.1
++##
++{ 'command': 'rtc-reset-reinjection' }
++
+diff --git a/qemu-monitor.hx b/qemu-monitor.hx
+index c6ac10c..36c9662 100644
+--- a/qemu-monitor.hx
++++ b/qemu-monitor.hx
+@@ -2466,6 +2466,31 @@ Example:
+ 
+ EQMP
+ 
++#if defined TARGET_I386
++    {
++        .name       = "rtc-reset-reinjection",
++        .args_type  = "",
++        .user_print = monitor_user_noop,
++        .mhandler.cmd_new = qmp_marshal_input_rtc_reset_reinjection,
++        .flags = MONITOR_CMD_QMP_ONLY
++    },
++#endif
++
++SQMP
++rtc-reset-reinjection
++---------------------
++
++Reset the RTC interrupt reinjection backlog.
++
++Arguments: None.
++
++Example:
++
++-> { "execute": "rtc-reset-reinjection" }
++<- { "return": {} }
++
++EQMP
++
+ HXCOMM Keep the 'info' command at the end!
+ HXCOMM This is required for the QMP documentation layout.
+ 
+-- 
+2.1.0
+

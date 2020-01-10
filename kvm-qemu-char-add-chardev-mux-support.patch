@@ -1,0 +1,89 @@
+From 650a9ed7f9eb04a331ecb78715416da55d17be5f Mon Sep 17 00:00:00 2001
+Message-Id: <650a9ed7f9eb04a331ecb78715416da55d17be5f.1376408877.git.minovotn@redhat.com>
+In-Reply-To: <823d94e906b2aeecd2c60bc9f19ca8948a756f27.1376408877.git.minovotn@redhat.com>
+References: <823d94e906b2aeecd2c60bc9f19ca8948a756f27.1376408877.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 30 Jul 2013 11:35:28 +0200
+Subject: [PATCH 10/18] qemu-char: add -chardev mux support
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1375184130-11076-11-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52787
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 10/12] qemu-char: add -chardev mux support
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+
+Allow to explicitly create mux chardevs on the command line,
+like you can using QMP.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Michael Tokarev <mjt@tls.msk.ru>
+(cherry picked from commit bb6fb7c0857aeda7982ac14460328edf3c29cfc8)
+
+Conflicts:
+
+	qemu-char.c
+---
+ qemu-char.c   |   15 +++++++++++++++
+ qemu-config.c |    3 +++
+ 2 files changed, 18 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c   | 15 +++++++++++++++
+ qemu-config.c |  3 +++
+ 2 files changed, 18 insertions(+)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 95b1f15..ea768af 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -2807,6 +2807,19 @@ static void qemu_chr_parse_pipe(QemuOpts *opts, ChardevBackend *backend,
+     backend->pipe->device = g_strdup(device);
+ }
+ 
++static void qemu_chr_parse_mux(QemuOpts *opts, ChardevBackend *backend,
++                               Error **errp)
++{
++    const char *chardev = qemu_opt_get(opts, "chardev");
++
++    if (chardev == NULL) {
++        error_setg(errp, "chardev: mux: no chardev given");
++        return;
++    }
++    backend->mux = g_new0(ChardevMux, 1);
++    backend->mux->chardev = g_strdup(chardev);
++}
++
+ typedef struct CharDriver {
+     const char *name;
+     /* old, pre qapi */
+@@ -3353,6 +3366,8 @@ static void register_types(void)
+     register_char_driver_qapi("console", CHARDEV_BACKEND_KIND_CONSOLE, NULL);
+     register_char_driver_qapi("pipe", CHARDEV_BACKEND_KIND_PIPE,
+                               qemu_chr_parse_pipe);
++    register_char_driver_qapi("mux", CHARDEV_BACKEND_KIND_MUX,
++                              qemu_chr_parse_mux);
+ }
+ 
+ machine_init(register_types);
+diff --git a/qemu-config.c b/qemu-config.c
+index f4e6702..fcca3a1 100644
+--- a/qemu-config.c
++++ b/qemu-config.c
+@@ -201,6 +201,9 @@ QemuOptsList qemu_chardev_opts = {
+         },{
+             .name = "debug",
+             .type = QEMU_OPT_NUMBER,
++        },{
++            .name = "chardev",
++            .type = QEMU_OPT_STRING,
+         },
+         { /* end if list */ }
+     },
+-- 
+1.7.11.7
+

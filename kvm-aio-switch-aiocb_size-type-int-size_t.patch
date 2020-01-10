@@ -1,0 +1,53 @@
+From d0ac017560c13e37ad318c0def2bc917bc5eda21 Mon Sep 17 00:00:00 2001
+Message-Id: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:21 -0500
+Subject: [CHANGE 01/29] aio: switch aiocb_size type int -> size_t
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-2-git-send-email-famz@redhat.com>
+Patchwork-id: 64902
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 01/28] aio: switch aiocb_size type int -> size_t
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@redhat.com>
+
+Using appropriate types for variables is a good thing :).  All users
+simply do sizeof(MyType) and the value is passed to a memory allocator,
+it should be size_t.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 8c82e9a4331bad42dfc01158fbd1e8f4c2f1c957)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ qemu-aio.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ qemu-aio.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/qemu-aio.h b/qemu-aio.h
+index aac97bf..dda97c7 100644
+--- a/qemu-aio.h
++++ b/qemu-aio.h
+@@ -23,7 +23,7 @@ typedef void BlockDriverCompletionFunc(void *opaque, int ret);
+ 
+ typedef struct AIOPool {
+     void (*cancel)(BlockDriverAIOCB *acb);
+-    int aiocb_size;
++    size_t aiocb_size;
+     BlockDriverAIOCB *free_aiocb;
+ } AIOPool;
+ 
+-- 
+2.1.0
+

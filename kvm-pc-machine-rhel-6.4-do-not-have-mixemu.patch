@@ -1,0 +1,100 @@
+From d89e72adfd7fe98088987ade3b1189d4125941d7 Mon Sep 17 00:00:00 2001
+Message-Id: <d89e72adfd7fe98088987ade3b1189d4125941d7.1369841886.git.minovotn@redhat.com>
+In-Reply-To: <9db4fbc10d733a88102ef99acaf6eb5d54153495.1369841886.git.minovotn@redhat.com>
+References: <9db4fbc10d733a88102ef99acaf6eb5d54153495.1369841886.git.minovotn@redhat.com>
+From: Marc-Andr Lureau <marcandre.lureau@redhat.com>
+Date: Wed, 29 May 2013 14:34:52 +0200
+Subject: [PATCH 04/14] pc: machine <= rhel 6.4 do not have mixemu
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Marc-André Lureau <marcandre.lureau@redhat.com>
+Message-id: <1369838102-26064-4-git-send-email-marcandre.lureau@redhat.com>
+Patchwork-id: 51674
+O-Subject: [RHEL-6.5 qemu-kvm PATCHv3 03/13] pc: machine <= rhel 6.4 do not have mixemu
+Bugzilla: 884253
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+---
+ hw/pc.c |    8 ++++++++
+ 1 files changed, 8 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/pc.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/hw/pc.c b/hw/pc.c
+index 5164a56..27bdeb8 100644
+--- a/hw/pc.c
++++ b/hw/pc.c
+@@ -1796,6 +1796,7 @@ static QEMUMachine pc_machine_rhel640 = {
+     .desc = "RHEL 6.4.0 PC",
+     .init = pc_init_rhel640,
+     .max_cpus = 255,
++    .no_mixemu = 1,
+ };
+ 
+ static void pc_init_rhel630(ram_addr_t ram_size,
+@@ -1816,6 +1817,7 @@ static QEMUMachine pc_machine_rhel630 = {
+     .desc = "RHEL 6.3.0 PC",
+     .init = pc_init_rhel630,
+     .max_cpus = 255,
++    .no_mixemu = 1,
+     .compat_props = (GlobalProperty[]) {
+         PC_RHEL6_3_COMPAT,
+         { /* end of list */ }
+@@ -1840,6 +1842,7 @@ static QEMUMachine pc_machine_rhel620 = {
+     .desc = "RHEL 6.2.0 PC",
+     .init = pc_init_rhel620,
+     .max_cpus = 255,
++    .no_mixemu = 1,
+     .compat_props = (GlobalProperty[]) {
+         PC_RHEL6_2_COMPAT,
+         { /* end of list */ }
+@@ -1864,6 +1867,7 @@ static QEMUMachine pc_machine_rhel610 = {
+     .desc = "RHEL 6.1.0 PC",
+     .init = pc_init_rhel610,
+     .max_cpus = 255,
++    .no_mixemu = 1,
+     .compat_props = (GlobalProperty[]) {
+         PC_RHEL6_1_COMPAT,
+         { /* end of list */ }
+@@ -1888,6 +1892,7 @@ static QEMUMachine pc_machine_rhel600 = {
+     .desc = "RHEL 6.0.0 PC",
+     .init = pc_init_rhel600,
+     .max_cpus = 255,
++    .no_mixemu = 1,
+     .compat_props = (GlobalProperty[]) {
+         {
+             .driver   = "VGA",
+@@ -1959,6 +1964,7 @@ static QEMUMachine pc_machine_rhel550 = {
+     .desc = "RHEL 5.5.0 PC",
+     .init = pc_init_rhel550,
+     .max_cpus = 255,
++    .no_mixemu = 1,
+     .compat_props = compat_rhel5,
+ };
+ 
+@@ -1980,6 +1986,7 @@ static QEMUMachine pc_machine_rhel544 = {
+     .desc = "RHEL 5.4.4 PC",
+     .init = pc_init_rhel544,
+     .max_cpus = 255,
++    .no_mixemu = 1,
+     .compat_props = compat_rhel5,
+ };
+ 
+@@ -2001,6 +2008,7 @@ static QEMUMachine pc_machine_rhel540 = {
+     .desc = "RHEL 5.4.0 PC",
+     .init = pc_init_rhel540,
+     .max_cpus = 255,
++    .no_mixemu = 1,
+     .compat_props = compat_rhel5,
+ };
+ 
+-- 
+1.7.11.7
+

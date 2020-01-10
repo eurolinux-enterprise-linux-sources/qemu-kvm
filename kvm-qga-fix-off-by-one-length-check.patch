@@ -1,0 +1,62 @@
+From a4ab1a9e434ea574323e6e6f5ffdf65a405e08e1 Mon Sep 17 00:00:00 2001
+Message-Id: <a4ab1a9e434ea574323e6e6f5ffdf65a405e08e1.1456769395.git.jen@redhat.com>
+In-Reply-To: <af9075e3725e0685c2d54d451267d48b16f48b02.1456769395.git.jen@redhat.com>
+References: <af9075e3725e0685c2d54d451267d48b16f48b02.1456769395.git.jen@redhat.com>
+From: =?UTF-8?q?Marc-Andr=C3=A9=20Lureau?= <marcandre.lureau@redhat.com>
+Date: Fri, 26 Feb 2016 14:16:02 -0500
+Subject: [CHANGE 7/8] qga: fix off-by-one length check
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Marc-André Lureau <marcandre.lureau@redhat.com>
+Message-id: <1456496163-31004-8-git-send-email-marcandre.lureau@redhat.com>
+Patchwork-id: 69507
+O-Subject: [RHEL-6.8 qemu-kvm PATCH v4 7/8] qga: fix off-by-one length check
+Bugzilla: 1174181
+RH-Acked-by: Thomas Huth <thuth@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Marc-André Lureau <marcandre.lureau@redhat.com>
+
+Laszlo Ersek said: "The length check is off by one (in the safe direction); it
+should be (nchars >= 2). The processing should be active for the wide string
+L"\r\n" -- resulting in the empty wide string --, I believe."
+
+Reported-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Marc-André Lureau <marcandre.lureau@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+
+(cherry picked from commit 25d943b95703ae45567395db4156b25052ee54c4)
+
+BZ: https://bugzilla.redhat.com/show_bug.cgi?id=1174181
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=10566110
+Upstream-status: 25d943b95703ae45567395db4156b25052ee54c4
+
+Signed-off-by: Marc-André Lureau <marcandre.lureau@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ qga/commands-win32.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/qga/commands-win32.c b/qga/commands-win32.c
+index 42e1932..a80045c 100644
+--- a/qga/commands-win32.c
++++ b/qga/commands-win32.c
+@@ -392,7 +392,7 @@ get_net_error_message(gint error)
+     if (msg != NULL) {
+         nchars = wcslen(msg);
+ 
+-        if (nchars > 2 &&
++        if (nchars >= 2 &&
+             msg[nchars - 1] == L'\n' &&
+             msg[nchars - 2] == L'\r') {
+             msg[nchars - 2] = L'\0';
+-- 
+2.1.0
+

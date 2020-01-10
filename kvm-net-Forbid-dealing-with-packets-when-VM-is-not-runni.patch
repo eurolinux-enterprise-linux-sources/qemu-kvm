@@ -1,0 +1,81 @@
+From c1a65d1a3f9888636f1026da1d5f77d985a8815b Mon Sep 17 00:00:00 2001
+Message-Id: <c1a65d1a3f9888636f1026da1d5f77d985a8815b.1411497349.git.jen@redhat.com>
+From: Juan Quintela <quintela@redhat.com>
+Date: Tue, 16 Sep 2014 15:50:17 -0400
+Subject: [CHANGE 1/7] net: Forbid dealing with packets when VM is not running
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Juan Quintela <quintela@redhat.com>
+Message-id: <1410882623-10906-2-git-send-email-quintela@redhat.com>
+Patchwork-id: 61184
+O-Subject: [PATCH qemu-kvm RHEL6.6 1/7] net: Forbid dealing with packets when VM is not running
+Bugzilla: 1142756 970103
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+From: zhanghailiang <zhang.zhanghailiang@huawei.com>
+
+For all NICs(except virtio-net) emulated by qemu,
+Such as e1000, rtl8139, pcnet and ne2k_pci,
+Qemu can still receive packets when VM is not running.
+
+If this happened in *migration's* last PAUSE VM stage, but
+before the end of the migration, the new receiving packets will possibly dirty
+parts of RAM which has been cached in *iovec*(will be sent asynchronously) and
+dirty parts of new RAM which will be missed.
+This will lead serious network fault in VM.
+
+To avoid this, we forbid receiving packets in generic net code when
+VM is not running.
+
+Bug reproduction steps:
+(1) Start a VM which configured at least one NIC
+(2) In VM, open several Terminal and do *Ping IP -i 0.1*
+(3) Migrate the VM repeatedly between two Hosts
+And the *PING* command in VM will very likely fail with message:
+'Destination HOST Unreachable', the NIC in VM will stay unavailable unless you
+run 'service network restart'
+
+Signed-off-by: zhanghailiang <zhang.zhanghailiang@huawei.com>
+Reviewed-by: Jason Wang <jasowang@redhat.com>
+Reviewed-by: Juan Quintela <quintela@redhat.com>
+Reviewed-by: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+(cherry picked from commit e1d64c084b2cc7e907b4e64026d8c8dba59116f8)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	net/net.c
+
+We need to change to ./net.c (file moved)
+We don't need the include file on RHEL6.
+
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ net.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/net.c b/net.c
+index 4ca648a..ef87f55 100644
+--- a/net.c
++++ b/net.c
+@@ -395,6 +395,12 @@ int qemu_can_send_packet(VLANClientState *sender)
+     VLANState *vlan = sender->vlan;
+     VLANClientState *vc;
+ 
++    int vm_running = runstate_is_running();
++
++    if (!vm_running) {
++        return 0;
++    }
++
+     if (sender->peer) {
+         if (sender->peer->receive_disabled) {
+             return 0;
+-- 
+1.9.3
+

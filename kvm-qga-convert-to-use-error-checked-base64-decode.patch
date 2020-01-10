@@ -1,0 +1,138 @@
+From 7040a26bb372f1f608a56a68cc35b040bf6a042d Mon Sep 17 00:00:00 2001
+Message-Id: <7040a26bb372f1f608a56a68cc35b040bf6a042d.1456769395.git.jen@redhat.com>
+In-Reply-To: <af9075e3725e0685c2d54d451267d48b16f48b02.1456769395.git.jen@redhat.com>
+References: <af9075e3725e0685c2d54d451267d48b16f48b02.1456769395.git.jen@redhat.com>
+From: =?UTF-8?q?Marc-Andr=C3=A9=20Lureau?= <marcandre.lureau@redhat.com>
+Date: Fri, 26 Feb 2016 14:15:58 -0500
+Subject: [CHANGE 3/8] qga: convert to use error checked base64 decode
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Marc-André Lureau <marcandre.lureau@redhat.com>
+Message-id: <1456496163-31004-4-git-send-email-marcandre.lureau@redhat.com>
+Patchwork-id: 69503
+O-Subject: [RHEL-6.8 qemu-kvm PATCH v4 3/8] qga: convert to use error checked base64 decode
+Bugzilla: 1174181
+RH-Acked-by: Thomas Huth <thuth@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: "Daniel P. Berrange" <berrange@redhat.com>
+
+Switch from using g_base64_decode over to qbase64_decode
+in order to get error checking of the base64 input data.
+
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Daniel P. Berrange <berrange@redhat.com>
+(cherry picked from commit 920639cab0fe28d003c90b53bd8b66e8fb333bdd)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+    qga/commands-posix.c
+    qga/commands-win32.c
+    qga/commands.c
+
+BZ: https://bugzilla.redhat.com/show_bug.cgi?id=1174181
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=10566110
+Upstream-status: 920639cab0fe28d003c90b53bd8b66e8fb333bdd
+
+Signed-off-by: Marc-André Lureau <marcandre.lureau@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ Makefile.objs         |  2 +-
+ include/qemu/base64.h |  1 +
+ qga/commands-posix.c  | 11 +++++++++--
+ qga/commands-win32.c  |  6 +++++-
+ 4 files changed, 16 insertions(+), 4 deletions(-)
+
+diff --git a/Makefile.objs b/Makefile.objs
+index 3f4b1ca..2e40598 100644
+--- a/Makefile.objs
++++ b/Makefile.objs
+@@ -223,7 +223,7 @@ qga-nested-y = commands.o guest-agent-command-state.o
+ qga-nested-$(CONFIG_POSIX) += commands-posix.o channel-posix.o
+ qga-nested-$(CONFIG_WIN32) += commands-win32.o channel-win32.o service-win32.o
+ qga-obj-y = $(addprefix qga/, $(qga-nested-y))
+-qga-obj-y += qemu-ga.o qemu-tool.o qemu-error.o module.o cutils.o osdep.o
++qga-obj-y += qemu-ga.o qemu-tool.o qemu-error.o module.o cutils.o osdep.o util/base64.o
+ qga-obj-$(CONFIG_WIN32) += qemu-malloc.o
+ qga-obj-$(CONFIG_POSIX) += qemu-malloc.o qemu-sockets.o qemu-option.o
+ 
+diff --git a/include/qemu/base64.h b/include/qemu/base64.h
+index 793708d..94eb9f6 100644
+--- a/include/qemu/base64.h
++++ b/include/qemu/base64.h
+@@ -22,6 +22,7 @@
+ #define QEMU_BASE64_H__
+ 
+ #include "qemu-common.h"
++#include "error.h"
+ 
+ 
+ /**
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index e4a8aad..d11b32d 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -44,6 +44,7 @@
+ #include "qerror.h"
+ #include "qemu-queue.h"
+ #include "host-utils.h"
++#include "qemu/base64.h"
+ 
+ #ifndef CONFIG_HAS_ENVIRON
+ #ifdef __APPLE__
+@@ -521,7 +522,10 @@ GuestFileWrite *qmp_guest_file_write(int64_t handle, const char *buf_b64,
+         gfh->state = RW_STATE_NEW;
+     }
+ 
+-    buf = g_base64_decode(buf_b64, &buf_len);
++    buf = qbase64_decode(buf_b64, -1, &buf_len, err);
++    if (!buf) {
++        return NULL;
++    }
+ 
+     if (!has_count) {
+         count = buf_len;
+@@ -1460,7 +1464,10 @@ void qmp_guest_set_user_password(const char *username,
+     char *chpasswddata = NULL;
+     size_t chpasswdlen;
+ 
+-    rawpasswddata = (char *)g_base64_decode(password, &rawpasswdlen);
++    rawpasswddata = (char *)qbase64_decode(password, -1, &rawpasswdlen, errp);
++    if (!rawpasswddata) {
++        return;
++    }
+     rawpasswddata = g_renew(char, rawpasswddata, rawpasswdlen + 1);
+     rawpasswddata[rawpasswdlen] = '\0';
+ 
+diff --git a/qga/commands-win32.c b/qga/commands-win32.c
+index bd36cef..8687d86 100644
+--- a/qga/commands-win32.c
++++ b/qga/commands-win32.c
+@@ -19,6 +19,7 @@
+ #include "qga/guest-agent-core.h"
+ #include "qga-qmp-commands.h"
+ #include "qerror.h"
++#include "qemu/base64.h"
+ 
+ #ifndef SHTDN_REASON_FLAG_PLANNED
+ #define SHTDN_REASON_FLAG_PLANNED 0x80000000
+@@ -422,7 +423,10 @@ void qmp_guest_set_user_password(const char *username,
+         return;
+     }
+ 
+-    rawpasswddata = (char *)g_base64_decode(password, &rawpasswdlen);
++    rawpasswddata = (char *)qbase64_decode(password, -1, &rawpasswdlen, errp);
++    if (!rawpasswddata) {
++        return;
++    }
+     rawpasswddata = g_renew(char, rawpasswddata, rawpasswdlen + 1);
+     rawpasswddata[rawpasswdlen] = '\0';
+ 
+-- 
+2.1.0
+

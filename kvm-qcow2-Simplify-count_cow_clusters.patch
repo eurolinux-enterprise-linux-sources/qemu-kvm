@@ -1,0 +1,96 @@
+From bb56d89a4b39e5764f3b7b422eb79db636ebb9e1 Mon Sep 17 00:00:00 2001
+Message-Id: <bb56d89a4b39e5764f3b7b422eb79db636ebb9e1.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:21:49 -0500
+Subject: [CHANGE 06/42] qcow2: Simplify count_cow_clusters
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-7-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64470
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 06/39] qcow2: Simplify count_cow_clusters
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+BZ: 1129892
+
+count_cow_clusters() tries to reuse existing functions, and all it
+achieves is to make things much more complicated than they really are:
+Everything needs COW, unless it's a normal cluster with refcount 1.
+
+This patch implements the obvious way of doing this, and by using
+qcow2_get_cluster_type() it gets rid of all flag magic.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 143550a83ef4eef86a847d00023d148e1f59f743)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-cluster.c | 33 +++++++++++++++------------------
+ 1 file changed, 15 insertions(+), 18 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-cluster.c | 33 +++++++++++++++------------------
+ 1 file changed, 15 insertions(+), 18 deletions(-)
+
+diff --git a/block/qcow2-cluster.c b/block/qcow2-cluster.c
+index f973b54..73c9bf3 100644
+--- a/block/qcow2-cluster.c
++++ b/block/qcow2-cluster.c
+@@ -751,30 +751,27 @@ err:
+ static int count_cow_clusters(BDRVQcowState *s, int nb_clusters,
+     uint64_t *l2_table, int l2_index)
+ {
+-    int i = 0;
+-    uint64_t cluster_offset;
++    int i;
+ 
+-    while (i < nb_clusters) {
+-        i += count_contiguous_clusters(nb_clusters - i, s->cluster_size,
+-                &l2_table[l2_index], i,
+-                QCOW_OFLAG_COPIED | QCOW_OFLAG_COMPRESSED);
+-        if ((i >= nb_clusters) || be64_to_cpu(l2_table[l2_index + i])) {
+-            break;
+-        }
++    for (i = 0; i < nb_clusters; i++) {
++        uint64_t l2_entry = be64_to_cpu(l2_table[l2_index + i]);
++        int cluster_type = qcow2_get_cluster_type(l2_entry);
+ 
+-        i += count_contiguous_free_clusters(nb_clusters - i,
+-                &l2_table[l2_index + i]);
+-        if (i >= nb_clusters) {
++        switch(cluster_type) {
++        case QCOW2_CLUSTER_NORMAL:
++            if (l2_entry & QCOW_OFLAG_COPIED) {
++                goto out;
++            }
+             break;
+-        }
+-
+-        cluster_offset = be64_to_cpu(l2_table[l2_index + i]);
+-
+-        if ((cluster_offset & QCOW_OFLAG_COPIED) ||
+-                (cluster_offset & QCOW_OFLAG_COMPRESSED))
++        case QCOW2_CLUSTER_UNALLOCATED:
++        case QCOW2_CLUSTER_COMPRESSED:
+             break;
++        default:
++            abort();
++        }
+     }
+ 
++out:
+     assert(i <= nb_clusters);
+     return i;
+ }
+-- 
+2.1.0
+

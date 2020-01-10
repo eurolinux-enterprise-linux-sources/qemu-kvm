@@ -1,0 +1,66 @@
+From ea4348a8c8e3b2126a693db112393ad760b30c44 Mon Sep 17 00:00:00 2001
+Message-Id: <ea4348a8c8e3b2126a693db112393ad760b30c44.1376408877.git.minovotn@redhat.com>
+In-Reply-To: <823d94e906b2aeecd2c60bc9f19ca8948a756f27.1376408877.git.minovotn@redhat.com>
+References: <823d94e906b2aeecd2c60bc9f19ca8948a756f27.1376408877.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 12 Aug 2013 12:20:16 +0200
+Subject: [PATCH 13/18] block: Allow IO throttling fields in
+ __com.redhat_drive_add
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1376310016-19628-1-git-send-email-famz@redhat.com>
+Patchwork-id: 53150
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2] block: Allow IO throttling fields in __com.redhat_drive_add
+Bugzilla: 987745
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+BZ: 987745
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=6155148
+(RHEL)
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=6155205
+(RHEV)
+Test: Tested locally.
+
+QMP __com.redhat_drive_add uses a downstream only function check_parm()
+to validate parameters. Add {bps,iops}{,_rd,_wr} as valid keys, so we
+can set io throttling limits.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+
+---
+v2: Not repeat "readonly", "copy-on-read" and NULL between #ifdef
+blocks.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ hw/device-hotplug.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/device-hotplug.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/hw/device-hotplug.c b/hw/device-hotplug.c
+index 135f106..5c9cb8a 100644
+--- a/hw/device-hotplug.c
++++ b/hw/device-hotplug.c
+@@ -50,7 +50,12 @@ static void check_parm(const char *key, QObject *obj, void *opaque)
+     static const char *valid_keys[] = {
+         "id", "cyls", "heads", "secs", "trans", "media", "snapshot",
+         "file", "cache", "aio", "format", "serial", "rerror", "werror",
+-        "readonly", "copy-on-read", NULL
++        "readonly", "copy-on-read",
++#ifdef CONFIG_BLOCK_IO_THROTTLING
++        "bps", "bps_rd", "bps_wr", "iops", "iops_rd", "iops_wr",
++#endif
++        NULL
++
+     };
+     int *stopped = opaque;
+     const char **p;
+-- 
+1.7.11.7
+

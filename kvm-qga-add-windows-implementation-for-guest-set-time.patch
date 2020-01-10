@@ -1,0 +1,77 @@
+From b968470aaa6fe47bb64c5a80976007bb3f160d3b Mon Sep 17 00:00:00 2001
+Message-Id: <b968470aaa6fe47bb64c5a80976007bb3f160d3b.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:28:16 +0200
+Subject: [PATCH 111/114] qga: add windows implementation for guest-set-time
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-54-git-send-email-lersek@redhat.com>
+Patchwork-id: 51152
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 53/56] qga: add windows implementation for guest-set-time
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Lei Li <lilei@linux.vnet.ibm.com>
+
+Signed-off-by: Lei Li <lilei@linux.vnet.ibm.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit b8f954fea019801370954fe85c32df49edf6397d)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qga/commands-win32.c |   29 ++++++++++++++++++++++++++++-
+ 1 files changed, 28 insertions(+), 1 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/commands-win32.c | 29 ++++++++++++++++++++++++++++-
+ 1 file changed, 28 insertions(+), 1 deletion(-)
+
+diff --git a/qga/commands-win32.c b/qga/commands-win32.c
+index 92dd7ab..59cc645 100644
+--- a/qga/commands-win32.c
++++ b/qga/commands-win32.c
+@@ -309,7 +309,34 @@ int64_t qmp_guest_get_time(Error **errp)
+ 
+ void qmp_guest_set_time(int64_t time_ns, Error **errp)
+ {
+-    error_set(errp, QERR_UNSUPPORTED);
++    SYSTEMTIME ts;
++    FILETIME tf;
++    LONGLONG time;
++
++    if (time_ns < 0 || time_ns / 100 > INT64_MAX - W32_FT_OFFSET) {
++        error_setg(errp, "Time %" PRId64 "is invalid", time_ns);
++        return;
++    }
++
++    time = time_ns / 100 + W32_FT_OFFSET;
++
++    tf.dwLowDateTime = (DWORD) time;
++    tf.dwHighDateTime = (DWORD) (time >> 32);
++
++    if (!FileTimeToSystemTime(&tf, &ts)) {
++        error_setg(errp, "Failed to convert system time %d", (int)GetLastError());
++        return;
++    }
++
++    acquire_privilege(SE_SYSTEMTIME_NAME, errp);
++    if (error_is_set(errp)) {
++        return;
++    }
++
++    if (!SetSystemTime(&ts)) {
++        error_setg(errp, "Failed to set time to guest: %d", (int)GetLastError());
++        return;
++    }
+ }
+ 
+ GuestLogicalProcessorList *qmp_guest_get_vcpus(Error **errp)
+-- 
+1.7.11.7
+

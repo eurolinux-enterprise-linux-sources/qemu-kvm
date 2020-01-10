@@ -1,0 +1,54 @@
+From 42019aef760ac8410a14f96f0ab05b78f1c558d6 Mon Sep 17 00:00:00 2001
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 11 Nov 2013 07:09:44 +0100
+Subject: [PATCH 2/3] vmdk: Fix vmdk_parse_extents
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1384153785-3385-2-git-send-email-famz@redhat.com>
+Patchwork-id: 55648
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 1/2] vmdk: Fix vmdk_parse_extents
+Bugzilla: 1028252
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+
+An extra 'p++' after while loop when *p == '\n' will move p to unknown
+data position, risking parsing junk data or memory access violation.
+
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 899f1ae219d5eaa96a53c996026cb0178d62a86d)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block/vmdk.c |    7 +++++--
+ 1 files changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index e8ea278..a955d1d 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -756,10 +756,13 @@ static int vmdk_parse_extents(const char *desc, BlockDriverState *bs,
+         }
+ next_line:
+         /* move to next line */
+-        while (*p && *p != '\n') {
++        while (*p) {
++            if (*p == '\n') {
++                p++;
++                break;
++            }
+             p++;
+         }
+-        p++;
+     }
+     return 0;
+ }
+-- 
+1.7.1
+

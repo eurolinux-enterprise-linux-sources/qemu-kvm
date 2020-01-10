@@ -1,0 +1,61 @@
+From 1d7d27453d05521b09c5b709aa6f00c682ab81dc Mon Sep 17 00:00:00 2001
+Message-Id: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 14 May 2013 10:13:08 +0200
+Subject: [PATCH 01/15] vnc: Add SCROLL lock key to kbd_leds
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1368526391-6510-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 51343
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 1/4] vnc: Add SCROLL lock key to kbd_leds
+Bugzilla: 955302
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Lei Li <lilei@linux.vnet.ibm.com>
+
+Signed-off-by: Lei Li <lilei@linux.vnet.ibm.com>
+Reviewed-by: Anthony Liguori <aliguori@us.ibm.com>
+Message-id: 1366867752-11578-2-git-send-email-lilei@linux.vnet.ibm.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 96f3d174bdfcc7d6205fa223ddc2cb01186dcd8f)
+---
+ vnc.c |    6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ vnc.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/vnc.c b/vnc.c
+index 624fecb..9dd2346 100644
+--- a/vnc.c
++++ b/vnc.c
+@@ -1519,10 +1519,11 @@ static void press_key(VncState *vs, int keysym)
+ static void kbd_leds(void *opaque, int ledstate)
+ {
+     VncState *vs = opaque;
+-    int caps, num;
++    int caps, num, scr;
+ 
+     caps = ledstate & QEMU_CAPS_LOCK_LED ? 1 : 0;
+     num  = ledstate & QEMU_NUM_LOCK_LED  ? 1 : 0;
++    scr  = ledstate & QEMU_SCROLL_LOCK_LED ? 1 : 0;
+ 
+     if (vs->modifiers_state[0x3a] != caps) {
+         vs->modifiers_state[0x3a] = caps;
+@@ -1530,6 +1531,9 @@ static void kbd_leds(void *opaque, int ledstate)
+     if (vs->modifiers_state[0x45] != num) {
+         vs->modifiers_state[0x45] = num;
+     }
++    if (vs->modifiers_state[0x46] != scr) {
++        vs->modifiers_state[0x46] = scr;
++    }
+ }
+ 
+ static void do_key_event(VncState *vs, int down, int keycode, int sym)
+-- 
+1.7.11.7
+

@@ -1,0 +1,69 @@
+From 3a2639a0029da6664843a45f66f2260ab5dc8cef Mon Sep 17 00:00:00 2001
+Message-Id: <3a2639a0029da6664843a45f66f2260ab5dc8cef.1376917686.git.minovotn@redhat.com>
+In-Reply-To: <36750bf64a907139115140007a802b2520a202bd.1376917686.git.minovotn@redhat.com>
+References: <36750bf64a907139115140007a802b2520a202bd.1376917686.git.minovotn@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Thu, 15 Aug 2013 20:19:42 +0200
+Subject: [PATCH 3/3] block: for HMP commit() operations on 'all', skip
+ non-COW drives
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <a331bb7a0de2c87ca2ef581d3001733d07813621.1376596451.git.jcody@redhat.com>
+Patchwork-id: 53530
+O-Subject: [RHEL6.5 qemu-kvm PATCH 3/3] block: for HMP commit() operations on 'all', skip non-COW drives
+Bugzilla: 856505
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+During a commit of 'all' using the HMP non-live commit, the operation
+is aborted and returns error on the first error enountered.  When
+non-COW drives are in use (e.g. ejected floppy, cdrom, or drives without
+a backing parent), that means a commit all will return an error of either
+-ENOMEDIUM or -ENOTSUP.  This is not desirable, so for the 'all' commit
+case, only attempt the commit if both bs->drv and bs->backing_hd are
+present.
+
+More succinctly: 'commit all' now means a commit on all COW drives.
+
+This means an individual commit to a specific non-COW drive will still
+return the appropriate error (-ENOMEDIUM if eject / not present, -ENOTSUP
+if no backing file).
+
+Reported-by: Jan Kiszka <jan.kiszka@web.de>
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Reviewed-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 272d2d8e1241b92ab9be87b2c8fb590fd84987a8)
+---
+ block.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/block.c b/block.c
+index 32feb72..ab7349e 100644
+--- a/block.c
++++ b/block.c
+@@ -1519,9 +1519,11 @@ int bdrv_commit_all(void)
+     BlockDriverState *bs;
+ 
+     QTAILQ_FOREACH(bs, &bdrv_states, list) {
+-        int ret = bdrv_commit(bs);
+-        if (ret < 0) {
+-            return ret;
++        if (bs->drv && bs->backing_hd) {
++            int ret = bdrv_commit(bs);
++            if (ret < 0) {
++                return ret;
++            }
+         }
+     }
+     return 0;
+-- 
+1.7.11.7
+

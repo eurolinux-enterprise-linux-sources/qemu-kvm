@@ -1,0 +1,65 @@
+From 7b702b70055195a984dcfd5e56fbaf63832e2a37 Mon Sep 17 00:00:00 2001
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 11 Nov 2013 06:09:27 +0100
+Subject: [PATCH 1/2] block: Round up total_sectors
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1384150167-14815-1-git-send-email-famz@redhat.com>
+Patchwork-id: 55646
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] block: Round up total_sectors
+Bugzilla: 1022548
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1025596
+Brew:     http://brewweb.devel.redhat.com/brew/taskinfo?taskID=6554516 (RHEL)
+          http://brewweb.devel.redhat.com/brew/taskinfo?taskID=6554526 (RHEV)
+
+Since b94a2610, bdrv_getlength() is omitted when probing image. VMDK
+monolithicFlat is broken by that because a file < 512 bytes can't be
+read with its total_sectors truncated to 0. This patch round up the size
+to BDRV_SECTOR_SIZE, when a image size is not sector aligned.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Reviewed-by: Benoit Canet <benoit@irqsave.net>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 7e382003f1bd9d8a441ecc5ac8a74bad3564d943)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+
+---
+
+Upstream commit ID is from Stefan's pull request of last Friday. Anthony
+didn't pull yet but this is becoming urgent. QE needs time to test, so
+I'm posting and see if it could be pushed in.
+
+Thanks,
+
+Fam
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/block.c b/block.c
+index 4c57615..d6a407b 100644
+--- a/block.c
++++ b/block.c
+@@ -532,7 +532,7 @@ static int refresh_total_sectors(BlockDriverState *bs, int64_t hint)
+         if (length < 0) {
+             return length;
+         }
+-        hint = length >> BDRV_SECTOR_BITS;
++        hint = DIV_ROUND_UP(length, BDRV_SECTOR_SIZE);
+     }
+ 
+     bs->total_sectors = hint;
+-- 
+1.7.1
+

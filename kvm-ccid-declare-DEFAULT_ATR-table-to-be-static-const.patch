@@ -1,0 +1,55 @@
+From 96909d8817aa7c43109cd7a6f128457bb8e0034d Mon Sep 17 00:00:00 2001
+Message-Id: <96909d8817aa7c43109cd7a6f128457bb8e0034d.1375955382.git.minovotn@redhat.com>
+In-Reply-To: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+References: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+From: Alon Levy <alevy@redhat.com>
+Date: Thu, 1 Aug 2013 11:53:22 +0200
+Subject: [PATCH 03/35] ccid: declare DEFAULT_ATR table to be "static const"
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Alon Levy <alevy@redhat.com>
+Message-id: <1375358029-12968-4-git-send-email-alevy@redhat.com>
+Patchwork-id: 52893
+O-Subject: [RHEL-6.5 RHEL-6.4.z qemu-kvm v6 03/30] ccid: declare DEFAULT_ATR table to be "static const"
+Bugzilla: 917860
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+From: Jim Meyering <meyering@redhat.com>
+
+Signed-off-by: Jim Meyering <meyering@redhat.com>
+Reviewed-by: Alon Levy <alevy@redhat.com>
+Reviewed-by: Marc-André Lureau <mlureau@redhat.com>
+(cherry picked from commit da000a4867749434e03896a5072321771736352a)
+
+Conflicts:
+	hw/usb/ccid-card-passthru.c
+upstream: moved hw/ccid-card-passthru.c to hw/usb/ccid-card-passthru.c
+---
+ hw/ccid-card-passthru.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/ccid-card-passthru.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/hw/ccid-card-passthru.c b/hw/ccid-card-passthru.c
+index 9ba6969..2567847 100644
+--- a/hw/ccid-card-passthru.c
++++ b/hw/ccid-card-passthru.c
+@@ -27,7 +27,7 @@ do {                                                    \
+ #define D_VERBOSE 4
+ 
+ /* TODO: do we still need this? */
+-uint8_t DEFAULT_ATR[] = {
++static const uint8_t DEFAULT_ATR[] = {
+ /*
+  * From some example somewhere
+  * 0x3B, 0xB0, 0x18, 0x00, 0xD1, 0x81, 0x05, 0xB1, 0x40, 0x38, 0x1F, 0x03, 0x28
+-- 
+1.7.11.7
+

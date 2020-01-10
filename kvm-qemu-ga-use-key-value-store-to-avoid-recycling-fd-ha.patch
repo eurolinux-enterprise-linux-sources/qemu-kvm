@@ -1,0 +1,406 @@
+From 189e8b761261ffa2e47b13b1f2cbba141a7f2e19 Mon Sep 17 00:00:00 2001
+Message-Id: <189e8b761261ffa2e47b13b1f2cbba141a7f2e19.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:28:08 +0200
+Subject: [PATCH 103/114] qemu-ga: use key-value store to avoid recycling fd
+ handles after restart
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-46-git-send-email-lersek@redhat.com>
+Patchwork-id: 51144
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 45/56] qemu-ga: use key-value store to avoid recycling fd handles after restart
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Hosts hold on to handles provided by guest-file-open for periods that can
+span beyond the life of the qemu-ga process that issued them. Since these
+are issued starting from 0 on every restart, we run the risk of issuing
+duplicate handles after restarts/reboots.
+
+As a result, users with a stale copy of these handles may end up
+reading/writing corrupted data due to their existing handles effectively
+being re-assigned to an unexpected file or offset.
+
+We unfortunately do not issue handles as strings, but as integers, so a
+solution such as using UUIDs can't be implemented without introducing a
+new interface.
+
+As a workaround, we fix this by implementing a persistent key-value store
+that will be used to track the value of the last handle that was issued
+across restarts/reboots to avoid issuing duplicates.
+
+The store is automatically written to the same directory we currently
+set via --statedir to track fsfreeze state, and so should be applicable
+for stable releases where this flag is supported.
+
+A follow-up can use this same store for handling fsfreeze state, but
+that change is cosmetic and left out for now.
+
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Cc: qemu-stable@nongnu.org
+
+* fixed guest_file_handle_add() return value from uint64_t to int64_t
+(cherry picked from commit 39097daf15c42243742667607d2cad2c9dc4f764)
+
+Conflicts:
+
+	qga/commands-posix.c
+
+RHEL-6 notes:
+- "qemu/bswap.h" -> "bswap.h";
+
+- no state-dir config option is added to:
+  - redhat/qemu-ga.init,
+  - redhat/qemu-ga.sysconfig,
+  for now, because we've used the same fixed state-dir for fsfreeze state
+  since commit a1963ce3 "qemu-ga: persist tracking of fsfreeze state via
+  filesystem";
+
+- the following upstream commit is cherry-picked out of order and squashed
+  with the above, because otherwise the build fails on RHEL-6:
+
+qga/main.c: Don't use g_key_file_get/set_int64
+
+These functions don't exist until glib version 2.26. QEMU is currently only
+mandating glib 2.12.
+
+This patch replaces the functions with g_key_file_get/set_integer.
+
+Unbreaks the build on Ubuntu 10.04 and RHEL 5.6.
+
+Regression was introduced by 39097daf15c42243742667607d2cad2c9dc4f764
+
+Signed-off-by: Peter Crosthwaite <peter.crosthwaite@xilinx.com>
+Message-id: 1363323879-682-1-git-send-email-peter.crosthwaite@xilinx.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 4f306496183d81aed4b43762cf3bfd6e054de767)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+
+---
+ v2: adapted to g_malloc()/g_free() conversion
+
+ qga/guest-agent-core.h |    1 +
+ qemu-ga.c              |  184 ++++++++++++++++++++++++++++++++++++++++++++++++
+ qga/commands-posix.c   |   25 +++++--
+ 3 files changed, 204 insertions(+), 6 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-ga.c              | 184 +++++++++++++++++++++++++++++++++++++++++++++++++
+ qga/commands-posix.c   |  25 +++++--
+ qga/guest-agent-core.h |   1 +
+ 3 files changed, 204 insertions(+), 6 deletions(-)
+
+diff --git a/qemu-ga.c b/qemu-ga.c
+index 0441ce0..5d19991 100644
+--- a/qemu-ga.c
++++ b/qemu-ga.c
+@@ -15,6 +15,7 @@
+ #include <stdbool.h>
+ #include <glib.h>
+ #include <getopt.h>
++#include <glib/gstdio.h>
+ #ifndef _WIN32
+ #include <syslog.h>
+ #include <sys/wait.h>
+@@ -30,6 +31,7 @@
+ #include "qerror.h"
+ #include "qapi/qmp-core.h"
+ #include "qga/channel.h"
++#include "bswap.h"
+ #ifdef _WIN32
+ #include "qga/service-win32.h"
+ #include <windows.h>
+@@ -53,6 +55,11 @@
+ #endif
+ #define QGA_SENTINEL_BYTE 0xFF
+ 
++typedef struct GAPersistentState {
++#define QGA_PSTATE_DEFAULT_FD_COUNTER 1000
++    int64_t fd_counter;
++} GAPersistentState;
++
+ struct GAState {
+     JSONMessageParser parser;
+     GMainLoop *main_loop;
+@@ -76,6 +83,8 @@ struct GAState {
+ #ifdef CONFIG_FSFREEZE
+     const char *fsfreeze_hook;
+ #endif
++    const gchar *pstate_filepath;
++    GAPersistentState pstate;
+ };
+ 
+ struct GAState *ga_state;
+@@ -725,6 +734,171 @@ VOID WINAPI service_main(DWORD argc, TCHAR *argv[])
+ }
+ #endif
+ 
++static void set_persistent_state_defaults(GAPersistentState *pstate)
++{
++    g_assert(pstate);
++    pstate->fd_counter = QGA_PSTATE_DEFAULT_FD_COUNTER;
++}
++
++static void persistent_state_from_keyfile(GAPersistentState *pstate,
++                                          GKeyFile *keyfile)
++{
++    g_assert(pstate);
++    g_assert(keyfile);
++    /* if any fields are missing, either because the file was tampered with
++     * by agents of chaos, or because the field wasn't present at the time the
++     * file was created, the best we can ever do is start over with the default
++     * values. so load them now, and ignore any errors in accessing key-value
++     * pairs
++     */
++    set_persistent_state_defaults(pstate);
++
++    if (g_key_file_has_key(keyfile, "global", "fd_counter", NULL)) {
++        pstate->fd_counter =
++            g_key_file_get_integer(keyfile, "global", "fd_counter", NULL);
++    }
++}
++
++static void persistent_state_to_keyfile(const GAPersistentState *pstate,
++                                        GKeyFile *keyfile)
++{
++    g_assert(pstate);
++    g_assert(keyfile);
++
++    g_key_file_set_integer(keyfile, "global", "fd_counter", pstate->fd_counter);
++}
++
++static gboolean write_persistent_state(const GAPersistentState *pstate,
++                                       const gchar *path)
++{
++    GKeyFile *keyfile = g_key_file_new();
++    GError *gerr = NULL;
++    gboolean ret = true;
++    gchar *data = NULL;
++    gsize data_len;
++
++    g_assert(pstate);
++
++    persistent_state_to_keyfile(pstate, keyfile);
++    data = g_key_file_to_data(keyfile, &data_len, &gerr);
++    if (gerr) {
++        g_critical("failed to convert persistent state to string: %s",
++                   gerr->message);
++        ret = false;
++        goto out;
++    }
++
++    g_file_set_contents(path, data, data_len, &gerr);
++    if (gerr) {
++        g_critical("failed to write persistent state to %s: %s",
++                    path, gerr->message);
++        ret = false;
++        goto out;
++    }
++
++out:
++    if (gerr) {
++        g_error_free(gerr);
++    }
++    if (keyfile) {
++        g_key_file_free(keyfile);
++    }
++    g_free(data);
++    return ret;
++}
++
++static gboolean read_persistent_state(GAPersistentState *pstate,
++                                      const gchar *path, gboolean frozen)
++{
++    GKeyFile *keyfile = NULL;
++    GError *gerr = NULL;
++    struct stat st;
++    gboolean ret = true;
++
++    g_assert(pstate);
++
++    if (stat(path, &st) == -1) {
++        /* it's okay if state file doesn't exist, but any other error
++         * indicates a permissions issue or some other misconfiguration
++         * that we likely won't be able to recover from.
++         */
++        if (errno != ENOENT) {
++            g_critical("unable to access state file at path %s: %s",
++                       path, strerror(errno));
++            ret = false;
++            goto out;
++        }
++
++        /* file doesn't exist. initialize state to default values and
++         * attempt to save now. (we could wait till later when we have
++         * modified state we need to commit, but if there's a problem,
++         * such as a missing parent directory, we want to catch it now)
++         *
++         * there is a potential scenario where someone either managed to
++         * update the agent from a version that didn't use a key store
++         * while qemu-ga thought the filesystem was frozen, or
++         * deleted the key store prior to issuing a fsfreeze, prior
++         * to restarting the agent. in this case we go ahead and defer
++         * initial creation till we actually have modified state to
++         * write, otherwise fail to recover from freeze.
++         */
++        set_persistent_state_defaults(pstate);
++        if (!frozen) {
++            ret = write_persistent_state(pstate, path);
++            if (!ret) {
++                g_critical("unable to create state file at path %s", path);
++                ret = false;
++                goto out;
++            }
++        }
++        ret = true;
++        goto out;
++    }
++
++    keyfile = g_key_file_new();
++    g_key_file_load_from_file(keyfile, path, 0, &gerr);
++    if (gerr) {
++        g_critical("error loading persistent state from path: %s, %s",
++                   path, gerr->message);
++        ret = false;
++        goto out;
++    }
++
++    persistent_state_from_keyfile(pstate, keyfile);
++
++out:
++    if (keyfile) {
++        g_key_file_free(keyfile);
++    }
++    if (gerr) {
++        g_error_free(gerr);
++    }
++
++    return ret;
++}
++
++int64_t ga_get_fd_handle(GAState *s, Error **errp)
++{
++    int64_t handle;
++
++    g_assert(s->pstate_filepath);
++    /* we blacklist commands and avoid operations that potentially require
++     * writing to disk when we're in a frozen state. this includes opening
++     * new files, so we should never get here in that situation
++     */
++    g_assert(!ga_is_frozen(s));
++
++    handle = s->pstate.fd_counter++;
++    if (s->pstate.fd_counter < 0) {
++        s->pstate.fd_counter = 0;
++    }
++    if (!write_persistent_state(&s->pstate, s->pstate_filepath)) {
++        error_setg(errp, "failed to commit persistent state to disk");
++    }
++
++    return handle;
++}
++
+ int main(int argc, char **argv)
+ {
+     const char *sopt = "hVvdm:p:l:f:F::b:s:t:";
+@@ -854,7 +1028,9 @@ int main(int argc, char **argv)
+     ga_enable_logging(s);
+     s->state_filepath_isfrozen = g_strdup_printf("%s/qga.state.isfrozen",
+                                                  state_dir);
++    s->pstate_filepath = g_strdup_printf("%s/qga.state", state_dir);
+     s->frozen = false;
++
+ #ifndef _WIN32
+     /* check if a previous instance of qemu-ga exited with filesystems' state
+      * marked as frozen. this could be a stale value (a non-qemu-ga process
+@@ -911,6 +1087,14 @@ int main(int argc, char **argv)
+         }
+     }
+ 
++    /* load persistent state from disk */
++    if (!read_persistent_state(&s->pstate,
++                               s->pstate_filepath,
++                               ga_is_frozen(s))) {
++        g_critical("failed to load persistent state");
++        goto out_bad;
++    }
++
+     if (blacklist) {
+         s->blacklist = blacklist;
+         do {
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index 84afd52..0033439 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -130,14 +130,22 @@ static struct {
+     QTAILQ_HEAD(, GuestFileHandle) filehandles;
+ } guest_file_state;
+ 
+-static void guest_file_handle_add(FILE *fh)
++static int64_t guest_file_handle_add(FILE *fh, Error **errp)
+ {
+     GuestFileHandle *gfh;
++    int64_t handle;
++
++    handle = ga_get_fd_handle(ga_state, errp);
++    if (error_is_set(errp)) {
++        return 0;
++    }
+ 
+     gfh = g_malloc0(sizeof(GuestFileHandle));
+-    gfh->id = fileno(fh);
++    gfh->id = handle;
+     gfh->fh = fh;
+     QTAILQ_INSERT_TAIL(&guest_file_state.filehandles, gfh, next);
++
++    return handle;
+ }
+ 
+ static GuestFileHandle *guest_file_handle_find(int64_t id, Error **err)
+@@ -159,7 +167,7 @@ int64_t qmp_guest_file_open(const char *path, bool has_mode, const char *mode, E
+ {
+     FILE *fh;
+     int fd;
+-    int64_t ret = -1;
++    int64_t ret = -1, handle;
+ 
+     if (!has_mode) {
+         mode = "r";
+@@ -185,9 +193,14 @@ int64_t qmp_guest_file_open(const char *path, bool has_mode, const char *mode, E
+         return -1;
+     }
+ 
+-    guest_file_handle_add(fh);
+-    slog("guest-file-open, handle: %d", fd);
+-    return fd;
++    handle = guest_file_handle_add(fh, err);
++    if (error_is_set(err)) {
++        fclose(fh);
++        return -1;
++    }
++
++    slog("guest-file-open, handle: %d", handle);
++    return handle;
+ }
+ 
+ void qmp_guest_file_close(int64_t handle, Error **err)
+diff --git a/qga/guest-agent-core.h b/qga/guest-agent-core.h
+index c6e8de0..7f73d48 100644
+--- a/qga/guest-agent-core.h
++++ b/qga/guest-agent-core.h
+@@ -35,6 +35,7 @@ bool ga_is_frozen(GAState *s);
+ void ga_set_frozen(GAState *s);
+ void ga_unset_frozen(GAState *s);
+ const char *ga_fsfreeze_hook(GAState *s);
++int64_t ga_get_fd_handle(GAState *s, Error **errp);
+ 
+ #ifndef _WIN32
+ void reopen_fd_to_null(int fd);
+-- 
+1.7.11.7
+

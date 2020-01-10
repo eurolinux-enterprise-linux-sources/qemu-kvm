@@ -1,0 +1,99 @@
+From e2d5efd95fe4517a84198eeb58b4891b155711eb Mon Sep 17 00:00:00 2001
+Message-Id: <e2d5efd95fe4517a84198eeb58b4891b155711eb.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:28:13 +0200
+Subject: [PATCH 108/114] qga: implement qmp_guest_set_vcpus() for Linux with
+ sysfs
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-51-git-send-email-lersek@redhat.com>
+Patchwork-id: 51149
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 50/56] qga: implement qmp_guest_set_vcpus() for Linux with sysfs
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit cbb65fc27fd97a3b020df7fce9db4ce09e3956ad)
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=924684
+---
+ qga/commands-posix.c |   38 ++++++++++++++++++++++++++++++++------
+ 1 files changed, 32 insertions(+), 6 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/commands-posix.c | 38 ++++++++++++++++++++++++++++++++------
+ 1 file changed, 32 insertions(+), 6 deletions(-)
+
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index 8aff190..4ca0718 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -1246,6 +1246,32 @@ GuestLogicalProcessorList *qmp_guest_get_vcpus(Error **errp)
+     return NULL;
+ }
+ 
++int64_t qmp_guest_set_vcpus(GuestLogicalProcessorList *vcpus, Error **errp)
++{
++    int64_t processed;
++    Error *local_err = NULL;
++
++    processed = 0;
++    while (vcpus != NULL) {
++        transfer_vcpu(vcpus->value, false, &local_err);
++        if (local_err != NULL) {
++            break;
++        }
++        ++processed;
++        vcpus = vcpus->next;
++    }
++
++    if (local_err != NULL) {
++        if (processed == 0) {
++            error_propagate(errp, local_err);
++        } else {
++            error_free(local_err);
++        }
++    }
++
++    return processed;
++}
++
+ #else /* defined(__linux__) */
+ 
+ void qmp_guest_suspend_disk(Error **err)
+@@ -1275,6 +1301,12 @@ GuestLogicalProcessorList *qmp_guest_get_vcpus(Error **errp)
+     return NULL;
+ }
+ 
++int64_t qmp_guest_set_vcpus(GuestLogicalProcessorList *vcpus, Error **errp)
++{
++    error_set(errp, QERR_UNSUPPORTED);
++    return -1;
++}
++
+ #endif
+ 
+ #if !defined(CONFIG_FSFREEZE)
+@@ -1308,12 +1340,6 @@ void qmp_guest_fstrim(bool has_minimum, int64_t minimum, Error **err)
+ }
+ #endif
+ 
+-int64_t qmp_guest_set_vcpus(GuestLogicalProcessorList *vcpus, Error **errp)
+-{
+-    error_set(errp, QERR_UNSUPPORTED);
+-    return -1;
+-}
+-
+ /* register init/cleanup routines for stateful command groups */
+ void ga_command_state_init(GAState *s, GACommandState *cs)
+ {
+-- 
+1.7.11.7
+

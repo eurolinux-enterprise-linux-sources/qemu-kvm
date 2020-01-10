@@ -1,0 +1,53 @@
+From 1db369b293b52c0893e3a9282557b8d45b2f94aa Mon Sep 17 00:00:00 2001
+Message-Id: <1db369b293b52c0893e3a9282557b8d45b2f94aa.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:27:51 +0200
+Subject: [PATCH 086/114] qga/channel-posix.c: Explicitly include string.h
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-29-git-send-email-lersek@redhat.com>
+Patchwork-id: 51127
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 28/56] qga/channel-posix.c: Explicitly include string.h
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Explicitly include string.h to avoid warnings under MacOS X/clang
+about implicit declarations of strerror() and strlen().
+
+Signed-off-by: Peter Maydell <peter.maydell@linaro.org>
+Reviewed-by: Stefan Weil <sw@weilnetz.de>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 1d57db193f2eb619ccc9a60e76120379b757d9f2)
+
+Conflicts:
+
+	qga/channel-posix.c
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qga/channel-posix.c |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/channel-posix.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/qga/channel-posix.c b/qga/channel-posix.c
+index 484dd95..52f880d 100644
+--- a/qga/channel-posix.c
++++ b/qga/channel-posix.c
+@@ -4,6 +4,7 @@
+ #include <unistd.h>
+ #include <fcntl.h>
+ #include <stdlib.h>
++#include <string.h>
+ #include "osdep.h"
+ #include "qemu_socket.h"
+ #include "qga/channel.h"
+-- 
+1.7.11.7
+

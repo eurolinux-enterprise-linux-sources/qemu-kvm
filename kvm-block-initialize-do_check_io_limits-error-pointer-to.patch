@@ -1,0 +1,75 @@
+From 1e159c740738ec1f626b398cc508486415bffe64 Mon Sep 17 00:00:00 2001
+Message-Id: <1e159c740738ec1f626b398cc508486415bffe64.1378302750.git.minovotn@redhat.com>
+In-Reply-To: <b9370b63e1ba262320933a8d26c1dd9b3b2bc4b1.1378302750.git.minovotn@redhat.com>
+References: <b9370b63e1ba262320933a8d26c1dd9b3b2bc4b1.1378302750.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Wed, 28 Aug 2013 06:03:07 +0200
+Subject: [PATCH 5/6] block: initialize do_check_io_limits error pointer to
+ NULL (RH only)
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1377669787-6027-1-git-send-email-famz@redhat.com>
+Patchwork-id: 53810
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v3] block: initialize do_check_io_limits error pointer to NULL (RH only)
+Bugzilla: 1001436
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1001436
+Brew:     http://brewweb.devel.redhat.com/brew/taskinfo?taskID=6218255 (RHEV)
+          http://brewweb.devel.redhat.com/brew/taskinfo?taskID=6218245 (RHEL)
+Upstream: N/A
+
+Commit 9b8a816369d47b70917f2636824d7791d66b71da
+
+    block: use Error in do_check_io_limits()
+
+had a downstream change to use local error pointer for error
+propogation, but it didn't initialize the value, which fails assertion
+in error.c:error_set(). Initialize it to zero to fix this, and propogate
+the error into qerror_report.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+
+--
+v3: fix commit message [amos].
+v2: resend of v1.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ blockdev.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ blockdev.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/blockdev.c b/blockdev.c
+index 91dce31..bb33df2 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -1255,7 +1255,7 @@ int do_block_set_io_throttle(Monitor *mon,
+     BlockIOLimit io_limits;
+     const char *devname = qdict_get_str(qdict, "device");
+     BlockDriverState *bs;
+-    Error *error;
++    Error *error = NULL;
+ 
+     io_limits.bps[BLOCK_IO_LIMIT_TOTAL]
+                         = qdict_get_try_int(qdict, "bps", -1);
+@@ -1288,7 +1288,9 @@ int do_block_set_io_throttle(Monitor *mon,
+     }
+ 
+     if (!do_check_io_limits(&io_limits, &error)) {
+-        qerror_report(QERR_INVALID_PARAMETER_COMBINATION);
++        if (error_is_set(&error)) {
++            qerror_report(QERR_GENERIC_ERROR, error_get_pretty(error));
++        }
+         error_free(error);
+         return -1;
+     }
+-- 
+1.7.11.7
+

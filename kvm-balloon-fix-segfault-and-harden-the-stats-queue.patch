@@ -1,0 +1,133 @@
+From 239b11872bdbebf59973470cde4d3f1195480a03 Mon Sep 17 00:00:00 2001
+Message-Id: <239b11872bdbebf59973470cde4d3f1195480a03.1481738366.git.ymankad@redhat.com>
+In-Reply-To: <be7cc66c94d4b6c77f9f1e674d4783c7d1c3efac.1481738366.git.ymankad@redhat.com>
+References: <be7cc66c94d4b6c77f9f1e674d4783c7d1c3efac.1481738366.git.ymankad@redhat.com>
+From: Ladi Prosek <lprosek@redhat.com>
+Date: Mon, 5 Dec 2016 13:57:45 -0500
+Subject: [CHANGE 04/10] balloon: fix segfault and harden the stats queue
+To: ymankad@redhat.com
+
+RH-Author: Ladi Prosek <lprosek@redhat.com>
+Message-id: <1480946267-6514-5-git-send-email-lprosek@redhat.com>
+Patchwork-id: 72986
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 4/6] balloon: fix segfault and harden the stats queue
+Bugzilla: 1392520
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Ladi Prosek <lprosek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+
+The segfault here is triggered by the driver notifying the stats queue
+twice after adding a buffer to it. This effectively resets stats_vq_elem
+back to NULL and QEMU crashes on the next stats timer tick in
+balloon_stats_poll_cb.
+
+This is a regression introduced in 51b19ebe4320f3dc, although admittedly
+the device assumed too much about the stats queue protocol even before
+that commit. This commit adds a few more checks and ensures that the one
+stats buffer gets deallocated on device reset.
+
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Ladi Prosek <lprosek@redhat.com>
+Reviewed-by: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+(cherry picked from commit 4eae2a657d1ff5ada56eb9b4966eae0eff333b0b)
+Signed-off-by: Ladi Prosek <lprosek@redhat.com>
+
+Conflicts:
+  * 0.12.1.2 does not return pointers from virtqueue_pop so only the
+    "harden the stats queue" part of the upstream patch description
+    applies
+  * a new field stats_vq_elem_pending is introduced to keep track
+    of the state of stats_vq_elem in lieu of its nullness upstream
+  * virtio_balloon_device_reset only resets stats_vq_elem_pending
+    because there is nothing to free
+
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ hw/virtio-balloon.c | 27 ++++++++++++++++++++++++---
+ 1 file changed, 24 insertions(+), 3 deletions(-)
+
+diff --git a/hw/virtio-balloon.c b/hw/virtio-balloon.c
+index 495a483..24e50af 100644
+--- a/hw/virtio-balloon.c
++++ b/hw/virtio-balloon.c
+@@ -44,6 +44,7 @@ typedef struct VirtIOBalloon
+     uint32_t actual;
+     uint64_t stats[VIRTIO_BALLOON_S_NR];
+     VirtQueueElement stats_vq_elem;
++    bool stats_vq_elem_pending;
+     size_t stats_vq_offset;
+     MonitorCompletion *stats_callback;
+     void *stats_opaque_callback_data;
+@@ -150,13 +151,21 @@ static void complete_stats_request(VirtIOBalloon *vb)
+ static void virtio_balloon_receive_stats(VirtIODevice *vdev, VirtQueue *vq)
+ {
+     VirtIOBalloon *s = DO_UPCAST(VirtIOBalloon, vdev, vdev);
+-    VirtQueueElement *elem = &s->stats_vq_elem;
++    VirtQueueElement elem;
+     VirtIOBalloonStat stat;
+     size_t offset = 0;
+ 
+-    if (!virtqueue_pop(vq, elem)) {
++    if (!virtqueue_pop(vq, &elem)) {
+         return;
+     }
++    if (s->stats_vq_elem_pending) {
++        /* This should never happen if the driver follows the spec. */
++        virtqueue_push(vq, &s->stats_vq_elem, 0);
++        virtio_notify(vdev, vq);
++    }
++
++    s->stats_vq_elem = elem;
++    s->stats_vq_elem_pending = true;
+ 
+     /* Initialize the stats to get rid of any stale values.  This is only
+      * needed to handle the case where a guest supports fewer stats than it
+@@ -164,7 +173,7 @@ static void virtio_balloon_receive_stats(VirtIODevice *vdev, VirtQueue *vq)
+      */
+     reset_stats(s);
+ 
+-    while (iov_to_buf(elem->out_sg, elem->out_num, &stat, offset, sizeof(stat))
++    while (iov_to_buf(elem.out_sg, elem.out_num, &stat, offset, sizeof(stat))
+            == sizeof(stat)) {
+         uint16_t tag = tswap16(stat.tag);
+         uint64_t val = tswap64(stat.val);
+@@ -178,6 +187,15 @@ static void virtio_balloon_receive_stats(VirtIODevice *vdev, VirtQueue *vq)
+     complete_stats_request(s);
+ }
+ 
++static void virtio_balloon_device_reset(VirtIODevice *vdev)
++{
++    VirtIOBalloon *s = to_virtio_balloon(vdev);
++
++    if (s->stats_vq_elem_pending) {
++        s->stats_vq_elem_pending = false;
++    }
++}
++
+ static void virtio_balloon_get_config(VirtIODevice *vdev, uint8_t *config_data)
+ {
+     VirtIOBalloon *dev = to_virtio_balloon(vdev);
+@@ -224,8 +242,10 @@ static void virtio_balloon_stat(void *opaque, MonitorCompletion cb,
+     dev->stats_opaque_callback_data = cb_data;
+ 
+     if (ENABLE_GUEST_STATS
++        && dev->stats_vq_elem_pending
+         && (dev->vdev.guest_features & (1 << VIRTIO_BALLOON_F_STATS_VQ))) {
+         virtqueue_push(dev->svq, &dev->stats_vq_elem, dev->stats_vq_offset);
++        dev->stats_vq_elem_pending = false;
+         virtio_notify(&dev->vdev, dev->svq);
+         return;
+     }
+@@ -287,6 +307,7 @@ VirtIODevice *virtio_balloon_init(DeviceState *dev)
+                                             VIRTIO_ID_BALLOON,
+                                             8, sizeof(VirtIOBalloon));
+ 
++    s->vdev.reset = virtio_balloon_device_reset;
+     s->vdev.get_config = virtio_balloon_get_config;
+     s->vdev.set_config = virtio_balloon_set_config;
+     s->vdev.get_features = virtio_balloon_get_features;
+-- 
+2.7.4
+

@@ -1,0 +1,57 @@
+From dfabd028df9cf3b6bbd78157c30f90e092cbb051 Mon Sep 17 00:00:00 2001
+From: Amos Kong <akong@redhat.com>
+Date: Tue, 10 Sep 2013 06:08:06 +0200
+Subject: [PATCH 24/39] rng-random: Use qemu_open / qemu_close
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1378793288-3371-25-git-send-email-akong@redhat.com>
+Patchwork-id: 54259
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v3 24/26] rng-random: Use qemu_open / qemu_close
+Bugzilla: 786407
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Stefan Berger <stefanb@linux.vnet.ibm.com>
+
+In the rng backend use qemu_open and qemu_close rather than POSIX
+open/close.
+
+Signed-off-by: Stefan Berger <stefanb@linux.vnet.ibm.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 7f9c9d12856e65e272297a619705864d9e6346f8)
+---
+ backends/rng-random.c |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ backends/rng-random.c |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/backends/rng-random.c b/backends/rng-random.c
+index 68a54fb..23301d0 100644
+--- a/backends/rng-random.c
++++ b/backends/rng-random.c
+@@ -74,7 +74,7 @@ static void rng_random_opened(RngBackend *b, Error **errp)
+         error_set(errp, QERR_INVALID_PARAMETER_VALUE,
+                   "filename", "a valid filename");
+     } else {
+-        s->fd = open(s->filename, O_RDONLY | O_NONBLOCK);
++        s->fd = qemu_open(s->filename, O_RDONLY | O_NONBLOCK);
+ 
+         if (s->fd == -1) {
+             error_set(errp, QERR_OPEN_FILE_FAILED, s->filename,
+@@ -131,7 +131,7 @@ static void rng_random_finalize(Object *obj)
+     qemu_set_fd_handler(s->fd, NULL, NULL, NULL);
+ 
+     if (s->fd != -1) {
+-        close(s->fd);
++        qemu_close(s->fd);
+     }
+ 
+     g_free(s->filename);
+-- 
+1.7.1
+

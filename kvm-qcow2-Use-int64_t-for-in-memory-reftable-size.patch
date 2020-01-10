@@ -1,0 +1,78 @@
+From a5bd08a1890e6934e98d96825e790cefb635bd90 Mon Sep 17 00:00:00 2001
+Message-Id: <a5bd08a1890e6934e98d96825e790cefb635bd90.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:22:08 -0500
+Subject: [CHANGE 25/42] qcow2: Use int64_t for in-memory reftable size
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-26-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64488
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 25/39] qcow2: Use int64_t for in-memory reftable size
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1129892
+
+Use int64_t for the entry count of the in-memory refcount table
+throughout the check functions.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 713d9675e0e31c627d08b6a33d3a92e4b8505b40)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	block/qcow2-refcount.c
+
+Fragmentation info is missing downstream (context).
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-refcount.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-refcount.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/block/qcow2-refcount.c b/block/qcow2-refcount.c
+index 0989daa..3544f03 100644
+--- a/block/qcow2-refcount.c
++++ b/block/qcow2-refcount.c
+@@ -934,7 +934,7 @@ fail:
+ static void inc_refcounts(BlockDriverState *bs,
+                           BdrvCheckResult *res,
+                           uint16_t *refcount_table,
+-                          int refcount_table_size,
++                          int64_t refcount_table_size,
+                           int64_t offset, int64_t size)
+ {
+     BDRVQcowState *s = bs->opaque;
+@@ -972,7 +972,7 @@ static void inc_refcounts(BlockDriverState *bs,
+  * error occurred.
+  */
+ static int check_refcounts_l2(BlockDriverState *bs, BdrvCheckResult *res,
+-    uint16_t *refcount_table, int refcount_table_size, int64_t l2_offset)
++    uint16_t *refcount_table, int64_t refcount_table_size, int64_t l2_offset)
+ {
+     BDRVQcowState *s = bs->opaque;
+     uint64_t *l2_table, l2_entry;
+@@ -1054,7 +1054,7 @@ fail:
+ static int check_refcounts_l1(BlockDriverState *bs,
+                               BdrvCheckResult *res,
+                               uint16_t *refcount_table,
+-                              int refcount_table_size,
++                              int64_t refcount_table_size,
+                               int64_t l1_table_offset, int l1_size)
+ {
+     BDRVQcowState *s = bs->opaque;
+-- 
+2.1.0
+

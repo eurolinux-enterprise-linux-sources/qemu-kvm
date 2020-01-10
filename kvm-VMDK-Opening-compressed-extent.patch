@@ -1,0 +1,98 @@
+From 1f275a6e90441535ee76588a87b991704e9eb4c6 Mon Sep 17 00:00:00 2001
+Message-Id: <1f275a6e90441535ee76588a87b991704e9eb4c6.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:35 +0200
+Subject: [PATCH 20/47] VMDK: Opening compressed extent.
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-21-git-send-email-famz@redhat.com>
+Patchwork-id: 51456
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 20/47] VMDK: Opening compressed extent.
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Fam Zheng <famcool@gmail.com>
+
+Added flags field for compressed/streamOptimized extents, open and save
+image configuration.
+
+Signed-off-by: Fam Zheng <famcool@gmail.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 432bb170afd168304ddff111fa3881b2458a67ac)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index d26bdcf..332b556 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -26,9 +26,13 @@
+ #include "qemu-common.h"
+ #include "block_int.h"
+ #include "module.h"
++#include "zlib.h"
+ 
+ #define VMDK3_MAGIC (('C' << 24) | ('O' << 16) | ('W' << 8) | 'D')
+ #define VMDK4_MAGIC (('K' << 24) | ('D' << 16) | ('M' << 8) | 'V')
++#define VMDK4_COMPRESSION_DEFLATE 1
++#define VMDK4_FLAG_COMPRESS (1 << 16)
++#define VMDK4_FLAG_MARKER (1 << 17)
+ 
+ typedef struct {
+     uint32_t version;
+@@ -56,6 +60,7 @@ typedef struct {
+     int64_t grain_offset;
+     char filler[1];
+     char check_bytes[4];
++    uint16_t compressAlgorithm;
+ } QEMU_PACKED VMDK4Header;
+ 
+ #define L2_CACHE_SIZE 16
+@@ -63,6 +68,8 @@ typedef struct {
+ typedef struct VmdkExtent {
+     BlockDriverState *file;
+     bool flat;
++    bool compressed;
++    bool has_marker;
+     int64_t sectors;
+     int64_t end_sector;
+     int64_t flat_start_offset;
+@@ -99,6 +106,12 @@ typedef struct VmdkMetaData {
+     int valid;
+ } VmdkMetaData;
+ 
++typedef struct VmdkGrainMarker {
++    uint64_t lba;
++    uint32_t size;
++    uint8_t  data[0];
++} VmdkGrainMarker;
++
+ static int vmdk_probe(const uint8_t *buf, int buf_size, const char *filename)
+ {
+     uint32_t magic;
+@@ -424,6 +437,9 @@ static int vmdk_open_vmdk4(BlockDriverState *bs,
+                           l1_size,
+                           le32_to_cpu(header.num_gtes_per_gte),
+                           le64_to_cpu(header.granularity));
++    extent->compressed =
++        le16_to_cpu(header.compressAlgorithm) == VMDK4_COMPRESSION_DEFLATE;
++    extent->has_marker = le32_to_cpu(header.flags) & VMDK4_FLAG_MARKER;
+     ret = vmdk_init_tables(bs, extent);
+     if (ret) {
+         /* free extent allocated by vmdk_add_extent */
+-- 
+1.7.11.7
+

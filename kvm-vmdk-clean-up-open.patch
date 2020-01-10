@@ -1,0 +1,124 @@
+From 9ffca6142ee5079a722366fd031927c3499b32ca Mon Sep 17 00:00:00 2001
+Message-Id: <9ffca6142ee5079a722366fd031927c3499b32ca.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:42 +0200
+Subject: [PATCH 27/47] vmdk: clean up open
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-28-git-send-email-famz@redhat.com>
+Patchwork-id: 51463
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 27/47] vmdk: clean up open
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Move vmdk_parent_open to vmdk_open.  There's another path how
+vmdk_parent_open can be reached:
+
+  vmdk_parse_extents() ->  vmdk_open_sparse() ->  vmdk_open_vmdk4() ->
+  vmdk_open_desc_file().
+
+If that can happen, however, the code is bogus.  vmdk_parent_open
+reads from bs->file:
+
+    if (bdrv_pread(bs->file, s->desc_offset, desc, DESC_SIZE) != DESC_SIZE) {
+
+but it is always called with s->desc_offset == 0 and with the same
+bs->file.  So the data that vmdk_parent_open reads comes always from the
+same place, and anyway there is only one place where it can write it,
+namely bs->backing_file.
+
+So, if it cannot happen, the patched code is okay.
+
+It is also possible that the recursive call can happen, but only once.  In
+that case there would still be a bug in vmdk_open_desc_file setting
+s->desc_offset = 0, but the patched code is okay.
+
+Finally, in the case where multiple recursive calls can happen the code
+would need to be rewritten anyway.  It is likely that this would anyway
+involve adding several parameters to vmdk_parent_open, and calling it from
+vmdk_open_vmdk4.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit bae0a0cc38d324c83ba737b92215f3447981d73b)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 40 ++++++++++++++++------------------------
+ 1 file changed, 16 insertions(+), 24 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 40 ++++++++++++++++------------------------
+ 1 file changed, 16 insertions(+), 24 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index e9e4345..ab8206c 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -625,20 +625,7 @@ static int vmdk_open_desc_file(BlockDriverState *bs, int flags,
+         return -ENOTSUP;
+     }
+     s->desc_offset = 0;
+-    ret = vmdk_parse_extents(buf, bs, bs->file->filename);
+-    if (ret) {
+-        vmdk_free_extents(bs);
+-        return ret;
+-    }
+-
+-    /* try to open parent images, if exist */
+-    ret = vmdk_parent_open(bs);
+-    if (ret) {
+-        vmdk_free_extents(bs);
+-        return ret;
+-    }
+-    s->parent_cid = vmdk_read_cid(bs, 1);
+-    return 0;
++    return vmdk_parse_extents(buf, bs, bs->file->filename);
+ }
+ 
+ static int vmdk_open(BlockDriverState *bs, int flags)
+@@ -648,19 +635,24 @@ static int vmdk_open(BlockDriverState *bs, int flags)
+ 
+     if (vmdk_open_sparse(bs, bs->file, flags) == 0) {
+         s->desc_offset = 0x200;
+-        /* try to open parent images, if exist */
+-        ret = vmdk_parent_open(bs);
++    } else {
++        ret = vmdk_open_desc_file(bs, flags, 0);
+         if (ret) {
+-            vmdk_free_extents(bs);
+-            return ret;
++            goto fail;
+         }
+-        s->parent_cid = vmdk_read_cid(bs, 1);
+-        qemu_co_mutex_init(&s->lock);
+-        return 0;
+-    } else {
+-        qemu_co_mutex_init(&s->lock);
+-        return vmdk_open_desc_file(bs, flags, 0);
+     }
++    /* try to open parent images, if exist */
++    ret = vmdk_parent_open(bs);
++    if (ret) {
++        goto fail;
++    }
++    s->parent_cid = vmdk_read_cid(bs, 1);
++    qemu_co_mutex_init(&s->lock);
++    return ret;
++
++fail:
++    vmdk_free_extents(bs);
++    return ret;
+ }
+ 
+ static int get_whole_cluster(BlockDriverState *bs,
+-- 
+1.7.11.7
+

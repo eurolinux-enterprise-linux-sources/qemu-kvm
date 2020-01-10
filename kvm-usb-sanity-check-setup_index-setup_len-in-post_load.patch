@@ -1,0 +1,48 @@
+From 1ded6dbb462f783827b3eaf381a26e11ec0b01b7 Mon Sep 17 00:00:00 2001
+From: Michael S. Tsirkin <mst@redhat.com>
+Date: Sun, 11 May 2014 15:34:56 -0500
+Subject: [PATCH 11/20] usb: sanity check setup_index+setup_len in post_load
+
+RH-Author: Michael S. Tsirkin <mst@redhat.com>
+Message-id: <1399822420-8632-2-git-send-email-mst@redhat.com>
+Patchwork-id: 58785
+O-Subject: [PATCH qemu-kvm RHEL6.6 1/2] usb: sanity check setup_index+setup_len in post_load
+Bugzilla: 1096117
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Gerd Hoffmann <kraxel@redhat.com>
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit c60174e847082ab9f70720f86509a3353f816fad)
+
+Bugzilla: 1096117
+
+---
+ hw/usb-bus.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/usb-bus.c |    4 ++++
+ 1 files changed, 4 insertions(+), 0 deletions(-)
+
+diff --git a/hw/usb-bus.c b/hw/usb-bus.c
+index f1f52d1..9299d5e 100644
+--- a/hw/usb-bus.c
++++ b/hw/usb-bus.c
+@@ -35,6 +35,10 @@ static int usb_device_post_load(void *opaque, int version_id)
+     } else {
+         dev->attached = 1;
+     }
++    if (dev->setup_index >= sizeof(dev->data_buf) ||
++        dev->setup_len >= sizeof(dev->data_buf)) {
++        return -EINVAL;
++    }
+     return 0;
+ }
+ 
+-- 
+1.7.1
+

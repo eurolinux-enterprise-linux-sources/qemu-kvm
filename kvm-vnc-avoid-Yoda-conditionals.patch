@@ -1,0 +1,63 @@
+From 7c8a868262c0cb1ce8c7c1b807e923dcb8994284 Mon Sep 17 00:00:00 2001
+Message-Id: <7c8a868262c0cb1ce8c7c1b807e923dcb8994284.1374754301.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:38 +0200
+Subject: [PATCH 27/65] vnc: avoid Yoda conditionals
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-28-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52142
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 27/65] vnc: avoid Yoda conditionals
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit c1c1619c8b100f675bc97198218f3fcb0a740921)
+
+Conflicts:
+
+	vnc.c
+---
+ vnc.c |    8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ vnc.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/vnc.c b/vnc.c
+index 61aff19..52d16c8 100644
+--- a/vnc.c
++++ b/vnc.c
+@@ -2910,8 +2910,8 @@ int vnc_display_open(DisplayState *ds, const char *display)
+             vs->lsock = unix_connect(display+5, NULL);
+         else
+             vs->lsock = inet_connect(display, NULL);
+-        if (-1 == vs->lsock) {
+-            free(vs->display);
++        if (vs->lsock < 0) {
++            g_free(vs->display);
+             vs->display = NULL;
+             return -1;
+         } else {
+@@ -2932,8 +2932,8 @@ int vnc_display_open(DisplayState *ds, const char *display)
+             vs->lsock = inet_listen(display, dpy, 256,
+                                     SOCK_STREAM, 5900, NULL);
+         }
+-        if (-1 == vs->lsock) {
+-            free(dpy);
++        if (vs->lsock < 0) {
++            g_free(dpy);
+             return -1;
+         } else {
+             free(vs->display);
+-- 
+1.7.11.7
+

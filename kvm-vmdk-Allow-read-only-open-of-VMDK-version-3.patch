@@ -1,0 +1,71 @@
+From bae5ad3cc04cd03f1aaf1acafe3e06ec2751800d Mon Sep 17 00:00:00 2001
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 20 Dec 2013 03:23:47 +0100
+Subject: [PATCH 39/39] vmdk: Allow read only open of VMDK version 3
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1387509827-27676-1-git-send-email-famz@redhat.com>
+Patchwork-id: 56399
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] vmdk: Allow read only open of VMDK version 3
+Bugzilla: 1007708
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1029852
+Brew:     http://brewweb.devel.redhat.com/brew/taskinfo?taskID=6764336 (RHEL)
+          http://brewweb.devel.redhat.com/brew/taskinfo?taskID=6764405 (RHEV)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 509d39aa22909c0ed1aabf896865f19c81fb38a1)
+
+Upstream commit doesn't have a verbose commit message, but as the
+comment says, VMware KB 2064959 [1] advises that backup software can
+read version=3 as version=1. This is important for virt-v2v and helps in
+importing VMware VMs from vSphere, since most of the vSphere exported
+OVF/OVA's come with version=3.
+
+[1]: http://kb.vmware.com/kb/2064959
+
+RHEL6 note: Error API is different, use qerror_report.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block/vmdk.c |    9 ++++++++-
+ 1 files changed, 8 insertions(+), 1 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index bb1809b..874fc8d 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -585,13 +585,20 @@ static int vmdk_open_vmdk4(BlockDriverState *bs,
+         header = footer.header;
+     }
+ 
+-    if (le32_to_cpu(header.version) >= 3) {
++    if (le32_to_cpu(header.version) > 3) {
+         char buf[64];
+         snprintf(buf, sizeof(buf), "VMDK version %d",
+                  le32_to_cpu(header.version));
+         qerror_report(QERR_UNKNOWN_BLOCK_FORMAT_FEATURE,
+                 bs->device_name, "vmdk", buf);
+         return -ENOTSUP;
++    } else if (le32_to_cpu(header.version) == 3 && (flags & BDRV_O_RDWR)) {
++        /* VMware KB 2064959 explains that version 3 added support for
++         * persistent changed block tracking (CBT), and backup software can
++         * read it as version=1 if it doesn't care about the changed area
++         * information. So we are safe to enable read only. */
++        qerror_report(QERR_GENERIC_ERROR, "VMDK version 3 must be read only");
++        return -EINVAL;
+     }
+ 
+     if (le32_to_cpu(header.num_gtes_per_gt) > 512) {
+-- 
+1.7.1
+

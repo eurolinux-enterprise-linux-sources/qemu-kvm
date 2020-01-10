@@ -1,0 +1,58 @@
+From befe8a5ea0b702e67a31e84d0aca23252cb79d0b Mon Sep 17 00:00:00 2001
+From: Max Reitz <mreitz@redhat.com>
+Date: Fri, 2 May 2014 16:58:53 -0500
+Subject: [PATCH 21/26] qcow2: fix wrong value of L1E_OFFSET_MASK, L2E_OFFSET_MASK and REFT_OFFSET_MASK
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1399049936-13496-22-git-send-email-mreitz@redhat.com>
+Patchwork-id: 58666
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 21/24] qcow2: fix wrong value of L1E_OFFSET_MASK, L2E_OFFSET_MASK and REFT_OFFSET_MASK
+Bugzilla: 1004420
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Hu Tao <hutao@cn.fujitsu.com>
+
+BZ: 1004420
+
+Accoring to qcow spec, the offset fields in l1e, l2e and ref table entry
+start at bit 9. The offset is cluster offset, and the smallest possible
+cluster size is 512 bytes.
+
+Signed-off-by: Hu Tao <hutao@cn.fujitsu.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 46bae927134468d27f5e2508c3ced67ff58fa45b)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2.h | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2.h |    6 +++---
+ 1 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/block/qcow2.h b/block/qcow2.h
+index 86f0cb2..2a71768 100644
+--- a/block/qcow2.h
++++ b/block/qcow2.h
+@@ -241,11 +241,11 @@ typedef enum QCow2MetadataOverlap {
+ #define QCOW2_OL_ALL \
+     (QCOW2_OL_CACHED | QCOW2_OL_INACTIVE_L2)
+ 
+-#define L1E_OFFSET_MASK 0x00ffffffffffff00ULL
+-#define L2E_OFFSET_MASK 0x00ffffffffffff00ULL
++#define L1E_OFFSET_MASK 0x00fffffffffffe00ULL
++#define L2E_OFFSET_MASK 0x00fffffffffffe00ULL
+ #define L2E_COMPRESSED_OFFSET_SIZE_MASK 0x3fffffffffffffffULL
+ 
+-#define REFT_OFFSET_MASK 0xffffffffffffff00ULL
++#define REFT_OFFSET_MASK 0xfffffffffffffe00ULL
+ 
+ static inline int64_t start_of_cluster(BDRVQcowState *s, int64_t offset)
+ {
+-- 
+1.7.1
+

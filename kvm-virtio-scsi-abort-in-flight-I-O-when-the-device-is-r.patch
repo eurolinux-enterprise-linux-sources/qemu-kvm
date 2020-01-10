@@ -1,0 +1,53 @@
+From 8a85c5406b0e1698ff8a112517465753f74d35c3 Mon Sep 17 00:00:00 2001
+Message-Id: <8a85c5406b0e1698ff8a112517465753f74d35c3.1429739396.git.jen@redhat.com>
+In-Reply-To: <933ebfcd0e18f4ed2c68553cf4bc257652872678.1429739396.git.jen@redhat.com>
+References: <933ebfcd0e18f4ed2c68553cf4bc257652872678.1429739396.git.jen@redhat.com>
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Thu, 16 Apr 2015 15:06:43 -0500
+Subject: [CHANGE 11/11] virtio-scsi: abort in-flight I/O when the device is
+ reset
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: <1429196803-9785-4-git-send-email-pbonzini@redhat.com>
+Patchwork-id: 64824
+O-Subject: [RHEL6.7 qemu-kvm PATCH 3/3] virtio-scsi: abort in-flight I/O when the device is reset
+Bugzilla: 1141594
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+When the device is reset, the SCSI bus should also be reset so
+that in-flight I/O is cancelled.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 47a150a4bbb06e45ef439a8222e9f46a7c4cca3f)
+---
+ hw/virtio-scsi.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/virtio-scsi.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/hw/virtio-scsi.c b/hw/virtio-scsi.c
+index 8bd16eb..f2c5bfe 100644
+--- a/hw/virtio-scsi.c
++++ b/hw/virtio-scsi.c
+@@ -596,6 +596,10 @@ static void virtio_scsi_reset(VirtIODevice *vdev)
+ {
+     VirtIOSCSI *s = (VirtIOSCSI *)vdev;
+ 
++    s->resetting++;
++    qbus_reset_all(&s->bus.qbus);
++    s->resetting--;
++
+     s->sense_size = VIRTIO_SCSI_SENSE_SIZE;
+     s->cdb_size = VIRTIO_SCSI_CDB_SIZE;
+     s->events_dropped = false;
+-- 
+2.1.0
+

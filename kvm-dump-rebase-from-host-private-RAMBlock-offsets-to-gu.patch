@@ -1,0 +1,419 @@
+From 25f0812a00bd17d6b8eebbc9bb0d0d0680de50a3 Mon Sep 17 00:00:00 2001
+Message-Id: <25f0812a00bd17d6b8eebbc9bb0d0d0680de50a3.1376572530.git.minovotn@redhat.com>
+In-Reply-To: <1ab1cadd348058496d2f900c3d4ac4b7c325d3e6.1376572530.git.minovotn@redhat.com>
+References: <1ab1cadd348058496d2f900c3d4ac4b7c325d3e6.1376572530.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 12 Aug 2013 15:17:08 +0200
+Subject: [PATCH 04/11] dump: rebase from host-private RAMBlock offsets to
+ guest-physical addresses
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1376320628-11255-5-git-send-email-lersek@redhat.com>
+Patchwork-id: 53157
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 4/4] dump: rebase from host-private RAMBlock offsets to guest-physical addresses
+Bugzilla: 989585
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Radim Krcmar <rkrcmar@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+
+RAMBlock.offset                   --> GuestPhysBlock.target_start
+RAMBlock.offset + RAMBlock.length --> GuestPhysBlock.target_end
+RAMBlock.length                   --> GuestPhysBlock.target_end -
+                                      GuestPhysBlock.target_start
+
+"GuestPhysBlock.host_addr" is only used when writing the dump contents.
+
+This patch enables "crash" to work with the vmcore by rebasing the vmcore
+from the left side of the following diagram to the right side:
+
+host-private
+offset
+relative
+to ram_addr   RAMBlock                  guest-visible paddrs
+            0 +-------------------+.....+-------------------+ 0
+              |         ^         |     |        ^          |
+              |       640 KB      |     |      640 KB       |
+              |         v         |     |        v          |
+  0x0000a0000 +-------------------+.....+-------------------+ 0x0000a0000
+              |         ^         |     |XXXXXXXXXXXXXXXXXXX|
+              |       384 KB      |     |XXXXXXXXXXXXXXXXXXX|
+              |         v         |     |XXXXXXXXXXXXXXXXXXX|
+  0x000100000 +-------------------+.....+-------------------+ 0x000100000
+              |         ^         |     |        ^          |
+              |       3583 MB     |     |      3583 MB      |
+              |         v         |     |        v          |
+  0x0e0000000 +-------------------+.....+-------------------+ 0x0e0000000
+              |         ^         |.    |XXXXXXXXXXXXXXXXXXX|
+              | above_4g_mem_size | .   |XXXX PCI hole XXXXX|
+              |         v         |  .  |XXXX          XXXXX|
+     ram_size +-------------------+   . |XXXX  512 MB  XXXXX|
+                                   .   .|XXXXXXXXXXXXXXXXXXX|
+                                    .   +-------------------+ 0x100000000
+                                     .  |         ^         |
+                                      . | above_4g_mem_size |
+                                       .|         v         |
+                                        +-------------------+ ram_size
+                                                              + 512 MB
+
+Manual port of upstream commit 56c4bfb3f07f3107894c00281276aea4f5e8834d.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ cpu-all.h               |    8 +++-
+ memory_mapping.h        |   10 ++++--
+ dump.c                  |   79 +++++++++++++++++++++++------------------------
+ memory_mapping.c        |   21 +++++++-----
+ target-i386/arch_dump.c |    9 +++--
+ 5 files changed, 69 insertions(+), 58 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ cpu-all.h               |  8 +++--
+ dump.c                  | 79 ++++++++++++++++++++++++-------------------------
+ memory_mapping.c        | 21 +++++++------
+ memory_mapping.h        | 10 +++++--
+ target-i386/arch_dump.c |  9 +++---
+ 5 files changed, 69 insertions(+), 58 deletions(-)
+
+diff --git a/cpu-all.h b/cpu-all.h
+index 10d427c..689f9a4 100644
+--- a/cpu-all.h
++++ b/cpu-all.h
+@@ -1132,7 +1132,11 @@ int cpu_write_elf64_qemunote(write_core_dump_function f, CPUArchState *env,
+                              void *opaque);
+ int cpu_write_elf32_qemunote(write_core_dump_function f, CPUArchState *env,
+                              void *opaque);
+-int cpu_get_dump_info(ArchDumpInfo *info);
++
++struct GuestPhysBlockList; /* memory_mapping.h */
++int cpu_get_dump_info(ArchDumpInfo *info,
++                      const struct GuestPhysBlockList *guest_phys_blocks);
++
+ size_t cpu_get_note_size(int class, int machine, int nr_cpus);
+ #else
+ static inline int cpu_write_elf64_note(write_core_dump_function f,
+@@ -1163,7 +1167,7 @@ static inline int cpu_write_elf32_qemunote(write_core_dump_function f,
+     return -1;
+ }
+ 
+-static inline int cpu_get_dump_info(ArchDumpInfo *info)
++static inline int cpu_get_dump_info(ArchDumpInfo *info, void *ignore)
+ {
+     return -1;
+ }
+diff --git a/dump.c b/dump.c
+index 87f6b85..9af4bf9 100644
+--- a/dump.c
++++ b/dump.c
+@@ -75,7 +75,7 @@ typedef struct DumpState {
+     target_phys_addr_t memory_offset;
+     int fd;
+ 
+-    RAMBlock *block;
++    GuestPhysBlock *next_block;
+     ram_addr_t start;
+     bool has_filter;
+     int64_t begin;
+@@ -391,14 +391,14 @@ static int write_data(DumpState *s, void *buf, int length)
+ }
+ 
+ /* write the memroy to vmcore. 1 page per I/O. */
+-static int write_memory(DumpState *s, RAMBlock *block, ram_addr_t start,
++static int write_memory(DumpState *s, GuestPhysBlock *block, ram_addr_t start,
+                         int64_t size)
+ {
+     int64_t i;
+     int ret;
+ 
+     for (i = 0; i < size / TARGET_PAGE_SIZE; i++) {
+-        ret = write_data(s, block->host + start + i * TARGET_PAGE_SIZE,
++        ret = write_data(s, block->host_addr + start + i * TARGET_PAGE_SIZE,
+                          TARGET_PAGE_SIZE);
+         if (ret < 0) {
+             return ret;
+@@ -406,7 +406,7 @@ static int write_memory(DumpState *s, RAMBlock *block, ram_addr_t start,
+     }
+ 
+     if ((size % TARGET_PAGE_SIZE) != 0) {
+-        ret = write_data(s, block->host + start + i * TARGET_PAGE_SIZE,
++        ret = write_data(s, block->host_addr + start + i * TARGET_PAGE_SIZE,
+                          size % TARGET_PAGE_SIZE);
+         if (ret < 0) {
+             return ret;
+@@ -423,7 +423,7 @@ static void get_offset_range(target_phys_addr_t phys_addr,
+                              target_phys_addr_t *p_offset,
+                              target_phys_addr_t *p_filesz)
+ {
+-    RAMBlock *block;
++    GuestPhysBlock *block;
+     target_phys_addr_t offset = s->memory_offset;
+     int64_t size_in_block, start;
+ 
+@@ -437,35 +437,34 @@ static void get_offset_range(target_phys_addr_t phys_addr,
+         }
+     }
+ 
+-    QLIST_FOREACH(block, &ram_list.blocks, next) {
++    QTAILQ_FOREACH(block, &s->guest_phys_blocks.head, next) {
+         if (s->has_filter) {
+-            if (block->offset >= s->begin + s->length ||
+-                block->offset + block->length <= s->begin) {
++            if (block->target_start >= s->begin + s->length ||
++                block->target_end <= s->begin) {
+                 /* This block is out of the range */
+                 continue;
+             }
+ 
+-            if (s->begin <= block->offset) {
+-                start = block->offset;
++            if (s->begin <= block->target_start) {
++                start = block->target_start;
+             } else {
+                 start = s->begin;
+             }
+ 
+-            size_in_block = block->length - (start - block->offset);
+-            if (s->begin + s->length < block->offset + block->length) {
+-                size_in_block -= block->offset + block->length -
+-                                 (s->begin + s->length);
++            size_in_block = block->target_end - start;
++            if (s->begin + s->length < block->target_end) {
++                size_in_block -= block->target_end - (s->begin + s->length);
+             }
+         } else {
+-            start = block->offset;
+-            size_in_block = block->length;
++            start = block->target_start;
++            size_in_block = block->target_end - block->target_start;
+         }
+ 
+         if (phys_addr >= start && phys_addr < start + size_in_block) {
+             *p_offset = phys_addr - start + offset;
+ 
+             /* The offset range mapped from the vmcore file must not spill over
+-             * the RAMBlock, clamp it. The rest of the mapping will be
++             * the GuestPhysBlock, clamp it. The rest of the mapping will be
+              * zero-filled in memory at load time; see
+              * <http://refspecs.linuxbase.org/elf/gabi4+/ch5.pheader.html>.
+              */
+@@ -613,26 +612,26 @@ static int dump_completed(DumpState *s)
+     return 0;
+ }
+ 
+-static int get_next_block(DumpState *s, RAMBlock *block)
++static int get_next_block(DumpState *s, GuestPhysBlock *block)
+ {
+     while (1) {
+-        block = QLIST_NEXT(block, next);
++        block = QTAILQ_NEXT(block, next);
+         if (!block) {
+             /* no more block */
+             return 1;
+         }
+ 
+         s->start = 0;
+-        s->block = block;
++        s->next_block = block;
+         if (s->has_filter) {
+-            if (block->offset >= s->begin + s->length ||
+-                block->offset + block->length <= s->begin) {
++            if (block->target_start >= s->begin + s->length ||
++                block->target_end <= s->begin) {
+                 /* This block is out of the range */
+                 continue;
+             }
+ 
+-            if (s->begin > block->offset) {
+-                s->start = s->begin - block->offset;
++            if (s->begin > block->target_start) {
++                s->start = s->begin - block->target_start;
+             }
+         }
+ 
+@@ -643,18 +642,18 @@ static int get_next_block(DumpState *s, RAMBlock *block)
+ /* write all memory to vmcore */
+ static int dump_iterate(DumpState *s)
+ {
+-    RAMBlock *block;
++    GuestPhysBlock *block;
+     int64_t size;
+     int ret;
+ 
+     while (1) {
+-        block = s->block;
++        block = s->next_block;
+ 
+-        size = block->length;
++        size = block->target_end - block->target_start;
+         if (s->has_filter) {
+             size -= s->start;
+-            if (s->begin + s->length < block->offset + block->length) {
+-                size -= block->offset + block->length - (s->begin + s->length);
++            if (s->begin + s->length < block->target_end) {
++                size -= block->target_end - (s->begin + s->length);
+             }
+         }
+         ret = write_memory(s, block, s->start, size);
+@@ -689,23 +688,23 @@ static int create_vmcore(DumpState *s)
+ 
+ static ram_addr_t get_start_block(DumpState *s)
+ {
+-    RAMBlock *block;
++    GuestPhysBlock *block;
+ 
+     if (!s->has_filter) {
+-        s->block = QLIST_FIRST(&ram_list.blocks);
++        s->next_block = QTAILQ_FIRST(&s->guest_phys_blocks.head);
+         return 0;
+     }
+ 
+-    QLIST_FOREACH(block, &ram_list.blocks, next) {
+-        if (block->offset >= s->begin + s->length ||
+-            block->offset + block->length <= s->begin) {
++    QTAILQ_FOREACH(block, &s->guest_phys_blocks.head, next) {
++        if (block->target_start >= s->begin + s->length ||
++            block->target_end <= s->begin) {
+             /* This block is out of the range */
+             continue;
+         }
+ 
+-        s->block = block;
+-        if (s->begin > block->offset) {
+-            s->start = s->begin - block->offset;
++        s->next_block = block;
++        if (s->begin > block->target_start) {
++            s->start = s->begin - block->target_start;
+         } else {
+             s->start = 0;
+         }
+@@ -757,7 +756,7 @@ static int dump_init(DumpState *s, int fd, bool paging, bool has_filter,
+      * If the target architecture is not supported, cpu_get_dump_info() will
+      * return -1.
+      */
+-    ret = cpu_get_dump_info(&s->dump_info);
++    ret = cpu_get_dump_info(&s->dump_info, &s->guest_phys_blocks);
+     if (ret < 0) {
+         error_set(errp, QERR_UNSUPPORTED);
+         goto cleanup;
+@@ -766,9 +765,9 @@ static int dump_init(DumpState *s, int fd, bool paging, bool has_filter,
+     /* get memory mapping */
+     memory_mapping_list_init(&s->list);
+     if (paging) {
+-        qemu_get_guest_memory_mapping(&s->list);
++        qemu_get_guest_memory_mapping(&s->list, &s->guest_phys_blocks);
+     } else {
+-        qemu_get_guest_simple_memory_mapping(&s->list);
++        qemu_get_guest_simple_memory_mapping(&s->list, &s->guest_phys_blocks);
+     }
+ 
+     if (s->has_filter) {
+diff --git a/memory_mapping.c b/memory_mapping.c
+index aaddd68..3eef074 100644
+--- a/memory_mapping.c
++++ b/memory_mapping.c
+@@ -277,10 +277,11 @@ static CPUArchState *find_paging_enabled_cpu(CPUArchState *start_cpu)
+     return NULL;
+ }
+ 
+-int qemu_get_guest_memory_mapping(MemoryMappingList *list)
++int qemu_get_guest_memory_mapping(MemoryMappingList *list,
++                                  const GuestPhysBlockList *guest_phys_blocks)
+ {
+     CPUArchState *env, *first_paging_enabled_cpu;
+-    RAMBlock *block;
++    GuestPhysBlock *block;
+     ram_addr_t offset, length;
+     int ret;
+ 
+@@ -299,9 +300,9 @@ int qemu_get_guest_memory_mapping(MemoryMappingList *list)
+      * If the guest doesn't use paging, the virtual address is equal to physical
+      * address.
+      */
+-    QLIST_FOREACH(block, &ram_list.blocks, next) {
+-        offset = block->offset;
+-        length = block->length;
++    QTAILQ_FOREACH(block, &guest_phys_blocks->head, next) {
++        offset = block->target_start;
++        length = block->target_end - block->target_start;
+         create_new_memory_mapping(list, offset, offset, length);
+     }
+ 
+@@ -309,12 +310,14 @@ int qemu_get_guest_memory_mapping(MemoryMappingList *list)
+ }
+ #endif
+ 
+-void qemu_get_guest_simple_memory_mapping(MemoryMappingList *list)
++void qemu_get_guest_simple_memory_mapping(MemoryMappingList *list,
++                                   const GuestPhysBlockList *guest_phys_blocks)
+ {
+-    RAMBlock *block;
++    GuestPhysBlock *block;
+ 
+-    QLIST_FOREACH(block, &ram_list.blocks, next) {
+-        create_new_memory_mapping(list, block->offset, 0, block->length);
++    QTAILQ_FOREACH(block, &guest_phys_blocks->head, next) {
++        create_new_memory_mapping(list, block->target_start, 0,
++                                  block->target_end - block->target_start);
+     }
+ }
+ 
+diff --git a/memory_mapping.h b/memory_mapping.h
+index 2a2d232..d204527 100644
+--- a/memory_mapping.h
++++ b/memory_mapping.h
+@@ -75,16 +75,20 @@ void guest_phys_blocks_append(GuestPhysBlockList *list);
+  *   -2: unsupported
+  */
+ #if defined(CONFIG_HAVE_GET_MEMORY_MAPPING)
+-int qemu_get_guest_memory_mapping(MemoryMappingList *list);
++int qemu_get_guest_memory_mapping(MemoryMappingList *list,
++                                  const GuestPhysBlockList *guest_phys_blocks);
+ #else
+-static inline int qemu_get_guest_memory_mapping(MemoryMappingList *list)
++static inline
++int qemu_get_guest_memory_mapping(MemoryMappingList *list,
++                                  const GuestPhysBlockList *guest_phys_blocks)
+ {
+     return -2;
+ }
+ #endif
+ 
+ /* get guest's memory mapping without do paging(virtual address is 0). */
+-void qemu_get_guest_simple_memory_mapping(MemoryMappingList *list);
++void qemu_get_guest_simple_memory_mapping(MemoryMappingList *list,
++                                  const GuestPhysBlockList *guest_phys_blocks);
+ 
+ void memory_mapping_filter(MemoryMappingList *list, int64_t begin,
+                            int64_t length);
+diff --git a/target-i386/arch_dump.c b/target-i386/arch_dump.c
+index 135d855..397e087 100644
+--- a/target-i386/arch_dump.c
++++ b/target-i386/arch_dump.c
+@@ -382,10 +382,11 @@ int cpu_write_elf32_qemunote(write_core_dump_function f, CPUArchState *env,
+     return cpu_write_qemu_note(f, env, opaque, 0);
+ }
+ 
+-int cpu_get_dump_info(ArchDumpInfo *info)
++int cpu_get_dump_info(ArchDumpInfo *info,
++                      const GuestPhysBlockList *guest_phys_blocks)
+ {
+     bool lma = false;
+-    RAMBlock *block;
++    GuestPhysBlock *block;
+ 
+ #ifdef TARGET_X86_64
+     lma = !!(first_cpu->hflags & HF_LMA_MASK);
+@@ -403,8 +404,8 @@ int cpu_get_dump_info(ArchDumpInfo *info)
+     } else {
+         info->d_class = ELFCLASS32;
+ 
+-        QLIST_FOREACH(block, &ram_list.blocks, next) {
+-            if (block->offset + block->length > UINT_MAX) {
++        QTAILQ_FOREACH(block, &guest_phys_blocks->head, next) {
++            if (block->target_end > UINT_MAX) {
+                 /* The memory size is greater than 4G */
+                 info->d_class = ELFCLASS64;
+                 break;
+-- 
+1.7.11.7
+

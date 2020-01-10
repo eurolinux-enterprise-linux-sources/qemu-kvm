@@ -1,0 +1,125 @@
+From 926130b1d3b9bf446ff5dbb2404256ae68702cca Mon Sep 17 00:00:00 2001
+Message-Id: <926130b1d3b9bf446ff5dbb2404256ae68702cca.1425657843.git.jen@redhat.com>
+In-Reply-To: <f6cf12f0d166001c7958ddc904eff181f03da5e4.1425657843.git.jen@redhat.com>
+References: <f6cf12f0d166001c7958ddc904eff181f03da5e4.1425657843.git.jen@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Fri, 21 Feb 2014 16:24:07 +0100
+Subject: [CHANGE 09/11] qemu-img: Allow -o help with incomplete argument list
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+This patch allows using 'qemu-img $subcmd -o help' for the create,
+convert and amend subcommands, without specifying the previously
+required filename arguments.
+
+Note that it's still allowed and meaningful to specify a filename: An
+invocation like 'qemu-img create -o help sheepdog:foo' will also display
+options that are provided by the Sheepdog driver.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Jeff Cody <jcody@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+(cherry picked from commit a283cb6e58fca846c658360971d23fdd1129db65)
+
+Conflicts:
+	qemu-img.c
+
+Conflicts because RHEL 6 doesn't have 'qemu-img amend' and commit
+98289620 ('block: Don't parse protocol from file.filename'), which is
+part of relatively recent blockdev-add work.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ qemu-img.c | 43 ++++++++++++++++++++++++-------------------
+ 1 file changed, 24 insertions(+), 19 deletions(-)
+
+diff --git a/qemu-img.c b/qemu-img.c
+index 495aa1f..f5fe2da 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -222,16 +222,19 @@ static int print_block_option_help(const char *filename, const char *fmt)
+         return 1;
+     }
+ 
+-    proto_drv = bdrv_find_protocol(filename);
+-    if (!proto_drv) {
+-        error_report("Unknown protocol '%s'", filename);
+-        return 1;
+-    }
+-
+     create_options = append_option_parameters(create_options,
+                                               drv->create_options);
+-    create_options = append_option_parameters(create_options,
+-                                              proto_drv->create_options);
++
++    if (filename) {
++        proto_drv = bdrv_find_protocol(filename);
++        if (!proto_drv) {
++            error_report("Unknown protocol '%s'", filename);
++            return 1;
++        }
++        create_options = append_option_parameters(create_options,
++                                                  proto_drv->create_options);
++    }
++
+     print_option_help(create_options);
+     free_option_parameters(create_options);
+     return 0;
+@@ -360,10 +363,16 @@ static int img_create(int argc, char **argv)
+     }
+ 
+     /* Get the filename */
++    filename = (optind < argc) ? argv[optind] : NULL;
++    if (options && has_help_option(options)) {
++        g_free(options);
++        return print_block_option_help(filename, fmt);
++    }
++
+     if (optind >= argc) {
+         help();
+     }
+-    filename = argv[optind++];
++    optind++;
+ 
+     /* Get image size, if specified */
+     if (optind < argc) {
+@@ -383,11 +392,6 @@ static int img_create(int argc, char **argv)
+         img_size = (uint64_t)sval;
+     }
+ 
+-    if (options && has_help_option(options)) {
+-        g_free(options);
+-        return print_block_option_help(filename, fmt);
+-    }
+-
+     bdrv_img_create(filename, fmt, base_filename, base_fmt,
+                     options, img_size, BDRV_O_FLAGS, &local_err);
+     if (error_is_set(&local_err)) {
+@@ -1198,17 +1202,18 @@ static int img_convert(int argc, char **argv)
+     }
+ 
+     bs_n = argc - optind - 1;
+-    if (bs_n < 1) {
+-        help();
+-    }
+-
+-    out_filename = argv[argc - 1];
++    out_filename = bs_n >= 1 ? argv[argc - 1] : NULL;
+ 
+     if (options && has_help_option(options)) {
+         ret = print_block_option_help(out_filename, out_fmt);
+         goto out;
+     }
+ 
++    if (bs_n < 1) {
++        help();
++    }
++
++
+     if (bs_n > 1 && out_baseimg) {
+         error_report("-B makes no sense when concatenating multiple input "
+                      "images");
+-- 
+2.1.0
+

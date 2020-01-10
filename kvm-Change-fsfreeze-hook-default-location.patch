@@ -1,0 +1,79 @@
+From 0771282bb5f6f5d03493b9539803e52fa8595171 Mon Sep 17 00:00:00 2001
+Message-Id: <0771282bb5f6f5d03493b9539803e52fa8595171.1453414664.git.jen@redhat.com>
+From: Miroslav Rezanina <mrezanin@redhat.com>
+Date: Thu, 7 Jan 2016 10:45:19 -0500
+Subject: [CHANGE 1/2] Change fsfreeze-hook default location
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Miroslav Rezanina <mrezanin@redhat.com>
+Message-id: <1452163519-31056-1-git-send-email-mrezanin@redhat.com>
+Patchwork-id: 68711
+O-Subject: [RHEL6.8 qemu-kvm PATCH] Change fsreeze-hook default location
+Bugzilla: 1213233
+RH-Acked-by: Thomas Huth <thuth@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Jeff Nelson <jenelson@redhat.com>
+
+From: Miroslav Rezanina <mrezanin@redhat.com>
+
+We store fsfreeze-hook in SYSCONFDIR/qemu-ga/ directory. However, qemu-ga
+uses QEMU_CONFDIR as default location. We properly set path in qemu-ga
+service but manual invoking will not work.
+
+QGA_FSFREEZE_HOOK_DEFAULT macro is used for fsfreeze-hook location. It
+uses CONFIG_QEMU_CONFDIR macro that contains "{sysconfdir}/qemu" path.
+
+To allow configuration via configure command line, new parameter
+"--with-confsuffix" is added. It's value replace harcoded qemu string
+in CONFIG_QEMU_CONFDIR. This allows full configuration of path to
+fsfreeze-hook on configure command line.
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ configure                     | 6 +++++-
+ redhat/qemu-kvm.spec.template | 3 ++-
+ 2 files changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/configure b/configure
+index 4f98ad3..dd8dea2 100755
+--- a/configure
++++ b/configure
+@@ -33,6 +33,7 @@ prefix=""
+ interp_prefix="/usr/gnemul/qemu-%M"
+ static="no"
+ sysconfdir=""
++confsuffix="qemu"
+ local_statedir=""
+ sparc_cpu=""
+ cross_prefix=""
+@@ -501,6 +502,8 @@ for opt do
+   ;;
+   --sysconfdir=*) sysconfdir="$optarg"
+   ;;
++  --with-confsuffix=*) confsuffix="$optarg"
++  ;;
+   --localstatedir=*) local_statedir="$optarg"
+   ;;
+   --disable-sdl) sdl="no"
+@@ -814,6 +817,7 @@ echo "  --make=MAKE              use specified make [$make]"
+ echo "  --install=INSTALL        use specified install [$install]"
+ echo "  --static                 enable static build [$static]"
+ echo "  --sysconfdir=PATH        install config in PATH"
++echo "  --with-confsuffix=SUFFIX suffix for Qemu data inside sysconfigdir [$confsuffix]"   
+ echo "  --localstatedir=PATH     install local state in PATH (set at runtime on win32)"
+ echo "  --enable-debug-tcg       enable TCG debugging"
+ echo "  --disable-debug-tcg      disable TCG debugging (default)"
+@@ -2475,7 +2479,7 @@ echo "CONFIG_QEMU_SHAREDIR=\"$prefix$datasuffix\"" >> $config_host_mak
+ if test "$mingw32" = "yes" ; then
+   echo "CONFIG_QEMU_CONFDIR=\"$sysconfdir\"" >> $config_host_mak
+ else
+-  echo "CONFIG_QEMU_CONFDIR=\"${sysconfdir}/qemu\"" >> $config_host_mak
++  echo "CONFIG_QEMU_CONFDIR=\"${sysconfdir}/${confsuffix}\"" >> $config_host_mak
+ fi
+ 
+ case "$cpu" in
+-- 
+2.1.0
+

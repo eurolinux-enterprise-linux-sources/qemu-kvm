@@ -1,0 +1,46 @@
+From adb6acfc8c1c39b07be166fa176bd25143bc1c57 Mon Sep 17 00:00:00 2001
+Message-Id: <adb6acfc8c1c39b07be166fa176bd25143bc1c57.1376408877.git.minovotn@redhat.com>
+In-Reply-To: <823d94e906b2aeecd2c60bc9f19ca8948a756f27.1376408877.git.minovotn@redhat.com>
+References: <823d94e906b2aeecd2c60bc9f19ca8948a756f27.1376408877.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 30 Jul 2013 11:35:30 +0200
+Subject: [PATCH 12/18] qemu-socket: don't leak opts on error
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1375184130-11076-13-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52788
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 12/12] qemu-socket: don't leak opts on error
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Michael Tokarev <mjt@tls.msk.ru>
+(cherry picked from commit 7a5b6af13a45ae7109900dee03a436819302126c)
+---
+ qemu-sockets.c |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-sockets.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/qemu-sockets.c b/qemu-sockets.c
+index 642bd1c..d5f0aa0 100644
+--- a/qemu-sockets.c
++++ b/qemu-sockets.c
+@@ -974,7 +974,7 @@ int socket_dgram(SocketAddress *remote, SocketAddress *local, Error **errp)
+ 
+     default:
+         error_setg(errp, "socket type unsupported for datagram");
+-        return -1;
++        fd = -1;
+     }
+     qemu_opts_del(opts);
+     return fd;
+-- 
+1.7.11.7
+

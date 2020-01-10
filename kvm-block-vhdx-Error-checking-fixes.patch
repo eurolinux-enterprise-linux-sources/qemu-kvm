@@ -1,0 +1,83 @@
+From 7fa464f9cf517d75790fd469a25cf8e8cd27c95f Mon Sep 17 00:00:00 2001
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Thu, 10 Jul 2014 23:24:32 +0200
+Subject: [PATCH 32/44] block/vhdx: Error checking fixes
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <6800ae10e5d971b989624f9c1b1725576a0dee00.1405033137.git.jcody@redhat.com>
+Patchwork-id: 59768
+O-Subject: [RHEL6-6 qemu-kvm PATCH v2 23/24] block/vhdx: Error checking fixes
+Bugzilla: 1063559
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+From: Markus Armbruster <armbru@redhat.com>
+
+Errors are inadvertently ignored in a few places.  Has always been
+broken.  Spotted by Coverity.
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Jeff Cody <jcody@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit f50159fa9b5a0ad82e30c123643ec39a1df81d9a)
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ block/vhdx-log.c | 4 ++--
+ block/vhdx.c     | 8 ++++----
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block/vhdx-log.c |    4 ++--
+ block/vhdx.c     |    8 ++++----
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/block/vhdx-log.c b/block/vhdx-log.c
+index a9f8185..21a346e 100644
+--- a/block/vhdx-log.c
++++ b/block/vhdx-log.c
+@@ -963,8 +963,8 @@ static int vhdx_log_write(BlockDriverState *bs, BDRVVHDXState *s,
+     cpu_to_le32s((uint32_t *)(buffer + 4));
+ 
+     /* now write to the log */
+-    vhdx_log_write_sectors(bs, &s->log, &sectors_written, buffer,
+-                           desc_sectors + sectors);
++    ret = vhdx_log_write_sectors(bs, &s->log, &sectors_written, buffer,
++                                 desc_sectors + sectors);
+     if (ret < 0) {
+         goto exit;
+     }
+diff --git a/block/vhdx.c b/block/vhdx.c
+index 3ff0db2..7054afe 100644
+--- a/block/vhdx.c
++++ b/block/vhdx.c
+@@ -375,7 +375,7 @@ static int vhdx_update_header(BlockDriverState *bs, BDRVVHDXState *s,
+         inactive_header->log_guid = *log_guid;
+     }
+ 
+-    vhdx_write_header(bs->file, inactive_header, header_offset, true);
++    ret = vhdx_write_header(bs->file, inactive_header, header_offset, true);
+     if (ret < 0) {
+         goto exit;
+     }
+@@ -1817,13 +1817,13 @@ static int vhdx_create(const char *filename, QEMUOptionParameter *options)
+     creator = g_utf8_to_utf16("QEMU v" QEMU_VERSION, -1, NULL,
+                               &creator_items, NULL);
+     signature = cpu_to_le64(VHDX_FILE_SIGNATURE);
+-    bdrv_pwrite(bs, VHDX_FILE_ID_OFFSET, &signature, sizeof(signature));
++    ret = bdrv_pwrite(bs, VHDX_FILE_ID_OFFSET, &signature, sizeof(signature));
+     if (ret < 0) {
+         goto delete_and_exit;
+     }
+     if (creator) {
+-        bdrv_pwrite(bs, VHDX_FILE_ID_OFFSET + sizeof(signature), creator,
+-                    creator_items * sizeof(gunichar2));
++        ret = bdrv_pwrite(bs, VHDX_FILE_ID_OFFSET + sizeof(signature),
++                          creator, creator_items * sizeof(gunichar2));
+         if (ret < 0) {
+             goto delete_and_exit;
+         }
+-- 
+1.7.1
+

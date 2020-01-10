@@ -1,0 +1,132 @@
+From 88b83e620749c81f2bbc03115eb40226821e1a26 Mon Sep 17 00:00:00 2001
+Message-Id: <88b83e620749c81f2bbc03115eb40226821e1a26.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:23 +0200
+Subject: [PATCH 08/47] VMDK: add field BDRVVmdkState.desc_offset
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-9-git-send-email-famz@redhat.com>
+Patchwork-id: 51444
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 08/47] VMDK: add field BDRVVmdkState.desc_offset
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Fam Zheng <famcool@gmail.com>
+
+There are several occurrence of magic number 0x200 as the descriptor
+offset within mono sparse image file. This is not the case for images
+with separate descriptor file. So a field is added to BDRVVmdkState to
+hold the correct value.
+
+Signed-off-by: Fam Zheng <famcool@gmail.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit e1da9b2433f78c4de3bac8c2a97173c648d212c0)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+
+Conflicts:
+	block/vmdk.c
+---
+ block/vmdk.c | 27 ++++++++++++++++++---------
+ 1 file changed, 18 insertions(+), 9 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 27 ++++++++++++++++++---------
+ 1 file changed, 18 insertions(+), 9 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index bcd53d9..89afc01 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -82,6 +82,7 @@ typedef struct VmdkExtent {
+ 
+ typedef struct BDRVVmdkState {
+     CoMutex lock;
++    int desc_offset;
+     uint32_t parent_cid;
+     int num_extents;
+     /* Extent array with num_extents entries, ascend ordered by address */
+@@ -176,10 +177,11 @@ static uint32_t vmdk_read_cid(BlockDriverState *bs, int parent)
+     uint32_t cid;
+     const char *p_name, *cid_str;
+     size_t cid_str_size;
++    BDRVVmdkState *s = bs->opaque;
+ 
+-    /* the descriptor offset = 0x200 */
+-    if (bdrv_pread(bs->file, 0x200, desc, DESC_SIZE) != DESC_SIZE)
++    if (bdrv_pread(bs->file, s->desc_offset, desc, DESC_SIZE) != DESC_SIZE) {
+         return 0;
++    }
+ 
+     if (parent) {
+         cid_str = "parentCID";
+@@ -201,10 +203,12 @@ static int vmdk_write_cid(BlockDriverState *bs, uint32_t cid)
+ {
+     char desc[DESC_SIZE], tmp_desc[DESC_SIZE];
+     char *p_name, *tmp_str;
++    BDRVVmdkState *s = bs->opaque;
+ 
+-    /* the descriptor offset = 0x200 */
+-    if (bdrv_pread(bs->file, 0x200, desc, DESC_SIZE) != DESC_SIZE)
+-        return -1;
++    memset(desc, 0, sizeof(desc));
++    if (bdrv_pread(bs->file, s->desc_offset, desc, DESC_SIZE) != DESC_SIZE) {
++        return -EIO;
++    }
+ 
+     tmp_str = strstr(desc,"parentCID");
+     pstrcpy(tmp_desc, sizeof(tmp_desc), tmp_str);
+@@ -214,8 +218,9 @@ static int vmdk_write_cid(BlockDriverState *bs, uint32_t cid)
+         pstrcat(desc, sizeof(desc), tmp_desc);
+     }
+ 
+-    if (bdrv_pwrite_sync(bs->file, 0x200, desc, DESC_SIZE) < 0)
+-        return -1;
++    if (bdrv_pwrite_sync(bs->file, s->desc_offset, desc, DESC_SIZE) < 0) {
++        return -EIO;
++    }
+     return 0;
+ }
+ 
+@@ -403,10 +408,11 @@ static int vmdk_parent_open(BlockDriverState *bs)
+ {
+     char *p_name;
+     char desc[DESC_SIZE];
++    BDRVVmdkState *s = bs->opaque;
+ 
+-    /* the descriptor offset = 0x200 */
+-    if (bdrv_pread(bs->file, 0x200, desc, DESC_SIZE) != DESC_SIZE)
++    if (bdrv_pread(bs->file, s->desc_offset, desc, DESC_SIZE) != DESC_SIZE) {
+         return -1;
++    }
+ 
+     if ((p_name = strstr(desc,"parentFileNameHint")) != NULL) {
+         char *end_name;
+@@ -507,8 +513,10 @@ static int vmdk_open_vmdk3(BlockDriverState *bs, int flags)
+     int ret;
+     uint32_t magic;
+     VMDK3Header header;
++    BDRVVmdkState *s = bs->opaque;
+     VmdkExtent *extent;
+ 
++    s->desc_offset = 0x200;
+     ret = bdrv_pread(bs->file, sizeof(magic), &header, sizeof(header));
+     if (ret < 0) {
+         goto fail;
+@@ -540,6 +548,7 @@ static int vmdk_open_vmdk4(BlockDriverState *bs, int flags)
+     BDRVVmdkState *s = bs->opaque;
+     VmdkExtent *extent;
+ 
++    s->desc_offset = 0x200;
+     ret = bdrv_pread(bs->file, sizeof(magic), &header, sizeof(header));
+     if (ret < 0) {
+         goto fail;
+-- 
+1.7.11.7
+

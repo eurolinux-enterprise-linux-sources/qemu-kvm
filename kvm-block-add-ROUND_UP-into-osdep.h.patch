@@ -1,0 +1,48 @@
+From 7e9c6d4fc5fdfbc0dbae82b6dd9ea7f5a9e630a9 Mon Sep 17 00:00:00 2001
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Thu, 10 Jul 2014 23:24:10 +0200
+Subject: [PATCH 10/44] block: add ROUND_UP into osdep.h
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <566abd958c3439ad09cf76aa40622007b4a84858.1405033137.git.jcody@redhat.com>
+Patchwork-id: 59746
+O-Subject: [RHEL6-6 qemu-kvm PATCH v2 01/24] block: add ROUND_UP into osdep.h
+Bugzilla: 1063559
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+The macro ROUND_UP was added upstream in commit 292c8e50, which
+contains a lot of unrelated VirtIOSCSI changes.  Add this macro
+to RHEL6.
+
+Downstream only.
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ osdep.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ osdep.h |    4 ++++
+ 1 files changed, 4 insertions(+), 0 deletions(-)
+
+diff --git a/osdep.h b/osdep.h
+index ba9229b..3122134 100644
+--- a/osdep.h
++++ b/osdep.h
+@@ -58,6 +58,10 @@
+ #define MAX(a, b) (((a) > (b)) ? (a) : (b))
+ #endif
+ 
++#ifndef ROUND_UP
++#define ROUND_UP(n,d) (((n) + (d) - 1) & -(d))
++#endif
++
+ #ifndef DIV_ROUND_UP
+ #define DIV_ROUND_UP(n,d) (((n) + (d) - 1) / (d))
+ #endif
+-- 
+1.7.1
+

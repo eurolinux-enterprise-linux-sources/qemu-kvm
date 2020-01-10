@@ -1,0 +1,101 @@
+From d2c8edf336d51edfaa20929546785a84c55c8b4f Mon Sep 17 00:00:00 2001
+Message-Id: <d2c8edf336d51edfaa20929546785a84c55c8b4f.1366117835.git.minovotn@redhat.com>
+In-Reply-To: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+References: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 4 Apr 2013 13:32:06 +0200
+Subject: [PATCH 19/19] qemu-img: Fix division by zero for zero size images
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1365082326-21846-1-git-send-email-kwolf@redhat.com>
+Patchwork-id: 50100
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] qemu-img: Fix division by zero for zero size images
+Bugzilla: 864378
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Bugzilla: 864378
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 1f71049523f4fc0738f96c74bfcce012521fa0f0)
+
+Conflicts:
+	qemu-img.c
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ qemu-img.c | 23 +++++++++++++++--------
+ 1 file changed, 15 insertions(+), 8 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-img.c | 23 +++++++++++++++--------
+ 1 file changed, 15 insertions(+), 8 deletions(-)
+
+diff --git a/qemu-img.c b/qemu-img.c
+index 705d18a..f461c07 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -809,7 +809,7 @@ static int img_convert(int argc, char **argv)
+     QEMUOptionParameter *param = NULL, *create_options = NULL;
+     QEMUOptionParameter *out_baseimg_param;
+     char *options = NULL;
+-    float local_progress;
++    float local_progress = 0;
+     int min_sparse = 8; /* Need at least 4k of zeros for sparse detection */
+ 
+     fmt = NULL;
+@@ -1021,8 +1021,10 @@ static int img_convert(int argc, char **argv)
+         sector_num = 0;
+ 
+         nb_sectors = total_sectors;
+-        local_progress = (float)100 /
+-            (nb_sectors / MIN(nb_sectors, cluster_sectors));
++        if (nb_sectors != 0) {
++            local_progress = (float)100 /
++                (nb_sectors / MIN(nb_sectors, cluster_sectors));
++        }
+ 
+         for(;;) {
+             int64_t bs_num;
+@@ -1093,8 +1095,10 @@ static int img_convert(int argc, char **argv)
+ 
+         sector_num = 0; // total number of sectors converted so far
+         nb_sectors = total_sectors - sector_num;
+-        local_progress = (float)100 /
+-            (nb_sectors / MIN(nb_sectors, IO_BUF_SIZE / 512));
++        if (nb_sectors != 0) {
++            local_progress = (float)100 /
++                (nb_sectors / MIN(nb_sectors, IO_BUF_SIZE / 512));
++        }
+ 
+         for(;;) {
+             nb_sectors = total_sectors - sector_num;
+@@ -1580,7 +1584,7 @@ static int img_rebase(int argc, char **argv)
+         int n;
+         uint8_t * buf_old;
+         uint8_t * buf_new;
+-        float local_progress;
++        float local_progress = 0;
+ 
+         buf_old = qemu_blockalign(bs, IO_BUF_SIZE);
+         buf_new = qemu_blockalign(bs, IO_BUF_SIZE);
+@@ -1589,8 +1593,11 @@ static int img_rebase(int argc, char **argv)
+         bdrv_get_geometry(bs_old_backing, &old_backing_num_sectors);
+         bdrv_get_geometry(bs_new_backing, &new_backing_num_sectors);
+ 
+-        local_progress = (float)100 /
+-            (num_sectors / MIN(num_sectors, IO_BUF_SIZE / 512));
++        if (num_sectors != 0) {
++            local_progress = (float)100 /
++                (num_sectors / MIN(num_sectors, IO_BUF_SIZE / 512));
++        }
++
+         for (sector = 0; sector < num_sectors; sector += n) {
+ 
+             /* How many sectors can we handle with the next read? */
+-- 
+1.7.11.7
+

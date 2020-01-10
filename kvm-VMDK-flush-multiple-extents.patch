@@ -1,0 +1,65 @@
+From 90b7d66719b0b6fc9dfa8384fe3b0ca1e4b68adb Mon Sep 17 00:00:00 2001
+Message-Id: <90b7d66719b0b6fc9dfa8384fe3b0ca1e4b68adb.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:24 +0200
+Subject: [PATCH 09/47] VMDK: flush multiple extents
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-10-git-send-email-famz@redhat.com>
+Patchwork-id: 51445
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 09/47] VMDK: flush multiple extents
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Fam Zheng <famcool@gmail.com>
+
+Flush all the file that referenced by the image.
+
+Signed-off-by: Fam Zheng <famcool@gmail.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 333c574d054f95912beef4f020f4128868463fd4)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+
+Conflicts:
+	block/vmdk.c
+---
+ block/vmdk.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 89afc01..7f6abc1 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -1100,7 +1100,17 @@ static void vmdk_close(BlockDriverState *bs)
+ 
+ static coroutine_fn int vmdk_co_flush(BlockDriverState *bs)
+ {
+-    return bdrv_co_flush(bs->file);
++    int i, err, ret;
++    BDRVVmdkState *s = bs->opaque;
++
++    ret = bdrv_co_flush(bs->file);
++    for (i = 0; i < s->num_extents; i++) {
++        err = bdrv_co_flush(s->extents[i].file);
++        if (err < 0) {
++            ret = err;
++        }
++    }
++    return ret;
+ }
+ 
+ 
+-- 
+1.7.11.7
+

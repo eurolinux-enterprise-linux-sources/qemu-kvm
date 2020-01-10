@@ -1,0 +1,56 @@
+From 4c19a1c754b958f823badd07e9af3f6dc555574e Mon Sep 17 00:00:00 2001
+Message-Id: <4c19a1c754b958f823badd07e9af3f6dc555574e.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:37:00 +0200
+Subject: [PATCH 45/47] vmdk: change magic number to macro
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-46-git-send-email-famz@redhat.com>
+Patchwork-id: 51481
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 45/47] vmdk: change magic number to macro
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+Two hard coded flag bits are changed to macros.
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 95b0aa4231dfc827ddc189138d6502cbca66d2b6)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index e380771..3e47faa 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -32,6 +32,7 @@
+ #define VMDK3_MAGIC (('C' << 24) | ('O' << 16) | ('W' << 8) | 'D')
+ #define VMDK4_MAGIC (('K' << 24) | ('D' << 16) | ('M' << 8) | 'V')
+ #define VMDK4_COMPRESSION_DEFLATE 1
++#define VMDK4_FLAG_NL_DETECT (1 << 0)
+ #define VMDK4_FLAG_RGD (1 << 1)
+ /* Zeroed-grain enable bit */
+ #define VMDK4_FLAG_ZERO_GRAIN   (1 << 2)
+@@ -1279,7 +1280,7 @@ static int vmdk_create_extent(const char *filename, int64_t filesize,
+     magic = cpu_to_be32(VMDK4_MAGIC);
+     memset(&header, 0, sizeof(header));
+     header.version = zeroed_grain ? 2 : 1;
+-    header.flags = 3
++    header.flags = VMDK4_FLAG_RGD | VMDK4_FLAG_NL_DETECT
+                    | (compress ? VMDK4_FLAG_COMPRESS | VMDK4_FLAG_MARKER : 0)
+                    | (zeroed_grain ? VMDK4_FLAG_ZERO_GRAIN : 0);
+     header.compressAlgorithm = compress ? VMDK4_COMPRESSION_DEFLATE : 0;
+-- 
+1.7.11.7
+

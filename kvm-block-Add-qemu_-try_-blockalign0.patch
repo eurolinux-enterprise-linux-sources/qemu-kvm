@@ -1,0 +1,94 @@
+From a4cbfb14f8ee3e7d3bb1dfc268cedca1d64d407f Mon Sep 17 00:00:00 2001
+Message-Id: <a4cbfb14f8ee3e7d3bb1dfc268cedca1d64d407f.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:22:03 -0500
+Subject: [CHANGE 20/42] block: Add qemu_{, try_}blockalign0()
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-21-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64483
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 20/39] block: Add qemu_{, try_}blockalign0()
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1129892
+
+These functions call their non-0-counterparts and then fill the
+allocated buffer with 0 (if the allocation has been successful).
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 9ebd84480583bb6d9a7666c079d99ff3266c423d)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	include/block/block.h
+	block_int.h
+
+Different files upstream and downstream.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block.c     | 16 ++++++++++++++++
+ block_int.h |  2 ++
+ 2 files changed, 18 insertions(+)
+
+diff --git a/block.c b/block.c
+index 1a77e3e..4aef5d0 100644
+--- a/block.c
++++ b/block.c
+@@ -4363,6 +4363,11 @@ void *qemu_blockalign(BlockDriverState *bs, size_t size)
+     return qemu_memalign((bs && bs->buffer_alignment) ? bs->buffer_alignment : 512, size);
+ }
+ 
++void *qemu_blockalign0(BlockDriverState *bs, size_t size)
++{
++    return memset(qemu_blockalign(bs, size), 0, size);
++}
++
+ void *qemu_try_blockalign(BlockDriverState *bs, size_t size)
+ {
+     size_t align = (bs && bs->buffer_alignment) ? bs->buffer_alignment : 512;
+@@ -4376,6 +4381,17 @@ void *qemu_try_blockalign(BlockDriverState *bs, size_t size)
+     return qemu_try_memalign(align, size);
+ }
+ 
++void *qemu_try_blockalign0(BlockDriverState *bs, size_t size)
++{
++    void *mem = qemu_try_blockalign(bs, size);
++
++    if (mem) {
++        memset(mem, 0, size);
++    }
++
++    return mem;
++}
++
+ /*
+  * Check if all memory in this vector is sector aligned.
+  */
+diff --git a/block_int.h b/block_int.h
+index 7587bb8..32dbdbf 100644
+--- a/block_int.h
++++ b/block_int.h
+@@ -309,7 +309,9 @@ struct BlockDriverState {
+ int get_tmp_filename(char *filename, int size);
+ 
+ void *qemu_blockalign(BlockDriverState *bs, size_t size);
++void *qemu_blockalign0(BlockDriverState *bs, size_t size);
+ void *qemu_try_blockalign(BlockDriverState *bs, size_t size);
++void *qemu_try_blockalign0(BlockDriverState *bs, size_t size);
+ void bdrv_set_io_limits(BlockDriverState *bs,
+                         ThrottleConfig *cfg);
+ 
+-- 
+2.1.0
+

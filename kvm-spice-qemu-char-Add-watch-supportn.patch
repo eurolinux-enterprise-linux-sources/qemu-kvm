@@ -1,0 +1,151 @@
+From 5115372cc9b120bbc83744aa7015bfcc38ab5768 Mon Sep 17 00:00:00 2001
+Message-Id: <5115372cc9b120bbc83744aa7015bfcc38ab5768.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:32 +0200
+Subject: [PATCH 58/65] spice-qemu-char: Add watch support
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <ecc24d4656ee884cb5d9c0c6aa893ee74879e551.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50836
+O-Subject: [RHEL6.5 qemu-kvm PATCH 58/65] spice-qemu-char: Add watch support
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Hans de Goede <hdegoede@redhat.com>
+
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit ae893e5e818878caf433d716d37be9df297403fe)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	spice-qemu-char.c
+---
+ spice-qemu-char.c | 64 ++++++++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 63 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ spice-qemu-char.c | 64 ++++++++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 63 insertions(+), 1 deletion(-)
+
+diff --git a/spice-qemu-char.c b/spice-qemu-char.c
+index ff79c98..658cd1c 100644
+--- a/spice-qemu-char.c
++++ b/spice-qemu-char.c
+@@ -12,11 +12,17 @@ typedef struct SpiceCharDriver {
+     SpiceCharDeviceInstance     sin;
+     char                  *subtype;
+     bool                  active;
++    bool                  blocked;
+     uint8_t               *buffer;
+     uint8_t               *datapos;
+     ssize_t               bufsize, datalen;
+ } SpiceCharDriver;
+ 
++typedef struct SpiceCharSource {
++    GSource               source;
++    SpiceCharDriver       *scd;
++} SpiceCharSource;
++
+ static int vmc_write(SpiceCharDeviceInstance *sin, const uint8_t *buf, int len)
+ {
+     SpiceCharDriver *scd = container_of(sin, SpiceCharDriver, sin);
+@@ -52,6 +58,10 @@ static int vmc_read(SpiceCharDeviceInstance *sin, uint8_t *buf, int len)
+             scd->datapos = 0;
+         }
+     }
++    if (scd->datalen == 0) {
++        scd->datapos = 0;
++        scd->blocked = false;
++    }
+     return bytes;
+ }
+ 
+@@ -113,10 +123,54 @@ static void vmc_unregister_interface(SpiceCharDriver *scd)
+     scd->active = false;
+ }
+ 
++static gboolean spice_char_source_prepare(GSource *source, gint *timeout)
++{
++    SpiceCharSource *src = (SpiceCharSource *)source;
++
++    *timeout = -1;
++
++    return !src->scd->blocked;
++}
++
++static gboolean spice_char_source_check(GSource *source)
++{
++    SpiceCharSource *src = (SpiceCharSource *)source;
++
++    return !src->scd->blocked;
++}
++
++static gboolean spice_char_source_dispatch(GSource *source,
++    GSourceFunc callback, gpointer user_data)
++{
++    GIOFunc func = (GIOFunc)callback;
++
++    return func(NULL, G_IO_OUT, user_data);
++}
++
++GSourceFuncs SpiceCharSourceFuncs = {
++    .prepare  = spice_char_source_prepare,
++    .check    = spice_char_source_check,
++    .dispatch = spice_char_source_dispatch,
++};
++
++static GSource *spice_chr_add_watch(CharDriverState *chr, GIOCondition cond)
++{
++    SpiceCharDriver *scd = chr->opaque;
++    SpiceCharSource *src;
++
++    assert(cond == G_IO_OUT);
++
++    src = (SpiceCharSource *)g_source_new(&SpiceCharSourceFuncs,
++                                          sizeof(SpiceCharSource));
++    src->scd = scd;
++
++    return (GSource *)src;
++}
+ 
+ static int spice_chr_write(CharDriverState *chr, const uint8_t *buf, int len)
+ {
+     SpiceCharDriver *s = chr->opaque;
++    int read_bytes;
+ 
+     vmc_register_interface(s);
+     assert(s->datalen == 0);
+@@ -128,7 +182,14 @@ static int spice_chr_write(CharDriverState *chr, const uint8_t *buf, int len)
+     s->datapos = s->buffer;
+     s->datalen = len;
+     spice_server_char_device_wakeup(&s->sin);
+-    return len;
++    read_bytes = len - s->datalen;
++    if (read_bytes != len) {
++        /* We'll get passed in the unconsumed data with the next call */
++        s->datalen = 0;
++        s->datapos = NULL;
++        s->blocked = true;
++    }
++    return read_bytes;
+ }
+ 
+ static void spice_chr_close(struct CharDriverState *chr)
+@@ -200,6 +261,7 @@ CharDriverState *qemu_chr_open_spice(QemuOpts *opts)
+     s->sin.subtype = subtype;
+     chr->opaque = s;
+     chr->chr_write = spice_chr_write;
++    chr->chr_add_watch = spice_chr_add_watch;
+     chr->chr_close = spice_chr_close;
+     chr->chr_guest_open = spice_chr_guest_open;
+     chr->chr_guest_close = spice_chr_guest_close;
+-- 
+1.7.11.7
+

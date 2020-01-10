@@ -1,0 +1,55 @@
+From 88308b36a05748324728b77a2861c9bd58439bd4 Mon Sep 17 00:00:00 2001
+Message-Id: <88308b36a05748324728b77a2861c9bd58439bd4.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:17 +0200
+Subject: [PATCH 02/47] block: Remove unused s->hd in various drivers
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-3-git-send-email-famz@redhat.com>
+Patchwork-id: 51438
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 02/47] block: Remove unused s->hd in various drivers
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+All drivers use bs->file instead of s->hd for quite a while now, so it's time
+to remove s->hd.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+(cherry picked from commit 80465c5016f23d8b39efb36db2ca77a35f67eaef)
+
+RHEL qemu-kvm's e6d323ad90eca5aef88b5ef506cd087c7f6978a7 didn't include
+vmdk.c so backport the upstream commit again
+(80465c5016f23d8b39efb36db2ca77a35f67eaef), but just the vmdk.c part.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 932a0d9..733e7d3 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -61,7 +61,6 @@ typedef struct {
+ #define L2_CACHE_SIZE 16
+ 
+ typedef struct BDRVVmdkState {
+-    BlockDriverState *hd;
+     int64_t l1_table_offset;
+     int64_t l1_backup_table_offset;
+     uint32_t *l1_table;
+-- 
+1.7.11.7
+

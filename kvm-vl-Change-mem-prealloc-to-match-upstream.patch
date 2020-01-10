@@ -1,0 +1,99 @@
+From 68bf0ffa91902a501fd66a32b2ff91934ffd1eb8 Mon Sep 17 00:00:00 2001
+From: Markus Armbruster <armbru@redhat.com>
+Date: Tue, 26 Aug 2014 17:57:33 -0500
+Subject: [CHANGE 3/3] vl: Change -mem-prealloc to match upstream
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1409075853-9478-2-git-send-email-armbru@redhat.com>
+Patchwork-id: 60711
+O-Subject: [PATCH 6.6 qemu-kvm 1/1] vl: Change -mem-prealloc to match upstream
+Bugzilla: 1006027
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Eduardo Habkost <ehabkost@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Andrea Arcangeli <aarcange@redhat.com>
+
+-mem-prealloc originated in RHEL-6
+
+commit 2f26d02b783a2fcada25ba7b87a8b67884e98df8
+Author: john cooper <john.cooper@redhat.com>
+Date:   Tue Jan 27 18:43:03 2009 -0200
+
+    Preallocate -mem-path memory by default
+
+    Attached is a patch to qemu which adds an option to preallocate of huge
+    pages at startup time, making it the default.
+
+    The motivation for this arose from odd behavior seen in qemu when access
+    to huge page backed phys_mem failed during startup (eg: loading the
+    bios), and during runtime where a guest will terminate via signal if a
+    free hpage isn't available to satisfy a guest page fault.
+
+    This is believed to be an interim solution until proper huge page
+    support is available from within the kernel+kvm, ideally allowing
+    fallback to 4K pages on a dynamic basis and ultimately allowing huge
+    pages faults to reclaim huge pages from other users in the system.
+
+    Signed-off-by: john cooper <john.cooper@redhat.com>
+    Signed-off-by: Marcelo Tosatti <mtosatti@redhat.com>
+
+Initializes mem_prealloc = 1.  -mem-prealloc *toggles* it.
+
+The option got pushed to upstream about a year later:
+
+commit c902760fb25f9c490af01e8f6bccaa8dd71cc224
+Author: Marcelo Tosatti <mtosatti@redhat.com>
+Date:   Mon Mar 1 20:25:08 2010 -0300
+
+    Add option to use file backed guest memory
+
+    Port qemu-kvm's -mem-path and -mem-prealloc options. These are useful
+    for backing guest memory with huge pages via hugetlbfs.
+
+    Signed-off-by: Marcelo Tosatti <mtosatti@redhat.com>
+    CC: john cooper <john.cooper@redhat.com>
+
+Here, however, mem_prealloc = 0, and -mem-prealloc *sets* it.
+
+Libvirt is blissfully unaware of the difference.  Switch to upstream's
+default and -mem-prealloc behavior.
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+---
+ vl.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ vl.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/vl.c b/vl.c
+index c7d97aa..a0fb1cb 100644
+--- a/vl.c
++++ b/vl.c
+@@ -254,7 +254,7 @@ unsigned int kvm_shadow_memory = 0;
+ const char *mem_path = NULL;
+ int disable_KSM;
+ #ifdef MAP_POPULATE
+-int mem_prealloc = 1;	/* force preallocation of physical target memory */
++int mem_prealloc = 0; /* force preallocation of physical target memory */
+ #endif
+ #ifdef TARGET_ARM
+ int old_param = 0;
+@@ -6027,8 +6027,8 @@ int main(int argc, char **argv, char **envp)
+                 break;
+ #ifdef MAP_POPULATE
+             case QEMU_OPTION_mem_prealloc:
+-		mem_prealloc = !mem_prealloc;
+-		break;
++                mem_prealloc = 1;
++                break;
+ #endif
+             case QEMU_OPTION_name:
+                 qemu_name = qemu_strdup(optarg);
+-- 
+1.9.3
+

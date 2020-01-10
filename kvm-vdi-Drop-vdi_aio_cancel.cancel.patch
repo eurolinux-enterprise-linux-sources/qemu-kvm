@@ -1,0 +1,63 @@
+From 127598b5e2453cd9a2f87f280e04ac7a2da87c11 Mon Sep 17 00:00:00 2001
+Message-Id: <127598b5e2453cd9a2f87f280e04ac7a2da87c11.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:36 -0500
+Subject: [CHANGE 16/29] vdi: Drop vdi_aio_cancel.cancel
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-17-git-send-email-famz@redhat.com>
+Patchwork-id: 64917
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 16/28] vdi: Drop vdi_aio_cancel.cancel
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Downstream only.
+
+VDI in upstream was converted to coroutines before the conversion of
+async cancel. Let's just remove the cancel code and let the block layer
+handle it.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vdi.c | 12 ------------
+ 1 file changed, 12 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/vdi.c | 12 ------------
+ 1 file changed, 12 deletions(-)
+
+diff --git a/block/vdi.c b/block/vdi.c
+index 6e7524a..a42c568 100644
+--- a/block/vdi.c
++++ b/block/vdi.c
+@@ -494,20 +494,8 @@ static int64_t coroutine_fn vdi_co_get_block_status(BlockDriverState *bs,
+     return BDRV_BLOCK_DATA | BDRV_BLOCK_OFFSET_VALID | offset;
+ }
+ 
+-static void vdi_aio_cancel(BlockDriverAIOCB *blockacb)
+-{
+-    /* TODO: This code is untested. How can I get it executed? */
+-    VdiAIOCB *acb = container_of(blockacb, VdiAIOCB, common);
+-    logout("\n");
+-    if (acb->hd_aiocb) {
+-        bdrv_aio_cancel(acb->hd_aiocb);
+-    }
+-    qemu_aio_release(acb);
+-}
+-
+ static AIOCBInfo vdi_aiocb_info = {
+     .aiocb_size = sizeof(VdiAIOCB),
+-    .cancel = vdi_aio_cancel,
+ };
+ 
+ static VdiAIOCB *vdi_aio_setup(BlockDriverState *bs, int64_t sector_num,
+-- 
+2.1.0
+

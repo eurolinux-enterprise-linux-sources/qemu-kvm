@@ -1,0 +1,82 @@
+From 518c66881bffc16f1468a6e3cd7849f1bdffa8bc Mon Sep 17 00:00:00 2001
+Message-Id: <518c66881bffc16f1468a6e3cd7849f1bdffa8bc.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:28:15 +0200
+Subject: [PATCH 110/114] qga: add windows implementation for guest-get-time
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-53-git-send-email-lersek@redhat.com>
+Patchwork-id: 51151
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 52/56] qga: add windows implementation for guest-get-time
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Lei Li <lilei@linux.vnet.ibm.com>
+
+Signed-off-by: Lei Li <lilei@linux.vnet.ibm.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit 3f2a6087de291dc96a2c4975139da27649cf32ff)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qga/commands-win32.c |   27 +++++++++++++++++++++++++--
+ 1 files changed, 25 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/commands-win32.c | 27 +++++++++++++++++++++++++--
+ 1 file changed, 25 insertions(+), 2 deletions(-)
+
+diff --git a/qga/commands-win32.c b/qga/commands-win32.c
+index da3eb2a..92dd7ab 100644
+--- a/qga/commands-win32.c
++++ b/qga/commands-win32.c
+@@ -22,6 +22,12 @@
+ #define SHTDN_REASON_FLAG_PLANNED 0x80000000
+ #endif
+ 
++/* multiple of 100 nanoseconds elapsed between windows baseline
++ *    (1/1/1601) and Unix Epoch (1/1/1970), accounting for leap years */
++#define W32_FT_OFFSET (10000000ULL * 60 * 60 * 24 * \
++                       (365 * (1970 - 1601) +       \
++                        (1970 - 1601) / 4 - 3))
++
+ static void acquire_privilege(const char *name, Error **err)
+ {
+     HANDLE token;
+@@ -280,8 +286,25 @@ GuestNetworkInterfaceList *qmp_guest_network_get_interfaces(Error **err)
+ 
+ int64_t qmp_guest_get_time(Error **errp)
+ {
+-    error_set(errp, QERR_UNSUPPORTED);
+-    return -1;
++    SYSTEMTIME ts = {0};
++    int64_t time_ns;
++    FILETIME tf;
++
++    GetSystemTime(&ts);
++    if (ts.wYear < 1601 || ts.wYear > 30827) {
++        error_setg(errp, "Failed to get time");
++        return -1;
++    }
++
++    if (!SystemTimeToFileTime(&ts, &tf)) {
++        error_setg(errp, "Failed to convert system time: %d", (int)GetLastError());
++        return -1;
++    }
++
++    time_ns = ((((int64_t)tf.dwHighDateTime << 32) | tf.dwLowDateTime)
++                - W32_FT_OFFSET) * 100;
++
++    return time_ns;
+ }
+ 
+ void qmp_guest_set_time(int64_t time_ns, Error **errp)
+-- 
+1.7.11.7
+

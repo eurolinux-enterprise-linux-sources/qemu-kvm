@@ -1,0 +1,45 @@
+From 2dd0fd4f2ac13c989f343c4c107884551bea448f Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Tue, 25 Mar 2014 11:45:48 +0100
+Subject: [PATCH 30/48] bochs: Fix bitmap offset calculation
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1395744364-16049-30-git-send-email-kwolf@redhat.com>
+Patchwork-id: n/a
+O-Subject: [EMBARGOED RHEL-6.6/6.5.z qemu-kvm PATCH v2 29/45]
+           bochs: Fix bitmap offset calculation
+Bugzilla: 1079518
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1079518
+Upstream status: Series embargoed
+
+32 bit truncation could let us access the wrong offset in the image.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
+---
+ block/bochs.c |    5 +++--
+ 1 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/block/bochs.c b/block/bochs.c
+index 933dffe..610fa5d 100644
+--- a/block/bochs.c
++++ b/block/bochs.c
+@@ -184,8 +184,9 @@ static int64_t seek_to_sector(BlockDriverState *bs, int64_t sector_num)
+ 	return -1; /* not allocated */
+     }
+ 
+-    bitmap_offset = s->data_offset + (512 * s->catalog_bitmap[extent_index] *
+-	(s->extent_blocks + s->bitmap_blocks));
++    bitmap_offset = s->data_offset +
++        (512 * (uint64_t) s->catalog_bitmap[extent_index] *
++        (s->extent_blocks + s->bitmap_blocks));
+ 
+     /* read in bitmap for current extent */
+     if (bdrv_pread(bs->file, bitmap_offset + (extent_offset / 8),
+-- 
+1.7.1
+

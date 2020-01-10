@@ -1,0 +1,77 @@
+From 215c04a8b70de8285ea9945e309998be6894a4b4 Mon Sep 17 00:00:00 2001
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 21 Jun 2013 06:20:01 +0200
+Subject: [PATCH 05/21] block: disable I/O throttling on sync api
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1371795611-7208-6-git-send-email-famz@redhat.com>
+Patchwork-id: 52079
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 05/15] block: disable I/O throttling on sync api
+Bugzilla: 956825
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Zhi Yong Wu <wuzhy@linux.vnet.ibm.com>
+
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Zhi Yong Wu <wuzhy@linux.vnet.ibm.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 498e386c58497f621a37301ea6e8ca886f9f2e07)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block.c | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block.c |   20 ++++++++++++++++++++
+ 1 files changed, 20 insertions(+), 0 deletions(-)
+
+diff --git a/block.c b/block.c
+index c6da89c..4604aba 100644
+--- a/block.c
++++ b/block.c
+@@ -1841,6 +1841,17 @@ static int bdrv_rw_co(BlockDriverState *bs, int64_t sector_num, uint8_t *buf,
+ 
+     qemu_iovec_init_external(&qiov, &iov, 1);
+ 
++    /**
++     * In sync call context, when the vcpu is blocked, this throttling timer
++     * will not fire; so the I/O throttling function has to be disabled here
++     * if it has been enabled.
++     */
++    if (bs->io_limits_enabled) {
++        fprintf(stderr, "Disabling I/O throttling on '%s' due "
++                        "to synchronous I/O.\n", bdrv_get_device_name(bs));
++        bdrv_io_limits_disable(bs);
++    }
++
+     if (qemu_in_coroutine()) {
+         /* Fast-path if already in coroutine context */
+         bdrv_rw_co_entry(&rwco);
+@@ -2319,10 +2330,19 @@ static int guess_disk_lchs(BlockDriverState *bs,
+     struct partition *p;
+     uint32_t nr_sects;
+     uint64_t nb_sectors;
++    bool enabled;
+ 
+     bdrv_get_geometry(bs, &nb_sectors);
+ 
++    /**
++     * The function will be invoked during startup not only in sync I/O mode,
++     * but also in async I/O mode. So the I/O throttling function has to
++     * be disabled temporarily here, not permanently.
++     */
++    enabled = bs->io_limits_enabled;
++    bs->io_limits_enabled = false;
+     ret = bdrv_read(bs, 0, buf, 1);
++    bs->io_limits_enabled = enabled;
+     if (ret < 0)
+         return -1;
+     /* test msdos magic */
+-- 
+1.7.1
+

@@ -1,0 +1,52 @@
+From 27d06ca9925222b21f31eaa025970245ceff5b9f Mon Sep 17 00:00:00 2001
+Message-Id: <27d06ca9925222b21f31eaa025970245ceff5b9f.1374754301.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:18 +0200
+Subject: [PATCH 07/65] qapi: generate C types for fixed-width integers
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-8-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52110
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 07/65] qapi: generate C types for fixed-width integers
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Laszlo Ersek <lersek@redhat.com>
+
+(Long line folded using parens:
+<http://www.python.org/dev/peps/pep-0008/#maximum-line-length>.)
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+(cherry picked from commit c46f18ce2b6dae531d72f61cf8441110c7936e70)
+---
+ scripts/qapi.py |    4 ++++
+ 1 file changed, 4 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ scripts/qapi.py | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/scripts/qapi.py b/scripts/qapi.py
+index 26c8826..b397ec9 100644
+--- a/scripts/qapi.py
++++ b/scripts/qapi.py
+@@ -177,6 +177,10 @@ def c_type(name):
+         return 'char *'
+     elif name == 'int':
+         return 'int64_t'
++    elif (name == 'int8' or name == 'int16' or name == 'int32' or
++          name == 'int64' or name == 'uint8' or name == 'uint16' or
++          name == 'uint32' or name == 'uint64'):
++        return name + '_t'
+     elif name == 'bool':
+         return 'bool'
+     elif name == 'number':
+-- 
+1.7.11.7
+

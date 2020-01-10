@@ -1,0 +1,191 @@
+From 85961806602e6d185cde1859d5c80918b9f391c8 Mon Sep 17 00:00:00 2001
+Message-Id: <85961806602e6d185cde1859d5c80918b9f391c8.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:27:24 +0200
+Subject: [PATCH 059/114] qga: convert qemu_mallocz() to g_malloc0() and
+ qemu_free() to g_free()
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-2-git-send-email-lersek@redhat.com>
+Patchwork-id: 51099
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 01/56] qga: convert qemu_mallocz() to g_malloc0() and qemu_free() to g_free()
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+No more hits from
+
+  grep -r -E '\<qemu_(malloc|realloc|mallocz|strdup|strndup|free)\>' \
+      qemu-ga.c qga/
+
+RHEL-6 only commit.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ v2: patch new in v2
+
+ qga/commands-posix.c            |   30 +++++++++++++++---------------
+ qga/commands.c                  |    2 +-
+ qga/guest-agent-command-state.c |    4 ++--
+ 3 files changed, 18 insertions(+), 18 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/commands-posix.c            | 30 +++++++++++++++---------------
+ qga/commands.c                  |  2 +-
+ qga/guest-agent-command-state.c |  4 ++--
+ 3 files changed, 18 insertions(+), 18 deletions(-)
+
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index 490856e..1e1bffa 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -103,7 +103,7 @@ static void guest_file_handle_add(FILE *fh)
+ {
+     GuestFileHandle *gfh;
+ 
+-    gfh = qemu_mallocz(sizeof(GuestFileHandle));
++    gfh = g_malloc0(sizeof(GuestFileHandle));
+     gfh->id = fileno(fh);
+     gfh->fh = fh;
+     QTAILQ_INSERT_TAIL(&guest_file_state.filehandles, gfh, next);
+@@ -174,7 +174,7 @@ void qmp_guest_file_close(int64_t handle, Error **err)
+     }
+ 
+     QTAILQ_REMOVE(&guest_file_state.filehandles, gfh, next);
+-    qemu_free(gfh);
++    g_free(gfh);
+ }
+ 
+ struct GuestFileRead *qmp_guest_file_read(int64_t handle, bool has_count,
+@@ -199,21 +199,21 @@ struct GuestFileRead *qmp_guest_file_read(int64_t handle, bool has_count,
+     }
+ 
+     fh = gfh->fh;
+-    buf = qemu_mallocz(count+1);
++    buf = g_malloc0(count+1);
+     read_count = fread(buf, 1, count, fh);
+     if (ferror(fh)) {
+         slog("guest-file-read failed, handle: %ld", handle);
+         error_set(err, QERR_QGA_COMMAND_FAILED, "fread() failed");
+     } else {
+         buf[read_count] = 0;
+-        read_data = qemu_mallocz(sizeof(GuestFileRead));
++        read_data = g_malloc0(sizeof(GuestFileRead));
+         read_data->count = read_count;
+         read_data->eof = feof(fh);
+         if (read_count) {
+             read_data->buf_b64 = g_base64_encode(buf, read_count);
+         }
+     }
+-    qemu_free(buf);
++    g_free(buf);
+     clearerr(fh);
+ 
+     return read_data;
+@@ -240,7 +240,7 @@ GuestFileWrite *qmp_guest_file_write(int64_t handle, const char *buf_b64,
+     if (!has_count) {
+         count = buf_len;
+     } else if (count < 0 || count > buf_len) {
+-        qemu_free(buf);
++        g_free(buf);
+         error_set(err, QERR_INVALID_PARAMETER, "count");
+         return NULL;
+     }
+@@ -250,11 +250,11 @@ GuestFileWrite *qmp_guest_file_write(int64_t handle, const char *buf_b64,
+         slog("guest-file-write failed, handle: %ld", handle);
+         error_set(err, QERR_QGA_COMMAND_FAILED, "fwrite() error");
+     } else {
+-        write_data = qemu_mallocz(sizeof(GuestFileWrite));
++        write_data = g_malloc0(sizeof(GuestFileWrite));
+         write_data->count = write_count;
+         write_data->eof = feof(fh);
+     }
+-    qemu_free(buf);
++    g_free(buf);
+     clearerr(fh);
+ 
+     return write_data;
+@@ -278,7 +278,7 @@ struct GuestFileSeek *qmp_guest_file_seek(int64_t handle, int64_t offset,
+     if (ret == -1) {
+         error_set(err, QERR_QGA_COMMAND_FAILED, strerror(errno));
+     } else {
+-        seek_data = qemu_mallocz(sizeof(GuestFileRead));
++        seek_data = g_malloc0(sizeof(GuestFileRead));
+         seek_data->position = ftell(fh);
+         seek_data->eof = feof(fh);
+     }
+@@ -741,8 +741,8 @@ GuestNetworkInterfaceList *qmp_guest_network_get_interfaces(Error **errp)
+         info = guest_find_interface(head, ifa->ifa_name);
+ 
+         if (!info) {
+-            info = qemu_mallocz(sizeof(*info));
+-            info->value = qemu_mallocz(sizeof(*info->value));
++            info = g_malloc0(sizeof(*info));
++            info->value = g_malloc0(sizeof(*info->value));
+             info->value->name = g_strdup(ifa->ifa_name);
+ 
+             if (!cur_item) {
+@@ -795,8 +795,8 @@ GuestNetworkInterfaceList *qmp_guest_network_get_interfaces(Error **errp)
+         if (ifa->ifa_addr &&
+             ifa->ifa_addr->sa_family == AF_INET) {
+             /* interface with IPv4 address */
+-            address_item = qemu_mallocz(sizeof(*address_item));
+-            address_item->value = qemu_mallocz(sizeof(*address_item->value));
++            address_item = g_malloc0(sizeof(*address_item));
++            address_item->value = g_malloc0(sizeof(*address_item->value));
+             p = &((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
+             if (!inet_ntop(AF_INET, p, addr4, sizeof(addr4))) {
+                 snprintf(err_msg, sizeof(err_msg),
+@@ -817,8 +817,8 @@ GuestNetworkInterfaceList *qmp_guest_network_get_interfaces(Error **errp)
+         } else if (ifa->ifa_addr &&
+                    ifa->ifa_addr->sa_family == AF_INET6) {
+             /* interface with IPv6 address */
+-            address_item = qemu_mallocz(sizeof(*address_item));
+-            address_item->value = qemu_mallocz(sizeof(*address_item->value));
++            address_item = g_malloc0(sizeof(*address_item));
++            address_item->value = g_malloc0(sizeof(*address_item->value));
+             p = &((struct sockaddr_in6 *)ifa->ifa_addr)->sin6_addr;
+             if (!inet_ntop(AF_INET6, p, addr6, sizeof(addr6))) {
+                 snprintf(err_msg, sizeof(err_msg),
+diff --git a/qga/commands.c b/qga/commands.c
+index 23d188f..5bcceaa 100644
+--- a/qga/commands.c
++++ b/qga/commands.c
+@@ -47,7 +47,7 @@ void qmp_guest_ping(Error **err)
+ 
+ struct GuestAgentInfo *qmp_guest_info(Error **err)
+ {
+-    GuestAgentInfo *info = qemu_mallocz(sizeof(GuestAgentInfo));
++    GuestAgentInfo *info = g_malloc0(sizeof(GuestAgentInfo));
+     GuestAgentCommandInfo *cmd_info;
+     GuestAgentCommandInfoList *cmd_info_list;
+     char **cmd_list_head, **cmd_list;
+diff --git a/qga/guest-agent-command-state.c b/qga/guest-agent-command-state.c
+index bc6e0bd..969da23 100644
+--- a/qga/guest-agent-command-state.c
++++ b/qga/guest-agent-command-state.c
+@@ -27,7 +27,7 @@ void ga_command_state_add(GACommandState *cs,
+                           void (*init)(void),
+                           void (*cleanup)(void))
+ {
+-    GACommandGroup *cg = qemu_mallocz(sizeof(GACommandGroup));
++    GACommandGroup *cg = g_malloc0(sizeof(GACommandGroup));
+     cg->init = init;
+     cg->cleanup = cleanup;
+     cs->groups = g_slist_append(cs->groups, cg);
+@@ -67,7 +67,7 @@ void ga_command_state_cleanup_all(GACommandState *cs)
+ 
+ GACommandState *ga_command_state_new(void)
+ {
+-    GACommandState *cs = qemu_mallocz(sizeof(GACommandState));
++    GACommandState *cs = g_malloc0(sizeof(GACommandState));
+     cs->groups = NULL;
+     return cs;
+ }
+-- 
+1.7.11.7
+

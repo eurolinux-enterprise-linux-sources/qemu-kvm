@@ -1,0 +1,114 @@
+From c6477fa9875b6773ffab3b6514686400ac823b97 Mon Sep 17 00:00:00 2001
+Message-Id: <c6477fa9875b6773ffab3b6514686400ac823b97.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:59 +0200
+Subject: [PATCH 44/47] vmdk: Add option to create zeroed-grain image
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-45-git-send-email-famz@redhat.com>
+Patchwork-id: 51480
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 44/47] vmdk: Add option to create zeroed-grain image
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+Add image create option "zeroed-grain" to enable zeroed-grain GTE
+feature of vmdk sparse extents. When this option is on, header version
+of newly created extent will be 2 and VMDK4_FLAG_ZERO_GRAIN flag bit
+will be set.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 69e0b6dfa455924842bfcbfa810fde34899f1350)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 22 +++++++++++++++++-----
+ 1 file changed, 17 insertions(+), 5 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 22 +++++++++++++++++-----
+ 1 file changed, 17 insertions(+), 5 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 3b2e9e0..e380771 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -48,6 +48,8 @@
+ #define VMDK_UNALLOC (-2)
+ #define VMDK_ZEROED  (-3)
+ 
++#define BLOCK_OPT_ZEROED_GRAIN "zeroed_grain"
++
+ typedef struct {
+     uint32_t version;
+     uint32_t flags;
+@@ -1253,7 +1255,7 @@ static coroutine_fn int vmdk_co_write(BlockDriverState *bs, int64_t sector_num,
+ 
+ 
+ static int vmdk_create_extent(const char *filename, int64_t filesize,
+-                              bool flat, bool compress)
++                              bool flat, bool compress, bool zeroed_grain)
+ {
+     int ret, i;
+     int fd = 0;
+@@ -1276,9 +1278,10 @@ static int vmdk_create_extent(const char *filename, int64_t filesize,
+     }
+     magic = cpu_to_be32(VMDK4_MAGIC);
+     memset(&header, 0, sizeof(header));
+-    header.version = 1;
+-    header.flags =
+-        3 | (compress ? VMDK4_FLAG_COMPRESS | VMDK4_FLAG_MARKER : 0);
++    header.version = zeroed_grain ? 2 : 1;
++    header.flags = 3
++                   | (compress ? VMDK4_FLAG_COMPRESS | VMDK4_FLAG_MARKER : 0)
++                   | (zeroed_grain ? VMDK4_FLAG_ZERO_GRAIN : 0);
+     header.compressAlgorithm = compress ? VMDK4_COMPRESSION_DEFLATE : 0;
+     header.capacity = filesize / 512;
+     header.granularity = 128;
+@@ -1459,6 +1462,7 @@ static int vmdk_create(const char *filename, QEMUOptionParameter *options)
+     char parent_desc_line[BUF_SIZE] = "";
+     uint32_t parent_cid = 0xffffffff;
+     uint32_t number_heads = 16;
++    bool zeroed_grain = false;
+     const char desc_template[] =
+         "# Disk DescriptorFile\n"
+         "version=1\n"
+@@ -1494,6 +1498,8 @@ static int vmdk_create(const char *filename, QEMUOptionParameter *options)
+             flags |= options->value.n ? BLOCK_FLAG_COMPAT6 : 0;
+         } else if (!strcmp(options->name, BLOCK_OPT_SUBFMT)) {
+             fmt = options->value.s;
++        } else if (!strcmp(options->name, BLOCK_OPT_ZEROED_GRAIN)) {
++            zeroed_grain |= options->value.n;
+         }
+         options++;
+     }
+@@ -1580,7 +1586,8 @@ static int vmdk_create(const char *filename, QEMUOptionParameter *options)
+         snprintf(ext_filename, sizeof(ext_filename), "%s%s",
+                 path, desc_filename);
+ 
+-        if (vmdk_create_extent(ext_filename, size, flat, compress)) {
++        if (vmdk_create_extent(ext_filename, size,
++                               flat, compress, zeroed_grain)) {
+             return -EINVAL;
+         }
+         filesize -= size;
+@@ -1703,6 +1710,11 @@ static QEMUOptionParameter vmdk_create_options[] = {
+             "VMDK flat extent format, can be one of "
+             "{monolithicSparse (default) | monolithicFlat | twoGbMaxExtentSparse | twoGbMaxExtentFlat | streamOptimized} "
+     },
++    {
++        .name = BLOCK_OPT_ZEROED_GRAIN,
++        .type = OPT_FLAG,
++        .help = "Enable efficient zero writes using the zeroed-grain GTE feature"
++    },
+     { NULL }
+ };
+ 
+-- 
+1.7.11.7
+

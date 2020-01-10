@@ -1,0 +1,144 @@
+From 1e81dba7a7429775f8d82480acfe9e8b191e3b98 Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Sat, 22 Mar 2014 03:31:07 +0100
+Subject: [PATCH 16/30] dump: add APIs to operate DataCache
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1395459071-19118-16-git-send-email-lersek@redhat.com>
+Patchwork-id: 58226
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 15/19] dump: add APIs to operate DataCache
+Bugzilla: 1035162
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: qiaonuohan <qiaonuohan@cn.fujitsu.com>
+
+DataCache is used to store data temporarily, then the data will be written to
+vmcore. These functions will be called later when writing data of page to
+vmcore.
+
+Signed-off-by: Qiao Nuohan <qiaonuohan@cn.fujitsu.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 64cfba6a47411092c941c8d17256fb5673cc8cbf)
+
+Conflicts:
+	dump.h
+
+RHEL-6 note: DataCache.offset is of type "off_t"; I'm including <sys/types.h>
+in dump.h as a downstream mesure against
+
+In file included from cpu-all.h:25,
+                 from target-i386/cpu.h:1003,
+                 from target-i386/exec.h:66,
+                 from cpu-exec.c:20:
+dump.h:151: error: expected specifier-qualifier-list before 'off_t'
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ dump.h | 11 +++++++++++
+ dump.c | 47 +++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 58 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ dump.c |   47 +++++++++++++++++++++++++++++++++++++++++++++++
+ dump.h |   11 +++++++++++
+ 2 files changed, 58 insertions(+), 0 deletions(-)
+
+diff --git a/dump.c b/dump.c
+index f168264..ce7b430 100644
+--- a/dump.c
++++ b/dump.c
+@@ -1165,6 +1165,53 @@ out:
+     return ret;
+ }
+ 
++static void prepare_data_cache(DataCache *data_cache, DumpState *s,
++                               off_t offset)
++{
++    data_cache->fd = s->fd;
++    data_cache->data_size = 0;
++    data_cache->buf_size = BUFSIZE_DATA_CACHE;
++    data_cache->buf = g_malloc0(BUFSIZE_DATA_CACHE);
++    data_cache->offset = offset;
++}
++
++static int write_cache(DataCache *dc, const void *buf, size_t size,
++                       bool flag_sync)
++{
++    /*
++     * dc->buf_size should not be less than size, otherwise dc will never be
++     * enough
++     */
++    assert(size <= dc->buf_size);
++
++    /*
++     * if flag_sync is set, synchronize data in dc->buf into vmcore.
++     * otherwise check if the space is enough for caching data in buf, if not,
++     * write the data in dc->buf to dc->fd and reset dc->buf
++     */
++    if ((!flag_sync && dc->data_size + size > dc->buf_size) ||
++        (flag_sync && dc->data_size > 0)) {
++        if (write_buffer(dc->fd, dc->offset, dc->buf, dc->data_size) < 0) {
++            return -1;
++        }
++
++        dc->offset += dc->data_size;
++        dc->data_size = 0;
++    }
++
++    if (!flag_sync) {
++        memcpy(dc->buf + dc->data_size, buf, size);
++        dc->data_size += size;
++    }
++
++    return 0;
++}
++
++static void free_data_cache(DataCache *data_cache)
++{
++    g_free(data_cache->buf);
++}
++
+ static ram_addr_t get_start_block(DumpState *s)
+ {
+     GuestPhysBlock *block;
+diff --git a/dump.h b/dump.h
+index cbba74a..05d8000 100644
+--- a/dump.h
++++ b/dump.h
+@@ -14,6 +14,8 @@
+ #ifndef DUMP_H
+ #define DUMP_H
+ 
++#include <sys/types.h>
++
+ #define MAKEDUMPFILE_SIGNATURE      "makedumpfile"
+ #define MAX_SIZE_MDF_HEADER         (4096) /* max size of makedumpfile_header */
+ #define TYPE_FLAT_HEADER            (1)    /* type of flattened format */
+@@ -41,6 +43,7 @@
+ #define DISKDUMP_HEADER_BLOCKS      (1)
+ #define BUFSIZE_BITMAP              (TARGET_PAGE_SIZE)
+ #define PFN_BUFBITMAP               (CHAR_BIT * BUFSIZE_BITMAP)
++#define BUFSIZE_DATA_CACHE          (TARGET_PAGE_SIZE * 4)
+ 
+ typedef struct ArchDumpInfo {
+     int d_machine;  /* Architecture */
+@@ -142,4 +145,12 @@ typedef struct QEMU_PACKED KdumpSubHeader64 {
+     uint64_t max_mapnr_64;          /* header_version 6 and later */
+ } KdumpSubHeader64;
+ 
++typedef struct DataCache {
++    int fd;             /* fd of the file where to write the cached data */
++    uint8_t *buf;       /* buffer for cached data */
++    size_t buf_size;    /* size of the buf */
++    size_t data_size;   /* size of cached data in buf */
++    off_t offset;       /* offset of the file */
++} DataCache;
++
+ #endif
+-- 
+1.7.1
+

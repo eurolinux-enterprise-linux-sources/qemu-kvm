@@ -1,0 +1,112 @@
+From 2374626a73d2521ef2ba7930fff61635c456e54b Mon Sep 17 00:00:00 2001
+Message-Id: <2374626a73d2521ef2ba7930fff61635c456e54b.1376317668.git.minovotn@redhat.com>
+In-Reply-To: <5877c7fdc54ad8b9608982a08ce5015eb646708a.1376317668.git.minovotn@redhat.com>
+References: <5877c7fdc54ad8b9608982a08ce5015eb646708a.1376317668.git.minovotn@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Fri, 9 Aug 2013 12:44:00 +0200
+Subject: [PATCH 3/4] blockdev: reset werror/rerror on drive_del
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1376052240-2616-1-git-send-email-stefanha@redhat.com>
+Patchwork-id: 53133
+O-Subject: [PATCH RHEL6.5 qemu-kvm] blockdev: reset werror/rerror on drive_del
+Bugzilla: 970159
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+BZ: 970159
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=6150182
+Upstream-status: 293c51a6ee369228633a8428ab689f14c045ff98
+
+Paolo Bonzini <pbonzini@redhat.com> suggested the following test case:
+
+1. Launch a guest and wait at the GRUB boot menu:
+
+  qemu-system-x86_64 -enable-kvm -m 1024 \
+   -drive if=none,cache=none,file=test.img,id=foo,werror=stop,rerror=stop
+   -device virtio-blk-pci,drive=foo,id=virtio0,addr=4
+
+2. Hot unplug the device:
+
+  (qemu) drive_del foo
+
+3. Select the first boot menu entry
+
+Without this patch the guest pauses due to ENOMEDIUM.  The guest is
+stuck in a continuous pause loop since the I/O request is retried and
+fails immediately again when the guest is resumed.
+
+With this patch the error is reported to the guest.
+
+Note that this scenario actually happens sometimes during libvirt disk
+hot unplug, where device_del is followed by drive_del.  I/O may still be
+submitted to the drive after drive_del if the guest does not process the
+PCI hot unplug notification.
+
+Reported-by: Dafna Ron <dron@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Reviewed-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 293c51a6ee369228633a8428ab689f14c045ff98)
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Conflicts:
+  blockdev.c
+  Upstream commit 92aa5c6d77ac29574c1717bcf57827fa1e586f31 ("iostatus:
+  move BlockdevOnError declaration to QAPI") moved the block error
+  constants to QAPI and changed their names.  We need to use the old
+  names in RHEL.
+
+  hmp-commands.hx
+  In RHEL we still use qemu-monitor.hx instead of hmp-commands.hx.
+---
+ blockdev.c      | 3 +++
+ qemu-monitor.hx | 4 ++++
+ 2 files changed, 7 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ blockdev.c      | 3 +++
+ qemu-monitor.hx | 4 ++++
+ 2 files changed, 7 insertions(+)
+
+diff --git a/blockdev.c b/blockdev.c
+index 1c8d48c..48e16d9 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -1317,6 +1317,9 @@ int do_drive_del(Monitor *mon, const QDict *qdict, QObject **ret_data)
+      */
+     if (bdrv_get_attached_dev(bs)) {
+         bdrv_make_anon(bs);
++
++        /* Further I/O must not pause the guest */
++        bdrv_set_on_error(bs, BLOCK_ERR_REPORT, BLOCK_ERR_REPORT);
+     } else {
+         drive_uninit(drive_get_by_blockdev(bs));
+     }
+diff --git a/qemu-monitor.hx b/qemu-monitor.hx
+index 8e974b1..a47766d 100644
+--- a/qemu-monitor.hx
++++ b/qemu-monitor.hx
+@@ -177,6 +177,8 @@ Remove host block device.  The result is that guest generated IO is no longer
+ submitted against the host device underlying the disk.  Once a drive has
+ been deleted, the QEMU Block layer returns -EIO which results in IO
+ errors in the guest for applications that are reading/writing to the device.
++These errors are always reported to the guest, regardless of the drive's error
++actions (drive options rerror, werror).
+ ETEXI
+ SQMP
+ __com.redhat_drive_del
+@@ -187,6 +189,8 @@ Remove host block device.  The result is that guest generated IO is no longer
+ submitted against the host device underlying the disk.  Once a drive has
+ been deleted, the QEMU Block layer returns -EIO which results in IO
+ errors in the guest for applications that are reading/writing to the device.
++These errors are always reported to the guest, regardless of the drive's error
++actions (drive options rerror, werror).
+ 
+ Arguments:
+ 
+-- 
+1.7.11.7
+

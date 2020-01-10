@@ -1,0 +1,103 @@
+From 384d8a448385f49ce339185650cb5fe861a05cd0 Mon Sep 17 00:00:00 2001
+Message-Id: <384d8a448385f49ce339185650cb5fe861a05cd0.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:49 +0200
+Subject: [PATCH 38/65] chardev: add pty chardev support to chardev-add (qmp)
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-39-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52163
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 38/65] chardev: add pty chardev support to chardev-add (qmp)
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+The ptsname is returned directly, so there is no need to
+use query-chardev to figure the pty device path.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 0a1a7fabda7f0fa05ef09051be29e92e81f929ad)
+
+Conflicts:
+
+	qmp-commands.hx
+---
+ qapi-schema.json |    3 ++-
+ qemu-char.c      |   13 +++++++++++++
+ qemu-monitor.hx  |    5 +++++
+ 3 files changed, 20 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema.json |  3 ++-
+ qemu-char.c      | 13 +++++++++++++
+ qemu-monitor.hx  |  5 +++++
+ 3 files changed, 20 insertions(+), 1 deletion(-)
+
+diff --git a/qapi-schema.json b/qapi-schema.json
+index 3b27dd9..78c68a2 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -471,6 +471,7 @@
+ { 'union': 'ChardevBackend', 'data': { 'file'   : 'ChardevFile',
+                                        'port'   : 'ChardevPort',
+                                        'socket' : 'ChardevSocket',
++                                       'pty'    : 'ChardevDummy',
+                                        'null'   : 'ChardevDummy' } }
+ 
+ ##
+@@ -480,7 +481,7 @@
+ #
+ # Since: 1.4
+ ##
+-{ 'type' : 'ChardevReturn', 'data': { } }
++{ 'type' : 'ChardevReturn', 'data': { '*pty' : 'str' } }
+ 
+ ##
+ # @chardev-add:
+diff --git a/qemu-char.c b/qemu-char.c
+index ef73321..f8a11a5 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -3170,6 +3170,19 @@ ChardevReturn *qmp_chardev_add(const char *id, ChardevBackend *backend,
+     case CHARDEV_BACKEND_KIND_SOCKET:
+         chr = qmp_chardev_open_socket(backend->socket, errp);
+         break;
++#ifdef HAVE_CHARDEV_TTY
++    case CHARDEV_BACKEND_KIND_PTY:
++    {
++        /* qemu_chr_open_pty sets "path" in opts */
++        QemuOpts *opts;
++        opts = qemu_opts_create(qemu_find_opts("chardev"), NULL, 0);
++        chr = qemu_chr_open_pty(opts);
++        ret->pty = g_strdup(qemu_opt_get(opts, "path"));
++        ret->has_pty = true;
++        qemu_opts_del(opts);
++        break;
++    }
++#endif
+     case CHARDEV_BACKEND_KIND_NULL:
+         chr = qemu_chr_open_null(NULL);
+         break;
+diff --git a/qemu-monitor.hx b/qemu-monitor.hx
+index 28c2a07..c4f0c17 100644
+--- a/qemu-monitor.hx
++++ b/qemu-monitor.hx
+@@ -2401,6 +2401,11 @@ Example:
+                      "backend" : { "type" : "null", "data" : {} } } }
+ <- { "return": {} }
+ 
++-> { "execute" : "chardev-add",
++     "arguments" : { "id" : "baz",
++                     "backend" : { "type" : "pty", "data" : {} } } }
++<- { "return": { "pty" : "/dev/pty/42" } }
++
+ EQMP
+ 
+     {
+-- 
+1.7.11.7
+

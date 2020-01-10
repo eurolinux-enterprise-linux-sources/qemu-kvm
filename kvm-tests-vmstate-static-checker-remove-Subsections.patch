@@ -1,0 +1,59 @@
+From 2b17cb27fc4add8af517ad7d413165c5bc636b2e Mon Sep 17 00:00:00 2001
+From: Amit Shah <amit.shah@redhat.com>
+Date: Fri, 11 Jul 2014 10:47:27 -0500
+Subject: [CHANGE 16/18] tests: vmstate static checker: remove Subsections
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <73795c447a3b2c4d585433ad0d2db346303ad4b4.1405075344.git.amit.shah@redhat.com>
+Patchwork-id: 59816
+O-Subject: [RHEL6.6 qemu-kvm PATCH 16/18] tests: vmstate static checker: remove Subsections
+Bugzilla: 1118718
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Reviewed-by: Juan Quintela <quintela@redhat.com>
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+(cherry picked from commit c7173a9c182c9092de6be57490132a218c850675)
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ tests/vmstate-static-checker-data/dump2.json | 15 ---------------
+ 1 file changed, 15 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ tests/vmstate-static-checker-data/dump2.json | 15 ---------------
+ 1 file changed, 15 deletions(-)
+
+diff --git a/tests/vmstate-static-checker-data/dump2.json b/tests/vmstate-static-checker-data/dump2.json
+index 6f8a617..b5cb1aa 100644
+--- a/tests/vmstate-static-checker-data/dump2.json
++++ b/tests/vmstate-static-checker-data/dump2.json
+@@ -558,21 +558,6 @@
+           "field_exists": false,
+           "size": 4
+         }
+-      ],
+-      "Subsections": [
+-        {
+-          "name": "PIIX3/rcr",
+-          "version_id": 1,
+-          "minimum_version_id": 1,
+-          "Fields": [
+-            {
+-              "field": "rcr",
+-              "version_id": 0,
+-              "field_exists": false,
+-              "size": 1
+-            }
+-          ]
+-        }
+       ]
+     }
+   },
+-- 
+1.9.3
+

@@ -1,0 +1,107 @@
+From e94fd0f14309457aa9ee9a4ef6beb2f22238d0df Mon Sep 17 00:00:00 2001
+Message-Id: <e94fd0f14309457aa9ee9a4ef6beb2f22238d0df.1427300678.git.jen@redhat.com>
+In-Reply-To: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+References: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+From: Vlad Yasevich <vyasevic@redhat.com>
+Date: Thu, 12 Mar 2015 19:13:10 -0500
+Subject: [CHANGE 14/33] main loop: use msec-based timeout in glib_select_fill
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Vlad Yasevich <vyasevic@redhat.com>
+Message-id: <1426187601-21396-15-git-send-email-vyasevic@redhat.com>
+Patchwork-id: 64351
+O-Subject: [RHEL6.7 qemu-kvm PATCH v2 14/25] main loop: use msec-based timeout in glib_select_fill
+Bugzilla: 1005016
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+The timeval-based timeout is not needed until we actually invoke select,
+so compute it only then.  Also group the two calls that modify the
+timeout, glib_select_fill and os_host_main_loop_wait.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Blue Swirl <blauwirbel@gmail.com>
+(cherry picked from commit 4dae83aeac63863af6b59f58552da68b35b1a40d)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	main-loop.c
+
+Changes manaully adapted to vl.c since main-loop.c is not present.
+
+Signed-off-by: Vlad Yasevich <vyasevic@redhat.com>
+---
+ vl.c | 21 +++++++++------------
+ 1 file changed, 9 insertions(+), 12 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ vl.c | 21 +++++++++------------
+ 1 file changed, 9 insertions(+), 12 deletions(-)
+
+diff --git a/vl.c b/vl.c
+index 9715433..24656c1 100644
+--- a/vl.c
++++ b/vl.c
+@@ -3953,11 +3953,11 @@ static int n_poll_fds;
+ static int max_priority;
+ 
+ static void glib_select_fill(int *max_fd, fd_set *rfds, fd_set *wfds,
+-                             fd_set *xfds, struct timeval *tv)
++                             fd_set *xfds, int *cur_timeout)
+ {
+     GMainContext *context = g_main_context_default();
+     int i;
+-    int timeout = 0, cur_timeout;
++    int timeout = 0;
+ 
+     g_main_context_prepare(context, &max_priority);
+ 
+@@ -3983,10 +3983,8 @@ static void glib_select_fill(int *max_fd, fd_set *rfds, fd_set *wfds,
+         }
+     }
+ 
+-    cur_timeout = (tv->tv_sec * 1000) + ((tv->tv_usec + 500) / 1000);
+-    if (timeout >= 0 && timeout < cur_timeout) {
+-        tv->tv_sec = timeout / 1000;
+-        tv->tv_usec = (timeout % 1000) * 1000;
++    if (timeout >= 0 && timeout < *cur_timeout) {
++        *cur_timeout = timeout;
+     }
+ }
+ 
+@@ -4027,8 +4025,6 @@ void main_loop_wait(int timeout)
+ 
+     qemu_bh_update_timeout((uint32_t *)&timeout);
+ 
+-    os_host_main_loop_wait(&timeout);
+-
+     /* poll any events */
+     /* XXX: separate device handlers from system ones */
+     nfds = -1;
+@@ -4054,13 +4050,14 @@ void main_loop_wait(int timeout)
+         }
+     }
+ 
++    slirp_select_fill(&nfds, &rfds, &wfds, &xfds);
++
++    glib_select_fill(&nfds, &rfds, &wfds, &xfds, &timeout);
++    os_host_main_loop_wait(&timeout);
++
+     tv.tv_sec = timeout / 1000;
+     tv.tv_usec = (timeout % 1000) * 1000;
+ 
+-    slirp_select_fill(&nfds, &rfds, &wfds, &xfds);
+-
+-    glib_select_fill(&nfds, &rfds, &wfds, &xfds, &tv);
+-
+     qemu_mutex_unlock_iothread();
+     ret = select(nfds + 1, &rfds, &wfds, &xfds, &tv);
+     qemu_mutex_lock_iothread();
+-- 
+2.1.0
+

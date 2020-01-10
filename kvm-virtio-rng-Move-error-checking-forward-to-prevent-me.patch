@@ -1,0 +1,95 @@
+From 5c2b96fce53a5daf03d721569c15015f649fda83 Mon Sep 17 00:00:00 2001
+From: John Snow <jsnow@redhat.com>
+Date: Tue, 5 Aug 2014 00:23:22 -0500
+Subject: [CHANGE 31/31] virtio-rng: Move error-checking forward to prevent
+ memory leak
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: John Snow <jsnow@redhat.com>
+Message-id: <1407198202-3989-3-git-send-email-jsnow@redhat.com>
+Patchwork-id: 60434
+O-Subject: [RHEL6.6 qemu-kvm PATCH v2 2/2] virtio-rng: Move error checking forward to prevent memory leak
+Bugzilla: 1119207
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+
+This patch pushes the error-checking forward and the virtio
+initialization backward in the device realization function
+in order to prevent memory leaks for hot plug scenarios.
+
+Signed-off-by: John Snow <jsnow@redhat.com>
+Reviewed-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+(cherry picked from commit 1efd6e072cb13b7a7050acc9c673eb4ff25ddfc9)
+
+Conflicts:
+	hw/virtio/virtio-rng.c
+
+As the layout of the downstream code differs, the cleaner solution
+is to add an error label that allows us to clean up on our way out.
+
+Signed-off-by: John Snow <jsnow@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/virtio-rng.c | 11 +++++++----
+ 1 file changed, 7 insertions(+), 4 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/virtio-rng.c | 11 +++++++----
+ 1 file changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/hw/virtio-rng.c b/hw/virtio-rng.c
+index 356e3d4..138ab8e 100644
+--- a/hw/virtio-rng.c
++++ b/hw/virtio-rng.c
+@@ -168,20 +168,20 @@ VirtIODevice *virtio_rng_init(DeviceState *dev, VirtIORNGConf *conf)
+     if (!conf->period_ms > 0) {
+         qerror_report(QERR_INVALID_PARAMETER_VALUE, "period",
+                       "a positive number");
+-        return NULL;
++        goto err;
+     }
+ 
+     vrng->rng = conf->rng;
+     if (vrng->rng == NULL) {
+         qerror_report(QERR_INVALID_PARAMETER_VALUE, "rng", "a valid object");
+-        return NULL;
++        goto err;
+     }
+ 
+     rng_backend_open(vrng->rng, &local_err);
+     if (local_err) {
+         qerror_report_err(local_err);
+         error_free(local_err);
+-        return NULL;
++        goto err;
+     }
+ 
+     vrng->vq = virtio_add_queue(vdev, 8, handle_input);
+@@ -197,7 +197,7 @@ VirtIODevice *virtio_rng_init(DeviceState *dev, VirtIORNGConf *conf)
+     if (vrng->conf->max_bytes > INT64_MAX) {
+         qerror_report(QERR_INVALID_PARAMETER_VALUE, "max-bytes",
+                       "a non-negative integer below 2^63");
+-        return NULL;
++        goto err;
+     }
+ 
+     vrng->rate_limit_timer = qemu_new_timer(vm_clock,
+@@ -210,6 +210,9 @@ VirtIODevice *virtio_rng_init(DeviceState *dev, VirtIORNGConf *conf)
+                     virtio_rng_load, vrng);
+ 
+     return vdev;
++ err:
++    virtio_cleanup(vdev);
++    return NULL;
+ }
+ 
+ void virtio_rng_exit(VirtIODevice *vdev)
+-- 
+1.9.3
+

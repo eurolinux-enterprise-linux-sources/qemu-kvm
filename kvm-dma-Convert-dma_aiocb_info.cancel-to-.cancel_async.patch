@@ -1,0 +1,92 @@
+From 850162b503b95a24a9727087621ecb8937c6e5da Mon Sep 17 00:00:00 2001
+Message-Id: <850162b503b95a24a9727087621ecb8937c6e5da.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:31 -0500
+Subject: [CHANGE 11/29] dma: Convert dma_aiocb_info.cancel to .cancel_async
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-12-git-send-email-famz@redhat.com>
+Patchwork-id: 64912
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 11/28] dma: Convert dma_aiocb_info.cancel to .cancel_async
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Just forward the request to bdrv_aio_cancel_async.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 9bb9da46d6639ded9406e4d8902033c9d97b0006)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	dma-helpers.c
+Context conflict due to fields in DMAAIOCB are different, but we only
+need to remove in_cancel here.
+---
+ dma-helpers.c | 19 ++++---------------
+ 1 file changed, 4 insertions(+), 15 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ dma-helpers.c | 19 ++++---------------
+ 1 file changed, 4 insertions(+), 15 deletions(-)
+
+diff --git a/dma-helpers.c b/dma-helpers.c
+index 1e6406e..89b3313 100644
+--- a/dma-helpers.c
++++ b/dma-helpers.c
+@@ -43,7 +43,6 @@ typedef struct {
+     QEMUSGList *sg;
+     uint64_t sector_num;
+     bool to_dev;
+-    bool in_cancel;
+     int sg_cur_index;
+     target_phys_addr_t sg_cur_byte;
+     QEMUIOVector iov;
+@@ -92,12 +91,7 @@ static void dma_complete(DMAAIOCB *dbs, int ret)
+         qemu_bh_delete(dbs->bh);
+         dbs->bh = NULL;
+     }
+-    if (!dbs->in_cancel) {
+-        /* Requests may complete while dma_aio_cancel is in progress.  In
+-         * this case, the AIOCB should not be released because it is still
+-         * referenced by dma_aio_cancel.  */
+-        qemu_aio_release(dbs);
+-    }
++    qemu_aio_release(dbs);
+ }
+ 
+ static void dma_bdrv_cb(void *opaque, int ret)
+@@ -151,19 +145,14 @@ static void dma_aio_cancel(BlockDriverAIOCB *acb)
+     DMAAIOCB *dbs = container_of(acb, DMAAIOCB, common);
+ 
+     if (dbs->acb) {
+-        BlockDriverAIOCB *acb = dbs->acb;
+-        dbs->acb = NULL;
+-        dbs->in_cancel = true;
+-        bdrv_aio_cancel(acb);
+-        dbs->in_cancel = false;
++        bdrv_aio_cancel_async(dbs->acb);
+     }
+-    dbs->common.cb = NULL;
+-    dma_complete(dbs, 0);
+ }
+ 
++
+ static const AIOCBInfo dma_aiocb_info = {
+     .aiocb_size         = sizeof(DMAAIOCB),
+-    .cancel             = dma_aio_cancel,
++    .cancel_async       = dma_aio_cancel,
+ };
+ 
+ static BlockDriverAIOCB *dma_bdrv_io(
+-- 
+2.1.0
+

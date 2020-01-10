@@ -1,0 +1,139 @@
+From b47473b16bcb6891b4099b5797f0476067cb92ec Mon Sep 17 00:00:00 2001
+Message-Id: <b47473b16bcb6891b4099b5797f0476067cb92ec.1376387172.git.minovotn@redhat.com>
+In-Reply-To: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+References: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Thu, 8 Aug 2013 06:09:35 +0200
+Subject: [PATCH 05/13] vmdk: check granularity field in opening
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1375942181-5262-6-git-send-email-famz@redhat.com>
+Patchwork-id: 53070
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 05/11] vmdk: check granularity field in opening
+Bugzilla: 994804
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+Granularity is used to calculate the cluster size and allocate r/w
+buffer. Check the value from image before using it, so we don't abort()
+for unbounded memory allocation.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 8aa1331c09a9b899f48d97f097bb49b7d458be1c)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+
+Conflicts:
+	tests/qemu-iotests/059
+	tests/qemu-iotests/059.out
+    Manually removed test cases from commit.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 40 +++++++++++++++++++++++++++++++---------
+ 1 file changed, 31 insertions(+), 9 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 40 +++++++++++++++++++++++++++++++---------
+ 1 file changed, 31 insertions(+), 9 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index e5a01cf..69c3718 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -383,15 +383,22 @@ static int vmdk_parent_open(BlockDriverState *bs)
+ 
+ /* Create and append extent to the extent array. Return the added VmdkExtent
+  * address. return NULL if allocation failed. */
+-static VmdkExtent *vmdk_add_extent(BlockDriverState *bs,
++static int vmdk_add_extent(BlockDriverState *bs,
+                            BlockDriverState *file, bool flat, int64_t sectors,
+                            int64_t l1_offset, int64_t l1_backup_offset,
+                            uint32_t l1_size,
+-                           int l2_size, unsigned int cluster_sectors)
++                           int l2_size, uint64_t cluster_sectors,
++                           VmdkExtent **new_extent)
+ {
+     VmdkExtent *extent;
+     BDRVVmdkState *s = bs->opaque;
+ 
++    if (cluster_sectors > 0x200000) {
++        /* 0x200000 * 512Bytes = 1GB for one cluster is unrealistic */
++        error_report("invalid granularity, image may be corrupt");
++        return -EINVAL;
++    }
++
+     s->extents = g_realloc(s->extents,
+                               (s->num_extents + 1) * sizeof(VmdkExtent));
+     extent = &s->extents[s->num_extents];
+@@ -414,7 +421,10 @@ static VmdkExtent *vmdk_add_extent(BlockDriverState *bs,
+         extent->end_sector = extent->sectors;
+     }
+     bs->total_sectors = extent->end_sector;
+-    return extent;
++    if (new_extent) {
++        *new_extent = extent;
++    }
++    return 0;
+ }
+ 
+ static int vmdk_init_tables(BlockDriverState *bs, VmdkExtent *extent)
+@@ -473,12 +483,17 @@ static int vmdk_open_vmdk3(BlockDriverState *bs,
+     if (ret < 0) {
+         return ret;
+     }
+-    extent = vmdk_add_extent(bs,
++
++    ret = vmdk_add_extent(bs,
+                              bs->file, false,
+                              le32_to_cpu(header.disk_sectors),
+                              le32_to_cpu(header.l1dir_offset) << 9,
+                              0, 1 << 6, 1 << 9,
+-                             le32_to_cpu(header.granularity));
++                             le32_to_cpu(header.granularity),
++                             &extent);
++    if (ret < 0) {
++        return ret;
++    }
+     ret = vmdk_init_tables(bs, extent);
+     if (ret) {
+         /* free extent allocated by vmdk_add_extent */
+@@ -569,13 +584,17 @@ static int vmdk_open_vmdk4(BlockDriverState *bs,
+     if (le32_to_cpu(header.flags) & VMDK4_FLAG_RGD) {
+         l1_backup_offset = le64_to_cpu(header.rgd_offset) << 9;
+     }
+-    extent = vmdk_add_extent(bs, file, false,
++    ret = vmdk_add_extent(bs, file, false,
+                           le64_to_cpu(header.capacity),
+                           le64_to_cpu(header.gd_offset) << 9,
+                           l1_backup_offset,
+                           l1_size,
+                           le32_to_cpu(header.num_gtes_per_gte),
+-                          le64_to_cpu(header.granularity));
++                          le64_to_cpu(header.granularity),
++                          &extent);
++    if (ret < 0) {
++        return ret;
++    }
+     extent->compressed =
+         le16_to_cpu(header.compressAlgorithm) == VMDK4_COMPRESSION_DEFLATE;
+     extent->has_marker = le32_to_cpu(header.flags) & VMDK4_FLAG_MARKER;
+@@ -691,8 +710,11 @@ static int vmdk_parse_extents(const char *desc, BlockDriverState *bs,
+             /* FLAT extent */
+             VmdkExtent *extent;
+ 
+-            extent = vmdk_add_extent(bs, extent_file, true, sectors,
+-                            0, 0, 0, 0, sectors);
++            ret = vmdk_add_extent(bs, extent_file, true, sectors,
++                            0, 0, 0, 0, sectors, &extent);
++            if (ret < 0) {
++                return ret;
++            }
+             extent->flat_start_offset = flat_offset << 9;
+         } else if (!strcmp(type, "SPARSE")) {
+             /* SPARSE extent */
+-- 
+1.7.11.7
+

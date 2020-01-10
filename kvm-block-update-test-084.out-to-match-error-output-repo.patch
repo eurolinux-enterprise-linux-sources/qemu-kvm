@@ -1,0 +1,78 @@
+From c07d2426db9a52e5472ff946784401fa80ce888d Mon Sep 17 00:00:00 2001
+Message-Id: <c07d2426db9a52e5472ff946784401fa80ce888d.1428549624.git.jen@redhat.com>
+In-Reply-To: <6f5be4df5e31d585f927f6280d6fd1112ee97a20.1428549624.git.jen@redhat.com>
+References: <6f5be4df5e31d585f927f6280d6fd1112ee97a20.1428549624.git.jen@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Tue, 31 Mar 2015 20:01:45 -0500
+Subject: [CHANGE 4/7] block: update test 084.out to match error output
+ reporting
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <1c6b13f8f5b45309dd4e3979d8bedfcf83ef9761.1427831639.git.jcody@redhat.com>
+Patchwork-id: 64650
+O-Subject: [RHEL-6.7 qemu-kvm PATCH] block: update test 084.out to match error output reporting
+Bugzilla: 1130046
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+Downstream RHEL6 block driver open functions do not have Error
+parameters for error reporting.  Update the test error output
+to match RHEL6 error output.
+
+Downstream only.
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1130046
+
+ tests/qemu-iotests/084.out | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ tests/qemu-iotests/084.out | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/tests/qemu-iotests/084.out b/tests/qemu-iotests/084.out
+index c7120d9..2ef039b 100644
+--- a/tests/qemu-iotests/084.out
++++ b/tests/qemu-iotests/084.out
+@@ -4,16 +4,16 @@ QA output created by 084
+ 
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
+ Test 1: Maximum size (1024 TB):
+-qemu-img: Could not open 'TEST_DIR/t.IMGFMT': Could not open 'TEST_DIR/t.IMGFMT': Invalid argument
++Could not open 'TEST_DIR/t.IMGFMT': Operation not permitted
+ 
+ Test 2: Size too large (1024TB + 1)
+-qemu-img: Could not open 'TEST_DIR/t.IMGFMT': Unsupported VDI image size (size is 0x3fffffff10000, max supported is 0x3fffffff00000)
++Could not open 'TEST_DIR/t.IMGFMT': Operation not permitted
+ 
+ Test 3: Size valid (64M), but Blocks In Image too small (63)
+-qemu-img: Could not open 'TEST_DIR/t.IMGFMT': unsupported VDI image (disk size 67108864, image bitmap has room for 66060288)
++Could not open 'TEST_DIR/t.IMGFMT': Operation not permitted
+ 
+ Test 4: Size valid (64M), but Blocks In Image exceeds max allowed
+-qemu-img: Could not open 'TEST_DIR/t.IMGFMT': unsupported VDI image (too many blocks 1073741824, max is 1073741823)
++Could not open 'TEST_DIR/t.IMGFMT': Operation not permitted
+ 
+ Test 5: Valid Image: 64MB, Blocks In Image 64, Block Size 1MB
+ image: TEST_DIR/t.IMGFMT
+@@ -22,9 +22,9 @@ virtual size: 64M (67108864 bytes)
+ cluster_size: 1048576
+ 
+ Test 6: Block Size != 1MB; too small test (1MB - 1)
+-qemu-img: Could not open 'TEST_DIR/t.IMGFMT': unsupported VDI image (block size 1048575 is not 1048576)
++Could not open 'TEST_DIR/t.IMGFMT': Operation not permitted
+ 
+ Test 7: Block Size != 1MB; too large test (1MB + 64KB)
+-qemu-img: Could not open 'TEST_DIR/t.IMGFMT': unsupported VDI image (block size 1114112 is not 1048576)
++Could not open 'TEST_DIR/t.IMGFMT': Operation not permitted
+ 
+ *** done
+-- 
+2.1.0
+

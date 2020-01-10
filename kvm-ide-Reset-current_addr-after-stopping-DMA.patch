@@ -1,0 +1,84 @@
+From de12ea78364ee780ffa631f54f4ee4573a66f901 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Fri, 1 Aug 2014 16:30:56 -0500
+Subject: [CHANGE 3/4] ide: Reset current_addr after stopping DMA
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406910657-19808-3-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60405
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 2/3] ide: Reset current_addr after stopping DMA
+Bugzilla: 1104573
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Marcel Apfelbaum <marcel.a@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1104573
+
+Whenever SSBM is reset in the command register all state information is lost.
+Restarting DMA means that current_addr must be reset to the base address of the
+PRD table. The OS is not required to change the base address register before
+starting a DMA operation, it can reuse the value it wrote for an earlier
+request.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+(cherry picked from commit b76876e602ca09ff848d99595a506feb1fd54ff4)
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	hw/ide/pci.c
+
+RHEL 6 has three separate bmdma_addr_write[bwl] functions instead of a
+single bmdma_addr_write like upstream.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ hw/ide/pci.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/ide/pci.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/hw/ide/pci.c b/hw/ide/pci.c
+index 713d9db..a10a9fc 100644
+--- a/hw/ide/pci.c
++++ b/hw/ide/pci.c
+@@ -63,6 +63,7 @@ void bmdma_cmd_writeb(void *opaque, uint32_t addr, uint32_t val)
+                     printf("ide_dma_cancel: BM_STATUS_DMAING still pending\n");
+             }
+         } else {
++            bm->cur_addr = bm->addr;
+             if (!(bm->status & BM_STATUS_DMAING)) {
+                 bm->status |= BM_STATUS_DMAING;
+                 /* start dma transfer if possible */
+@@ -95,7 +96,6 @@ void bmdma_addr_writeb(void *opaque, uint32_t addr, uint32_t val)
+ #endif
+     bm->addr &= ~(0xFF << shift);
+     bm->addr |= ((val & 0xFF) << shift) & ~3;
+-    bm->cur_addr = bm->addr;
+ }
+ 
+ uint32_t bmdma_addr_readw(void *opaque, uint32_t addr)
+@@ -118,7 +118,6 @@ void bmdma_addr_writew(void *opaque, uint32_t addr, uint32_t val)
+ #endif
+     bm->addr &= ~(0xFFFF << shift);
+     bm->addr |= ((val & 0xFFFF) << shift) & ~3;
+-    bm->cur_addr = bm->addr;
+ }
+ 
+ uint32_t bmdma_addr_readl(void *opaque, uint32_t addr)
+@@ -139,7 +138,6 @@ void bmdma_addr_writel(void *opaque, uint32_t addr, uint32_t val)
+     printf("%s: 0x%08x\n", __func__, val);
+ #endif
+     bm->addr = val & ~3;
+-    bm->cur_addr = bm->addr;
+ }
+ 
+ static bool ide_bmdma_current_needed(void *opaque)
+-- 
+1.9.3
+

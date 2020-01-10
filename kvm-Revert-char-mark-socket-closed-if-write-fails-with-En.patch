@@ -1,0 +1,54 @@
+From 5d5fce51717d25f7b58062d98b664eaf835f1425 Mon Sep 17 00:00:00 2001
+Message-Id: <5d5fce51717d25f7b58062d98b664eaf835f1425.1368111913.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:17:46 +0200
+Subject: [PATCH 12/65] Revert "char: mark socket closed if write fails with
+ -EPIPE"
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <f4bac434fcb7f7dcfc86012554afbaec9e850ea7.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50790
+O-Subject: [RHEL6.5 qemu-kvm PATCH 12/65] Revert "char: mark socket closed if write fails with -EPIPE"
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+This reverts commit ba75551d24d1b0577118854ee166f8fee84c0969.
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ qemu-char.c | 9 +--------
+ 1 file changed, 1 insertion(+), 8 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 9 +--------
+ 1 file changed, 1 insertion(+), 8 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 86bb1cb..a31d772 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -1941,15 +1941,8 @@ static void tcp_closed(void *opaque)
+ static int tcp_chr_write(CharDriverState *chr, const uint8_t *buf, int len)
+ {
+     TCPCharDriver *s = chr->opaque;
+-
+     if (s->connected) {
+-        int ret;
+-
+-        ret = send_all(s->fd, buf, len);
+-        if (ret == -1 && errno == EPIPE) {
+-            tcp_closed(chr);
+-        }
+-        return ret;
++        return send_all(s->fd, buf, len);
+     } else {
+         /* XXX: indicate an error ? */
+         return len;
+-- 
+1.7.11.7
+

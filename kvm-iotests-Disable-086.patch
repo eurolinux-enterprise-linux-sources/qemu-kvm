@@ -1,0 +1,48 @@
+From 064660d17ae33fb9a297b30b6cd72f46f2845996 Mon Sep 17 00:00:00 2001
+Message-Id: <064660d17ae33fb9a297b30b6cd72f46f2845996.1484162498.git.ymankad@redhat.com>
+In-Reply-To: <6da299cbd22aeea340aaabe3e57b8efc46a477f6.1484162498.git.ymankad@redhat.com>
+References: <6da299cbd22aeea340aaabe3e57b8efc46a477f6.1484162498.git.ymankad@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Mon, 9 Jan 2017 20:21:01 -0500
+Subject: [CHANGE 5/7] iotests: Disable 086
+To: ymankad@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <20170109202103.28932-6-mreitz@redhat.com>
+Patchwork-id: 73228
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 5/7] iotests: Disable 086
+Bugzilla: 1405882
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+This is a downstream-only patch.
+
+Test 086 is rather unstable because it tests qemu-img convert's progress
+output. We could either update the reference output now and maybe see it
+fail again some time in the future or just disable it. This patch does
+the latter because for downstream, it is actually not too important.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ tests/qemu-iotests/group | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/qemu-iotests/group b/tests/qemu-iotests/group
+index 3f185ee..9b65057 100644
+--- a/tests/qemu-iotests/group
++++ b/tests/qemu-iotests/group
+@@ -92,7 +92,7 @@
+ 083 rw auto
+ 084 img auto quick
+ 085 rw auto
+-086 rw auto quick
++# 086 rw auto quick -- unstable because of progress output
+ # 087 rw auto quick -- requires blockdev-add
+ 088 rw auto quick
+ # 089 rw auto quick -- requires json: pseudo-protocol
+-- 
+2.7.4
+

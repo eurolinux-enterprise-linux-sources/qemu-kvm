@@ -1,0 +1,115 @@
+From 5c623b3c687d830e45a047754a4a2cc640a9164a Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Tue, 17 Jun 2014 13:11:44 +0200
+Subject: [PATCH 04/44] dump: eliminate DumpState.page_shift ("guest's page shift")
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1403010708-7504-5-git-send-email-lersek@redhat.com>
+Patchwork-id: 59253
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 4/8] dump: eliminate DumpState.page_shift ("guest's page shift")
+Bugzilla: 1102659
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+Just use TARGET_PAGE_BITS.
+
+"DumpState.page_shift" used to have type "uint32_t", while the replacement
+TARGET_PAGE_BITS has type "int". Since "DumpState.page_shift" was only
+used as bit shift counts in the paddr_to_pfn() and pfn_to_paddr() macros,
+this is safe.
+
+Suggested-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 22227f121bddb038a0335cf83a3c24f451e2e836)
+---
+ dump.h |  8 ++++----
+ dump.c | 10 ++++------
+ 2 files changed, 8 insertions(+), 10 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ dump.c |   10 ++++------
+ dump.h |    8 ++++----
+ 2 files changed, 8 insertions(+), 10 deletions(-)
+
+diff --git a/dump.c b/dump.c
+index b974fa3..5ab51df 100644
+--- a/dump.c
++++ b/dump.c
+@@ -96,7 +96,6 @@ typedef struct DumpState {
+     size_t note_buf_offset;     /* the writing place in note_buf */
+     uint32_t nr_cpus;           /* number of guest's cpu */
+     size_t page_size;           /* guest's page size */
+-    uint32_t page_shift;        /* guest's page shift */
+     uint64_t max_mapnr;         /* the biggest guest's phys-mem's number */
+     size_t len_dump_bitmap;     /* the size of the place used to store
+                                    dump_bitmap in vmcore */
+@@ -1086,7 +1085,7 @@ static bool get_next_page(GuestPhysBlock **blockptr, uint64_t *pfnptr,
+         *blockptr = block;
+         assert(block->target_start % s->page_size == 0);
+         assert(block->target_end % s->page_size == 0);
+-        *pfnptr = paddr_to_pfn(block->target_start, s->page_shift);
++        *pfnptr = paddr_to_pfn(block->target_start);
+         if (bufptr) {
+             *bufptr = block->host_addr;
+         }
+@@ -1094,7 +1093,7 @@ static bool get_next_page(GuestPhysBlock **blockptr, uint64_t *pfnptr,
+     }
+ 
+     *pfnptr = *pfnptr + 1;
+-    addr = pfn_to_paddr(*pfnptr, s->page_shift);
++    addr = pfn_to_paddr(*pfnptr);
+ 
+     if ((addr >= block->target_start) &&
+         (addr + s->page_size <= block->target_end)) {
+@@ -1108,7 +1107,7 @@ static bool get_next_page(GuestPhysBlock **blockptr, uint64_t *pfnptr,
+         }
+         assert(block->target_start % s->page_size == 0);
+         assert(block->target_end % s->page_size == 0);
+-        *pfnptr = paddr_to_pfn(block->target_start, s->page_shift);
++        *pfnptr = paddr_to_pfn(block->target_start);
+         buf = block->host_addr;
+     }
+ 
+@@ -1534,7 +1533,7 @@ static void get_max_mapnr(DumpState *s)
+     GuestPhysBlock *last_block;
+ 
+     last_block = QTAILQ_LAST(&s->guest_phys_blocks.head, GuestPhysBlockHead);
+-    s->max_mapnr = paddr_to_pfn(last_block->target_end, s->page_shift);
++    s->max_mapnr = paddr_to_pfn(last_block->target_end);
+ }
+ 
+ static int dump_init(DumpState *s, int fd, bool has_format,
+@@ -1607,7 +1606,6 @@ static int dump_init(DumpState *s, int fd, bool has_format,
+ 
+     s->nr_cpus = nr_cpus;
+     s->page_size = TARGET_PAGE_SIZE;
+-    s->page_shift = ffs(s->page_size) - 1;
+ 
+     get_max_mapnr(s);
+ 
+diff --git a/dump.h b/dump.h
+index 88dc2fc..c9a3155 100644
+--- a/dump.h
++++ b/dump.h
+@@ -24,10 +24,10 @@
+ 
+ #define ARCH_PFN_OFFSET             (0)
+ 
+-#define paddr_to_pfn(X, page_shift) \
+-    (((unsigned long long)(X) >> (page_shift)) - ARCH_PFN_OFFSET)
+-#define pfn_to_paddr(X, page_shift) \
+-    (((unsigned long long)(X) + ARCH_PFN_OFFSET) << (page_shift))
++#define paddr_to_pfn(X) \
++    (((unsigned long long)(X) >> TARGET_PAGE_BITS) - ARCH_PFN_OFFSET)
++#define pfn_to_paddr(X) \
++    (((unsigned long long)(X) + ARCH_PFN_OFFSET) << TARGET_PAGE_BITS)
+ 
+ /*
+  * flag for compressed format
+-- 
+1.7.1
+

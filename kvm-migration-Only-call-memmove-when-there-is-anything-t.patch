@@ -1,0 +1,56 @@
+From 52c5750b50f8f4e7fb765e3ea6128296c45554bd Mon Sep 17 00:00:00 2001
+Message-Id: <52c5750b50f8f4e7fb765e3ea6128296c45554bd.1421272770.git.jen@redhat.com>
+In-Reply-To: <acd6d327ae856e72f084949fd71314237a4b9b8b.1421272770.git.jen@redhat.com>
+References: <acd6d327ae856e72f084949fd71314237a4b9b8b.1421272770.git.jen@redhat.com>
+From: Juan Quintela <quintela@redhat.com>
+Date: Wed, 7 Jan 2015 16:45:09 -0600
+Subject: [CHANGE 05/10] migration: Only call memmove when there is anything to
+ move
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Juan Quintela <quintela@redhat.com>
+Message-id: <1420649114-17435-6-git-send-email-quintela@redhat.com>
+Patchwork-id: 63162
+O-Subject: [PATCH qemu-kvm RHEL6.7 05/10] migration: Only call memmove when there is anything to move
+Bugzilla: 970103
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+
+--
+v4: we really need to also move when the remaining size is zero.
+    paper brown bug of >= instead of >
+
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+---
+ buffered_file.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ buffered_file.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/buffered_file.c b/buffered_file.c
+index 1a88cc0..2fa13cd 100644
+--- a/buffered_file.c
++++ b/buffered_file.c
+@@ -104,8 +104,10 @@ static void buffered_flush(QEMUFileBuffered *s)
+     }
+ 
+     DPRINTF("flushed %zu of %zu byte(s)\n", offset, s->buffer_size);
+-    memmove(s->buffer, s->buffer + offset, s->buffer_size - offset);
+-    s->buffer_size -= offset;
++    if ((offset > 0) && ((s->buffer_size - offset) >= 0)) {
++        memmove(s->buffer, s->buffer + offset, s->buffer_size - offset);
++        s->buffer_size -= offset;
++    }
+ }
+ 
+ static int buffered_put_buffer(void *opaque, const uint8_t *buf, int64_t pos, int size)
+-- 
+2.1.0
+

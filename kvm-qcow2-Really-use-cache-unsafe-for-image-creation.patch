@@ -1,0 +1,51 @@
+From 64a2aaaee36830d4aa8232d14dffe15ce0b5f9fb Mon Sep 17 00:00:00 2001
+Message-Id: <64a2aaaee36830d4aa8232d14dffe15ce0b5f9fb.1376492227.git.minovotn@redhat.com>
+In-Reply-To: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+References: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+From: Asias He <asias@redhat.com>
+Date: Wed, 14 Aug 2013 10:24:22 +0200
+Subject: [PATCH 21/22] qcow2: Really use cache=unsafe for image creation
+
+RH-Author: Asias He <asias@redhat.com>
+Message-id: <1376475863-27929-17-git-send-email-asias@redhat.com>
+Patchwork-id: 53403
+O-Subject: [RHEL6.5 qemu-kvm PATCH v4 16/17] qcow2: Really use cache=unsafe for image creation
+Bugzilla: 848070
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+For cache=unsafe we also need to set BDRV_O_CACHE_WB, otherwise we have some
+strange unsafe writethrough mode.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+(cherry picked from commit e1a7107f2d92af646ec37b74d074dc150e688559)
+---
+ block/qcow2.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/qcow2.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/block/qcow2.c b/block/qcow2.c
+index 20bef2b..9a1665d 100644
+--- a/block/qcow2.c
++++ b/block/qcow2.c
+@@ -1018,7 +1018,8 @@ static int qcow2_create2(const char *filename, int64_t total_size,
+      */
+     BlockDriver* drv = bdrv_find_format("qcow2");
+     assert(drv != NULL);
+-    ret = bdrv_open(bs, filename, BDRV_O_RDWR | BDRV_O_NO_FLUSH, drv);
++    ret = bdrv_open(bs, filename,
++        BDRV_O_RDWR | BDRV_O_CACHE_WB | BDRV_O_NO_FLUSH, drv);
+     if (ret < 0) {
+         goto out;
+     }
+-- 
+1.7.11.7
+

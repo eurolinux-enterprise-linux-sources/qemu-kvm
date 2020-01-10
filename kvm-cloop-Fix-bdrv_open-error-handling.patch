@@ -1,0 +1,104 @@
+From e964c07e4b1dec4d4b696b0a878a46d7ff9c70cf Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Tue, 25 Mar 2014 11:45:39 +0100
+Subject: [PATCH 21/48] cloop: Fix bdrv_open() error handling
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1395744364-16049-21-git-send-email-kwolf@redhat.com>
+Patchwork-id: n/a
+O-Subject: [EMBARGOED RHEL-6.6/6.5.z qemu-kvm PATCH v2 20/45]
+           cloop: Fix bdrv_open() error handling
+Bugzilla: 1079518
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeff Cody <jcody@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1079518
+
+Return -errno instead of -1 on errors. While touching the
+code, fix a memory leak.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 1a60657f5729bac57e70802eb17e67ad793400fd)
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/cloop.c |   29 +++++++++++++++++++----------
+ 1 files changed, 19 insertions(+), 10 deletions(-)
+
+diff --git a/block/cloop.c b/block/cloop.c
+index d46ba6f..cc364ce 100644
+--- a/block/cloop.c
++++ b/block/cloop.c
+@@ -60,12 +60,14 @@ static int cloop_open(BlockDriverState *bs, int flags)
+ {
+     BDRVCloopState *s = bs->opaque;
+     uint32_t offsets_size, max_compressed_block_size = 1, i;
++    int ret;
+ 
+     bs->read_only = 1;
+ 
+     /* read header */
+-    if (bdrv_pread(bs->file, 128, &s->block_size, 4) < 4) {
+-        goto cloop_close;
++    ret = bdrv_pread(bs->file, 128, &s->block_size, 4);
++    if (ret < 0) {
++        return ret;
+     }
+     s->block_size = be32_to_cpu(s->block_size);
+     if (s->block_size % 512) {
+@@ -87,8 +89,9 @@ static int cloop_open(BlockDriverState *bs, int flags)
+         return -EINVAL;
+     }
+ 
+-    if (bdrv_pread(bs->file, 128 + 4, &s->n_blocks, 4) < 4) {
+-        goto cloop_close;
++    ret = bdrv_pread(bs->file, 128 + 4, &s->n_blocks, 4);
++    if (ret < 0) {
++        return ret;
+     }
+     s->n_blocks = be32_to_cpu(s->n_blocks);
+ 
+@@ -109,10 +112,12 @@ static int cloop_open(BlockDriverState *bs, int flags)
+         return -EINVAL;
+     }
+     s->offsets = g_malloc(offsets_size);
+-    if (bdrv_pread(bs->file, 128 + 4 + 4, s->offsets, offsets_size) <
+-            offsets_size) {
+-        goto cloop_close;
++
++    ret = bdrv_pread(bs->file, 128 + 4 + 4, s->offsets, offsets_size);
++    if (ret < 0) {
++        goto fail;
+     }
++
+     for(i=0;i<s->n_blocks;i++) {
+         s->offsets[i] = be64_to_cpu(s->offsets[i]);
+         if (i > 0) {
+@@ -127,7 +132,8 @@ static int cloop_open(BlockDriverState *bs, int flags)
+     s->compressed_block = g_malloc(max_compressed_block_size + 1);
+     s->uncompressed_block = g_malloc(s->block_size);
+     if (inflateInit(&s->zstream) != Z_OK) {
+-        goto cloop_close;
++        ret = -EINVAL;
++        goto fail;
+     }
+     s->current_block = s->n_blocks;
+ 
+@@ -136,8 +142,11 @@ static int cloop_open(BlockDriverState *bs, int flags)
+     qemu_co_mutex_init(&s->lock);
+     return 0;
+ 
+-cloop_close:
+-    return -1;
++fail:
++    g_free(s->offsets);
++    g_free(s->compressed_block);
++    g_free(s->uncompressed_block);
++    return ret;
+ }
+ 
+ static inline int cloop_read_block(BlockDriverState *bs, int block_num)
+-- 
+1.7.1
+

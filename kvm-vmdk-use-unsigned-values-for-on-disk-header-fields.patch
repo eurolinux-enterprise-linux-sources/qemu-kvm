@@ -1,0 +1,99 @@
+From b331caa9dba256b6df2f0005b54e0dcc0ed9aa8f Mon Sep 17 00:00:00 2001
+Message-Id: <b331caa9dba256b6df2f0005b54e0dcc0ed9aa8f.1376387172.git.minovotn@redhat.com>
+In-Reply-To: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+References: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Thu, 8 Aug 2013 06:09:34 +0200
+Subject: [PATCH 04/13] vmdk: use unsigned values for on disk header fields
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1375942181-5262-5-git-send-email-famz@redhat.com>
+Patchwork-id: 53069
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 04/11] vmdk: use unsigned values for on disk header fields
+Bugzilla: 994804
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+The size and offset fields are all non-negative values, use uint64_t for
+them to avoid getting negative in memory value by int overflow.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit e98768d43799cd3f00b358bfbe455fdae793d3e8)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 24 ++++++++++++------------
+ 1 file changed, 12 insertions(+), 12 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 24 ++++++++++++------------
+ 1 file changed, 12 insertions(+), 12 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 8d17b9b..e5a01cf 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -67,14 +67,14 @@ typedef struct {
+ typedef struct {
+     uint32_t version;
+     uint32_t flags;
+-    int64_t capacity;
+-    int64_t granularity;
+-    int64_t desc_offset;
+-    int64_t desc_size;
+-    int32_t num_gtes_per_gte;
+-    int64_t rgd_offset;
+-    int64_t gd_offset;
+-    int64_t grain_offset;
++    uint64_t capacity;
++    uint64_t granularity;
++    uint64_t desc_offset;
++    uint64_t desc_size;
++    uint32_t num_gtes_per_gte;
++    uint64_t rgd_offset;
++    uint64_t gd_offset;
++    uint64_t grain_offset;
+     char filler[1];
+     char check_bytes[4];
+     uint16_t compressAlgorithm;
+@@ -109,7 +109,7 @@ typedef struct VmdkExtent {
+ 
+ typedef struct BDRVVmdkState {
+     CoMutex lock;
+-    int desc_offset;
++    uint64_t desc_offset;
+     bool cid_updated;
+     uint32_t parent_cid;
+     int num_extents;
+@@ -488,7 +488,7 @@ static int vmdk_open_vmdk3(BlockDriverState *bs,
+ }
+ 
+ static int vmdk_open_desc_file(BlockDriverState *bs, int flags,
+-                               int64_t desc_offset);
++                               uint64_t desc_offset);
+ 
+ static int vmdk_open_vmdk4(BlockDriverState *bs,
+                            BlockDriverState *file,
+@@ -506,7 +506,7 @@ static int vmdk_open_vmdk4(BlockDriverState *bs,
+         return ret;
+     }
+     if (header.capacity == 0) {
+-        int64_t desc_offset = le64_to_cpu(header.desc_offset);
++        uint64_t desc_offset = le64_to_cpu(header.desc_offset);
+         if (desc_offset) {
+             return vmdk_open_desc_file(bs, flags, desc_offset << 9);
+         }
+@@ -717,7 +717,7 @@ next_line:
+ }
+ 
+ static int vmdk_open_desc_file(BlockDriverState *bs, int flags,
+-                               int64_t desc_offset)
++                               uint64_t desc_offset)
+ {
+     int ret;
+     char buf[2048];
+-- 
+1.7.11.7
+

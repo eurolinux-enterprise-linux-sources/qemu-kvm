@@ -1,0 +1,58 @@
+From 6d09dda4efbe886abcacab8df0e8d4f35b64278a Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Wed, 13 Nov 2013 23:34:47 +0100
+Subject: [PATCH 32/39] chardev: remove the headers of Memory chardev driver
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1384385687-11423-6-git-send-email-lersek@redhat.com>
+Patchwork-id: 55676
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 5/5] chardev: remove the headers of Memory chardev driver
+Bugzilla: 1026903
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: Lei Li <lilei@linux.vnet.ibm.com>
+
+Memory chardev driver is no longer used, and Commit:
+4bf0bb8014ac2ac61b1004f5d92b2a4594d48017 has droped
+it but the headers, so clean it up.
+
+Signed-off-by: Lei Li <lilei@linux.vnet.ibm.com>
+Message-id: 1366188414-24214-1-git-send-email-lilei@linux.vnet.ibm.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit bd5ac20325ed67eb8f1af719d76aad6ad80e5697)
+
+Conflicts:
+	qemu-char.h
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qemu-char.h | 6 ------
+ 1 file changed, 6 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ qemu-char.h |    6 ------
+ 1 files changed, 0 insertions(+), 6 deletions(-)
+
+diff --git a/qemu-char.h b/qemu-char.h
+index 906e916..7a034c5 100644
+--- a/qemu-char.h
++++ b/qemu-char.h
+@@ -260,12 +260,6 @@ CharDriverState *qemu_chr_find(const char *name);
+ 
+ extern int term_escape_char;
+ 
+-/* memory chardev */
+-void qemu_chr_init_mem(CharDriverState *chr);
+-void qemu_chr_close_mem(CharDriverState *chr);
+-QString *qemu_chr_mem_to_qs(CharDriverState *chr);
+-size_t qemu_chr_mem_osize(const CharDriverState *chr);
+-
+ /* async I/O support */
+ 
+ int qemu_set_fd_handler2(int fd,
+-- 
+1.7.1
+

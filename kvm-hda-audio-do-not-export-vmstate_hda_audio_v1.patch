@@ -1,0 +1,160 @@
+From c199300c160a3d29e9bbe2ddb741dd5baf19fb9c Mon Sep 17 00:00:00 2001
+Message-Id: <c199300c160a3d29e9bbe2ddb741dd5baf19fb9c.1369841886.git.minovotn@redhat.com>
+In-Reply-To: <9db4fbc10d733a88102ef99acaf6eb5d54153495.1369841886.git.minovotn@redhat.com>
+References: <9db4fbc10d733a88102ef99acaf6eb5d54153495.1369841886.git.minovotn@redhat.com>
+From: Marc-Andr Lureau <marcandre.lureau@redhat.com>
+Date: Wed, 29 May 2013 14:34:53 +0200
+Subject: [PATCH 05/14] hda-audio: do not export vmstate_hda_audio_v1
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Marc-André Lureau <marcandre.lureau@redhat.com>
+Message-id: <1369838102-26064-5-git-send-email-marcandre.lureau@redhat.com>
+Patchwork-id: 51675
+O-Subject: [RHEL-6.5 qemu-kvm PATCHv3 04/13] hda-audio: do not export vmstate_hda_audio_v1
+Bugzilla: 884253
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Sorry for shuffling code around, but we can't link twice the same object otherwise.
+---
+ hw/hda-audio.c |  102 +++++++++++++++++++++++++++----------------------------
+ 1 files changed, 50 insertions(+), 52 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/hda-audio.c | 102 ++++++++++++++++++++++++++++-----------------------------
+ 1 file changed, 50 insertions(+), 52 deletions(-)
+
+diff --git a/hw/hda-audio.c b/hw/hda-audio.c
+index 1f6c12e..8cffcae 100644
+--- a/hw/hda-audio.c
++++ b/hw/hda-audio.c
+@@ -883,57 +883,6 @@ static void hda_audio_stream(HDACodecDevice *hda, uint32_t stnr, bool running, b
+     }
+ }
+ 
+-extern const VMStateDescription vmstate_hda_audio_v1;
+-
+-static int hda_audio_init(HDACodecDevice *hda, const struct desc_codec *desc)
+-{
+-    HDAAudioState *a = DO_UPCAST(HDAAudioState, hda, hda);
+-    HDAAudioStream *st;
+-    const desc_node *node;
+-    const desc_param *param;
+-    uint32_t i, type;
+-
+-    a->desc = desc;
+-    a->name = a->hda.qdev.info->name;
+-    dprint(a, 1, "%s: cad %d\n", __FUNCTION__, a->hda.cad);
+-
+-    if (a->mcompat) {
+-        hda->qdev.info->vmsd = &vmstate_hda_audio_v1;
+-    }
+-
+-    AUD_register_card("hda", &a->card);
+-    for (i = 0; i < a->desc->nnodes; i++) {
+-        node = a->desc->nodes + i;
+-        param = hda_codec_find_param(node, AC_PAR_AUDIO_WIDGET_CAP);
+-        if (NULL == param)
+-            continue;
+-        type = (param->val & AC_WCAP_TYPE) >> AC_WCAP_TYPE_SHIFT;
+-        switch (type) {
+-        case AC_WID_AUD_OUT:
+-        case AC_WID_AUD_IN:
+-            assert(node->stindex < ARRAY_SIZE(a->st));
+-            st = a->st + node->stindex;
+-            st->state = a;
+-            st->node = node;
+-            if (type == AC_WID_AUD_OUT) {
+-                /* unmute output by default */
+-                st->gain_left = QEMU_HDA_AMP_STEPS;
+-                st->gain_right = QEMU_HDA_AMP_STEPS;
+-                st->bpos = sizeof(st->buf);
+-                st->output = true;
+-            } else {
+-                st->output = false;
+-            }
+-            st->format = AC_FMT_TYPE_PCM | AC_FMT_BITS_16 |
+-                (1 << AC_FMT_CHAN_SHIFT);
+-            hda_codec_parse_fmt(st->format, &st->as);
+-            hda_audio_setup(st);
+-            break;
+-        }
+-    }
+-    return 0;
+-}
+-
+ static int hda_audio_exit(HDACodecDevice *hda)
+ {
+     HDAAudioState *a = DO_UPCAST(HDAAudioState, hda, hda);
+@@ -998,7 +947,7 @@ static const VMStateDescription vmstate_hda_audio_stream = {
+     }
+ };
+ 
+-const VMStateDescription vmstate_hda_audio_v1 = {
++static const VMStateDescription vmstate_hda_audio_v1 = {
+     .name = "hda-audio",
+     .version_id = 1,
+     .post_load = hda_audio_post_load,
+@@ -1031,6 +980,55 @@ static Property hda_audio_properties[] = {
+     DEFINE_PROP_END_OF_LIST(),
+ };
+ 
++static int hda_audio_init(HDACodecDevice *hda, const struct desc_codec *desc)
++{
++    HDAAudioState *a = DO_UPCAST(HDAAudioState, hda, hda);
++    HDAAudioStream *st;
++    const desc_node *node;
++    const desc_param *param;
++    uint32_t i, type;
++
++    a->desc = desc;
++    a->name = a->hda.qdev.info->name;
++    dprint(a, 1, "%s: cad %d\n", __FUNCTION__, a->hda.cad);
++
++    if (a->mcompat) {
++        hda->qdev.info->vmsd = &vmstate_hda_audio_v1;
++    }
++
++    AUD_register_card("hda", &a->card);
++    for (i = 0; i < a->desc->nnodes; i++) {
++        node = a->desc->nodes + i;
++        param = hda_codec_find_param(node, AC_PAR_AUDIO_WIDGET_CAP);
++        if (NULL == param)
++            continue;
++        type = (param->val & AC_WCAP_TYPE) >> AC_WCAP_TYPE_SHIFT;
++        switch (type) {
++        case AC_WID_AUD_OUT:
++        case AC_WID_AUD_IN:
++            assert(node->stindex < ARRAY_SIZE(a->st));
++            st = a->st + node->stindex;
++            st->state = a;
++            st->node = node;
++            if (type == AC_WID_AUD_OUT) {
++                /* unmute output by default */
++                st->gain_left = QEMU_HDA_AMP_STEPS;
++                st->gain_right = QEMU_HDA_AMP_STEPS;
++                st->bpos = sizeof(st->buf);
++                st->output = true;
++            } else {
++                st->output = false;
++            }
++            st->format = AC_FMT_TYPE_PCM | AC_FMT_BITS_16 |
++                (1 << AC_FMT_CHAN_SHIFT);
++            hda_codec_parse_fmt(st->format, &st->as);
++            hda_audio_setup(st);
++            break;
++        }
++    }
++    return 0;
++}
++
+ static int hda_audio_init_output(HDACodecDevice *hda)
+ {
+     return hda_audio_init(hda, &output);
+-- 
+1.7.11.7
+

@@ -1,0 +1,76 @@
+From 96b831347c10b52200210af0c80a4c69f6ec7591 Mon Sep 17 00:00:00 2001
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 20 May 2014 10:37:32 +0200
+Subject: [PATCH 02/26] usb: move usb_{hi, lo} helpers to header file.
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1400582257-1744-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 58960
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 1/6] usb: move usb_{hi, lo} helpers to header file.
+Bugzilla: 949547
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 0b1fa34e1dd2764ee7ae2be849e1c5ba5e8724ca)
+
+Conflicts:
+	hw/usb-desc.h
+---
+ hw/usb-desc.c | 10 ----------
+ hw/usb-desc.h | 11 +++++++++++
+ 2 files changed, 11 insertions(+), 10 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ hw/usb-desc.c |   10 ----------
+ hw/usb-desc.h |   11 +++++++++++
+ 2 files changed, 11 insertions(+), 10 deletions(-)
+
+diff --git a/hw/usb-desc.c b/hw/usb-desc.c
+index dc5d9fe..08c0863 100644
+--- a/hw/usb-desc.c
++++ b/hw/usb-desc.c
+@@ -6,16 +6,6 @@
+ 
+ /* ------------------------------------------------------------------ */
+ 
+-static uint8_t usb_lo(uint16_t val)
+-{
+-    return val & 0xff;
+-}
+-
+-static uint8_t usb_hi(uint16_t val)
+-{
+-    return (val >> 8) & 0xff;
+-}
+-
+ int usb_desc_device(const USBDescID *id, const USBDescDevice *dev,
+                     uint8_t *dest, size_t len)
+ {
+diff --git a/hw/usb-desc.h b/hw/usb-desc.h
+index 78b1ff2..8dcdf0c 100644
+--- a/hw/usb-desc.h
++++ b/hw/usb-desc.h
+@@ -150,6 +150,17 @@ struct USBDesc {
+     const char* const         *str;
+ };
+ 
++/* little helpers */
++static inline uint8_t usb_lo(uint16_t val)
++{
++    return val & 0xff;
++}
++
++static inline uint8_t usb_hi(uint16_t val)
++{
++    return (val >> 8) & 0xff;
++}
++
+ /* generate usb packages from structs */
+ int usb_desc_device(const USBDescID *id, const USBDescDevice *dev,
+                     uint8_t *dest, size_t len);
+-- 
+1.7.1
+

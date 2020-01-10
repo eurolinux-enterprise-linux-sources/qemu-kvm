@@ -1,0 +1,42 @@
+From 71ffaff659743c322abd1f51ba14babfaff0de95 Mon Sep 17 00:00:00 2001
+From: Marcel Apfelbaum <marcel.a@redhat.com>
+Date: Thu, 5 Jun 2014 07:09:14 +0200
+Subject: [PATCH 5/9] PCI: show also host bridge data in "info pci" output
+
+RH-Author: Marcel Apfelbaum <marcel.a@redhat.com>
+Message-id: <1401952158-29608-4-git-send-email-marcel.a@redhat.com>
+Patchwork-id: 59149
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v5 3/7] PCI: show also host bridge data in "info pci" output
+Bugzilla: 813748
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+Signed-off-by: Blue Swirl <blauwirbel@gmail.com>
+(cherry picked from commit 525e05147d5a3bdc08caa422d108c1ef71b584b5)
+Signed-off-by: Marcel Apfelbaum <marcel.a@redhat.com>
+---
+ hw/pci.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/pci.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/hw/pci.c b/hw/pci.c
+index c87423b..9664c71 100644
+--- a/hw/pci.c
++++ b/hw/pci.c
+@@ -1439,7 +1439,7 @@ static QObject *pci_get_dev_dict(PCIDevice *dev, PCIBus *bus, int bus_num)
+     }
+ 
+     class = pci_get_word(dev->config + PCI_CLASS_DEVICE);
+-    if (class == 0x0604) {
++    if (class == PCI_CLASS_BRIDGE_HOST || class == PCI_CLASS_BRIDGE_PCI) {
+         QDict *qdict;
+         QObject *pci_bridge;
+ 
+-- 
+1.7.1
+

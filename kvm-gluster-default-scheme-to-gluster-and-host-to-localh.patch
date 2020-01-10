@@ -1,0 +1,69 @@
+From 510678fc690c64ca75dfb13c2b4cd2ef25eacb54 Mon Sep 17 00:00:00 2001
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Thu, 17 Apr 2014 14:29:46 +0200
+Subject: [PATCH 29/30] gluster: default scheme to gluster:// and host to localhost.
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <ffba73b5496b2e79821645f4ec25ed9d75f8ca59.1397683268.git.jcody@redhat.com>
+Patchwork-id: 58501
+O-Subject: [RHEL-6.6 qemu-kvm PATCH] gluster: default scheme to gluster:// and host to localhost.
+Bugzilla: 1088610
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Currently, "gluster:///volname/img" and (using file. options)
+"file.driver=gluster,file.filename=foo" will segfault.  Also,
+"//host/volname/img" will be rejected, but it is a valid URL
+that should be accepted just fine with "file.driver=gluster".
+Accept all of these, by inferring missing transport and host
+as TCP and localhost respectively.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Reviewed-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 24897a767bd778fc6a050537d024565f9272cd06)
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+
+RHEL6 Notes:
+
+BZ 1088610
+Brew (RHEL): http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7360118
+Brew (RHEV): http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7360125
+
+ block/gluster.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block/gluster.c |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/block/gluster.c b/block/gluster.c
+index 4e70c47..b251b62 100644
+--- a/block/gluster.c
++++ b/block/gluster.c
+@@ -132,7 +132,7 @@ static int qemu_gluster_parseuri(GlusterConf *gconf, const char *filename)
+     }
+ 
+     /* transport */
+-    if (!strcmp(uri->scheme, "gluster")) {
++    if (!uri->scheme || !strcmp(uri->scheme, "gluster")) {
+         gconf->transport = g_strdup("tcp");
+     } else if (!strcmp(uri->scheme, "gluster+tcp")) {
+         gconf->transport = g_strdup("tcp");
+@@ -168,7 +168,7 @@ static int qemu_gluster_parseuri(GlusterConf *gconf, const char *filename)
+         }
+         gconf->server = g_strdup(qp->p[0].value);
+     } else {
+-        gconf->server = g_strdup(uri->server);
++        gconf->server = g_strdup(uri->server ? uri->server : "localhost");
+         gconf->port = uri->port;
+     }
+ 
+-- 
+1.7.1
+

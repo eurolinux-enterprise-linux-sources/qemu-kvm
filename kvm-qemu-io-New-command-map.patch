@@ -1,0 +1,94 @@
+From d6d3705f82cda7c1c83166bc9900b5dc8f5b2ad8 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:26 -0500
+Subject: [CHANGE 04/31] qemu-io: New command map
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-5-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60364
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 04/29] qemu-io: New command map
+Bugzilla: 1122410
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+The new map command in qemu-io lists all allocated/unallocated areas in an
+image file.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 191c2890ddc9626d35c9e432494e1699a8181025)
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	qemu-io.c
+
+Conflicts because of style changes (tab conversion etc.)
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ qemu-io.c | 39 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 39 insertions(+)
+
+diff --git a/qemu-io.c b/qemu-io.c
+index df1ed94..58611d8 100644
+--- a/qemu-io.c
++++ b/qemu-io.c
+@@ -1337,6 +1337,44 @@ static const cmdinfo_t alloc_cmd = {
+     .oneline    = "checks if a sector is present in the file",
+ };
+ 
++static int
++map_f(int argc, char **argv)
++{
++	int64_t offset;
++	int64_t nb_sectors;
++	char s1[64];
++	int num, num_checked;
++	int ret;
++	const char *retstr;
++
++	offset = 0;
++	nb_sectors = bs->total_sectors;
++
++	do {
++		num_checked = MIN(nb_sectors, INT_MAX);
++		ret = bdrv_is_allocated(bs, offset, num_checked, &num);
++		retstr = ret ? "    allocated" : "not allocated";
++		cvtstr(offset << 9ULL, s1, sizeof(s1));
++		printf("[% 24" PRId64 "] % 8d/% 8d sectors %s at offset %s (%d)\n",
++				offset << 9ULL, num, num_checked, retstr, s1, ret);
++
++		offset += num;
++		nb_sectors -= num;
++	} while(offset < bs->total_sectors);
++
++	return 0;
++}
++
++static const cmdinfo_t map_cmd = {
++       .name           = "map",
++       .argmin         = 0,
++       .argmax         = 0,
++       .cfunc          = map_f,
++       .args           = "",
++       .oneline        = "prints the allocated areas of a file",
++};
++
++
+ static int close_f(int argc, char **argv)
+ {
+     bdrv_close(bs);
+@@ -1577,6 +1615,7 @@ int main(int argc, char **argv)
+     add_command(&length_cmd);
+     add_command(&info_cmd);
+     add_command(&alloc_cmd);
++    add_command(&map_cmd);
+ 
+     add_args_command(init_args_command);
+     add_check_command(init_check_command);
+-- 
+1.9.3
+

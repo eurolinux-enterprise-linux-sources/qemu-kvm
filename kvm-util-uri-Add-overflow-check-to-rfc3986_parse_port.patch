@@ -1,0 +1,79 @@
+From fc0cdcd88e357d1eabfe4e83bc7d2d520bec0b8f Mon Sep 17 00:00:00 2001
+Message-Id: <fc0cdcd88e357d1eabfe4e83bc7d2d520bec0b8f.1430931597.git.jen@redhat.com>
+In-Reply-To: <167537380706cbdedae56a1c6445daa9e414396d.1430931597.git.jen@redhat.com>
+References: <167537380706cbdedae56a1c6445daa9e414396d.1430931597.git.jen@redhat.com>
+From: Markus Armbruster <armbru@redhat.com>
+Date: Wed, 6 May 2015 07:51:11 -0500
+Subject: [CHANGE 9/9] util/uri: Add overflow check to rfc3986_parse_port
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1430898671-22595-9-git-send-email-armbru@redhat.com>
+Patchwork-id: 65012
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 8/8] util/uri: Add overflow check to rfc3986_parse_port
+Bugzilla: 1205288
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Max Reitz <mreitz@redhat.com>
+
+And while at it, replace tabs by eight spaces in this function.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Message-Id: <1424887718-10800-2-git-send-email-mreitz@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 2b21233061696feed434317a70e0a8b74f956ec8)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	util/uri.c
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ uri.c | 24 ++++++++++++++----------
+ 1 file changed, 14 insertions(+), 10 deletions(-)
+
+diff --git a/uri.c b/uri.c
+index 4ef7104..0e9fecc 100644
+--- a/uri.c
++++ b/uri.c
+@@ -320,19 +320,23 @@ static int
+ rfc3986_parse_port(URI *uri, const char **str)
+ {
+     const char *cur = *str;
++    int port = 0;
+ 
+     if (ISA_DIGIT(cur)) {
+-	if (uri != NULL)
+-	    uri->port = 0;
+-	while (ISA_DIGIT(cur)) {
+-	    if (uri != NULL)
+-		uri->port = uri->port * 10 + (*cur - '0');
+-	    cur++;
+-	}
+-	*str = cur;
+-	return(0);
++        while (ISA_DIGIT(cur)) {
++            port = port * 10 + (*cur - '0');
++            if (port > 65535) {
++                return 1;
++            }
++            cur++;
++        }
++        if (uri) {
++            uri->port = port;
++        }
++        *str = cur;
++        return 0;
+     }
+-    return(1);
++    return 1;
+ }
+ 
+ /**
+-- 
+2.1.0
+

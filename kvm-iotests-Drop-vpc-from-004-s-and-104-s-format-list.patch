@@ -1,0 +1,68 @@
+From c4df6195485fad303e76bf93bf6af3b2f56af250 Mon Sep 17 00:00:00 2001
+Message-Id: <c4df6195485fad303e76bf93bf6af3b2f56af250.1428549624.git.jen@redhat.com>
+In-Reply-To: <6f5be4df5e31d585f927f6280d6fd1112ee97a20.1428549624.git.jen@redhat.com>
+References: <6f5be4df5e31d585f927f6280d6fd1112ee97a20.1428549624.git.jen@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Tue, 31 Mar 2015 20:05:00 -0500
+Subject: [CHANGE 6/7] iotests: Drop vpc from 004's and 104's format list
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <7862255fdcb6701acca1cb84aef464f17b171b40.1427831876.git.jcody@redhat.com>
+Patchwork-id: 64653
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 2/3] iotests: Drop vpc from 004's and 104's format list
+Bugzilla: 1130015
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Max Reitz <mreitz@redhat.com>
+
+Both tests require the test image to have a specific size; this cannot
+be guaranteed by vpc (unless tuning the test specifically for that
+format).
+
+It is safe to exclude vpc from 004 because what is tested there is
+implemented in a generic part in the block layer and not
+format-specific.
+
+It is safe to exclude vpc from 104 because for vpc basically every image
+size is "unaligned", so if that would break at some point in time, we
+would quickly notice just by running the generic tests.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit aef58bdc1e7d8f37cdf838b49f160c520399c84f)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	tests/qemu-iotests/104
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ tests/qemu-iotests/004 | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ tests/qemu-iotests/004 | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/qemu-iotests/004 b/tests/qemu-iotests/004
+index 651072e..2ad77ed 100755
+--- a/tests/qemu-iotests/004
++++ b/tests/qemu-iotests/004
+@@ -38,7 +38,7 @@ trap "_cleanup; exit \$status" 0 1 2 3 15
+ . ./common.rc
+ . ./common.filter
+ 
+-_supported_fmt generic
++_supported_fmt raw qcow qcow2 qed vdi vmdk vhdx
+ _supported_proto generic
+ _supported_os Linux
+ 
+-- 
+2.1.0
+

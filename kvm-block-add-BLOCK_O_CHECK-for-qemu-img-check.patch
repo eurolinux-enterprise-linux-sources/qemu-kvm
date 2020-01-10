@@ -1,0 +1,96 @@
+From fe0d0d9a73db1e335ed10c21091935a5f4f05251 Mon Sep 17 00:00:00 2001
+Message-Id: <fe0d0d9a73db1e335ed10c21091935a5f4f05251.1366117835.git.minovotn@redhat.com>
+In-Reply-To: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+References: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 7 Mar 2013 15:29:18 +0100
+Subject: [PATCH 10/19] block: add BLOCK_O_CHECK for qemu-img check
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1362670164-15796-7-git-send-email-kwolf@redhat.com>
+Patchwork-id: 49308
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 06/12] block: add BLOCK_O_CHECK for qemu-img check
+Bugzilla: 888008
+RH-Acked-by: Eric Blake <eblake@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+
+Image formats with a dirty bit, like qed and qcow2, repair dirty image
+files upon open with BDRV_O_RDWR.  Performing automatic repair when
+qemu-img check runs is not ideal because the bdrv_open() call repairs
+the image before the actual bdrv_check() call from qemu-img.c.
+
+Fix this "double repair" since it leads to confusing output from
+qemu-img check.  Tell the block driver that this image is being opened
+just for bdrv_check().  This skips automatic repair and qemu-img.c can
+invoke it manually with bdrv_check().
+
+Update the golden output for qemu-iotests 039 to reflect the new
+qemu-img check output.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 058f8f16db0c1c528b665a6283457f019c8b0926)
+
+Conflicts:
+	block.h
+	block/qcow2.c
+	tests/qemu-iotests/039.out
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block.h     | 1 +
+ block/qed.c | 2 +-
+ qemu-img.c  | 2 +-
+ 3 files changed, 3 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.h     | 1 +
+ block/qed.c | 2 +-
+ qemu-img.c  | 2 +-
+ 3 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/block.h b/block.h
+index a4f2a6e..5ac25fc 100644
+--- a/block.h
++++ b/block.h
+@@ -78,6 +78,7 @@ typedef struct BlockDevOps {
+ #define BDRV_O_NO_FLUSH    0x0200 /* disable flushing on this disk */
+ #define BDRV_O_COPY_ON_READ 0x0400 /* copy read backing sectors into image */
+ #define BDRV_O_INCOMING    0x0800 /* consistency hint for incoming migration */
++#define BDRV_O_CHECK       0x1000  /* open solely for consistency check */
+ #define BDRV_O_ALLOW_RDWR  0x2000  /* allow reopen to change from r/o to r/w */
+ 
+ #define BDRV_O_CACHE_MASK  (BDRV_O_NOCACHE | BDRV_O_CACHE_WB)
+diff --git a/block/qed.c b/block/qed.c
+index 040d88e..1bb53b2 100644
+--- a/block/qed.c
++++ b/block/qed.c
+@@ -473,7 +473,7 @@ static int bdrv_qed_open(BlockDriverState *bs, int flags)
+     }
+ 
+     /* If image was not closed cleanly, check consistency */
+-    if (s->header.features & QED_F_NEED_CHECK) {
++    if (!(flags & BDRV_O_CHECK) && (s->header.features & QED_F_NEED_CHECK)) {
+         /* Read-only images cannot be fixed.  There is no risk of corruption
+          * since write operations are not possible.  Therefore, allow
+          * potentially inconsistent images to be opened read-only.  This can
+diff --git a/qemu-img.c b/qemu-img.c
+index abfc663..da546d2 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -402,7 +402,7 @@ static int img_check(int argc, char **argv)
+     BlockDriverState *bs;
+     BdrvCheckResult result;
+     int fix = 0;
+-    int flags = BDRV_O_FLAGS;
++    int flags = BDRV_O_FLAGS | BDRV_O_CHECK;
+ 
+     fmt = NULL;
+     for(;;) {
+-- 
+1.7.11.7
+

@@ -1,0 +1,221 @@
+From a053edd4953feef14747c767762e75f7843abafb Mon Sep 17 00:00:00 2001
+Message-Id: <a053edd4953feef14747c767762e75f7843abafb.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:06:13 +0200
+Subject: [PATCH 62/65] chardev: add vc support to qapi
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-63-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52145
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 62/65] chardev: add vc support to qapi
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+This patch adds 'vc' support to qapi and also switches over the
+vc chardev initialization to the new qapi code path.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 702ec69cc1aa87a1e53d1b066a38a9eb0fa7845b)
+
+Conflicts:
+
+	console.c
+	console.h
+	ui/gtk.c
+---
+ console.c        |   60 +++++++++++++++++++++++++++++++++++++++++++++---------
+ console.h        |    1 -
+ qapi-schema.json |   20 +++++++++++++++++-
+ qemu-char-qapi.h |    1 +
+ qemu-char.c      |    3 +++
+ 5 files changed, 73 insertions(+), 12 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ console.c        | 60 ++++++++++++++++++++++++++++++++++++++++++++++----------
+ console.h        |  1 -
+ qapi-schema.json | 20 ++++++++++++++++++-
+ qemu-char-qapi.h |  1 +
+ qemu-char.c      |  3 +++
+ 5 files changed, 73 insertions(+), 12 deletions(-)
+
+diff --git a/console.c b/console.c
+index f331710..fe76d44 100644
+--- a/console.c
++++ b/console.c
+@@ -25,6 +25,9 @@
+ #include "console.h"
+ #include "qemu-timer.h"
+ 
++#include "qapi-visit.h"
++#include "qemu-char-qapi.h"
++
+ //#define DEBUG_CONSOLE
+ #define DEFAULT_BACKSCROLL 512
+ #define MAX_CONSOLES 12
+@@ -1362,12 +1365,12 @@ static void text_console_do_init(CharDriverState *chr, DisplayState *ds)
+         chr->init(chr);
+ }
+ 
+-CharDriverState *text_console_init(QemuOpts *opts)
++CharDriverState *text_console_init(ChardevVC *vc)
+ {
+     CharDriverState *chr;
+     TextConsole *s;
+-    unsigned width;
+-    unsigned height;
++    unsigned width = 0;
++    unsigned height = 0;
+ 
+     chr = qemu_mallocz(sizeof(CharDriverState));
+ 
+@@ -1377,13 +1380,17 @@ CharDriverState *text_console_init(QemuOpts *opts)
+     }
+     text_consoles[n_text_consoles] = chr;
+ 
+-    width = qemu_opt_get_number(opts, "width", 0);
+-    if (width == 0)
+-        width = qemu_opt_get_number(opts, "cols", 0) * FONT_WIDTH;
++    if (vc->has_width) {
++        width = vc->width;
++    } else if (vc->has_cols) {
++        width = vc->cols * FONT_WIDTH;
++    }
+ 
+-    height = qemu_opt_get_number(opts, "height", 0);
+-    if (height == 0)
+-        height = qemu_opt_get_number(opts, "rows", 0) * FONT_HEIGHT;
++    if (vc->has_height) {
++        height = vc->height;
++    } else if (vc->has_rows) {
++        height = vc->rows * FONT_HEIGHT;
++    }
+ 
+     if (width == 0 || height == 0) {
+         s = new_console(NULL, TEXT_CONSOLE);
+@@ -1611,9 +1618,42 @@ void defaultallocator_free_displaysurface(DisplaySurface *surface)
+     qemu_free(surface);
+ }
+ 
++static void qemu_chr_parse_vc(QemuOpts *opts, ChardevBackend *backend,
++                              Error **errp)
++{
++    int val;
++
++    backend->vc = g_new0(ChardevVC, 1);
++
++    val = qemu_opt_get_number(opts, "width", 0);
++    if (val != 0) {
++        backend->vc->has_width = true;
++        backend->vc->width = val;
++    }
++
++    val = qemu_opt_get_number(opts, "height", 0);
++    if (val != 0) {
++        backend->vc->has_height = true;
++        backend->vc->height = val;
++    }
++
++    val = qemu_opt_get_number(opts, "cols", 0);
++    if (val != 0) {
++        backend->vc->has_cols = true;
++        backend->vc->cols = val;
++    }
++
++    val = qemu_opt_get_number(opts, "rows", 0);
++    if (val != 0) {
++        backend->vc->has_rows = true;
++        backend->vc->rows = val;
++    }
++}
++
+ static void register_types(void)
+ {
+-    register_char_driver("vc", text_console_init);
++    register_char_driver_qapi("vc", CHARDEV_BACKEND_KIND_VC,
++                              qemu_chr_parse_vc);
+ }
+ 
+ machine_init(register_types);
+diff --git a/console.h b/console.h
+index 3ff90ab..1ba54cd 100644
+--- a/console.h
++++ b/console.h
+@@ -354,7 +354,6 @@ void vga_hw_text_update(console_ch_t *chardata);
+ 
+ int is_graphic_console(void);
+ int is_fixedsize_console(void);
+-CharDriverState *text_console_init(QemuOpts *opts);
+ void text_consoles_set_display(DisplayState *ds);
+ void console_select(unsigned int index);
+ void console_color_init(DisplayState *ds);
+diff --git a/qapi-schema.json b/qapi-schema.json
+index 73ebe20..24c30f4 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -502,6 +502,23 @@
+ { 'type': 'ChardevSpicePort', 'data': { 'fqdn'  : 'str' } }
+ 
+ ##
++# @ChardevVC:
++#
++# Configuration info for virtual console chardevs.
++#
++# @width:  console width,  in pixels
++# @height: console height, in pixels
++# @cols:   console width,  in chars
++# @rows:   console height, in chars
++#
++# Since: 1.5
++##
++{ 'type': 'ChardevVC', 'data': { '*width'  : 'int',
++                                 '*height' : 'int',
++                                 '*cols'   : 'int',
++                                 '*rows'   : 'int' } }
++
++##
+ # @ChardevBackend:
+ #
+ # Configuration info for the new chardev backend.
+@@ -523,7 +540,8 @@
+                                        'stdio'  : 'ChardevStdio',
+                                        'console': 'ChardevDummy',
+                                        'spicevmc' : 'ChardevSpiceChannel',
+-                                       'spiceport' : 'ChardevSpicePort' } }
++                                       'spiceport' : 'ChardevSpicePort',
++                                       'vc'     : 'ChardevVC' } }
+ 
+ ##
+ # @ChardevReturn:
+diff --git a/qemu-char-qapi.h b/qemu-char-qapi.h
+index 405c487..f971157 100644
+--- a/qemu-char-qapi.h
++++ b/qemu-char-qapi.h
+@@ -3,5 +3,6 @@
+ 
+ void register_char_driver_qapi(const char *name, int kind,
+         void (*parse)(QemuOpts *opts, ChardevBackend *backend, Error **errp));
++CharDriverState *text_console_init(ChardevVC *vc);
+ 
+ #endif
+diff --git a/qemu-char.c b/qemu-char.c
+index 051fa90..83985cb 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -3284,6 +3284,9 @@ ChardevReturn *qmp_chardev_add(const char *id, ChardevBackend *backend,
+         chr = qemu_chr_open_spice_vmc(backend->spicevmc->type);
+         break;
+ #endif
++    case CHARDEV_BACKEND_KIND_VC:
++        chr = text_console_init(backend->vc);
++        break;
+     default:
+         error_setg(errp, "unknown chardev backend (%d)", backend->kind);
+         break;
+-- 
+1.7.11.7
+

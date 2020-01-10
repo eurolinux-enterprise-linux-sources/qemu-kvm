@@ -1,0 +1,90 @@
+From d65e0ca4d05f2e8db537d51df350da088f78b020 Mon Sep 17 00:00:00 2001
+Message-Id: <d65e0ca4d05f2e8db537d51df350da088f78b020.1366117835.git.minovotn@redhat.com>
+In-Reply-To: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+References: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 7 Mar 2013 15:29:13 +0100
+Subject: [PATCH 05/19] qemu-img: add image fragmentation statistics
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1362670164-15796-2-git-send-email-kwolf@redhat.com>
+Patchwork-id: 49302
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 01/12] qemu-img: add image fragmentation statistics
+Bugzilla: 888008
+RH-Acked-by: Eric Blake <eblake@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Dong Xu Wang <wdongxu@linux.vnet.ibm.com>
+
+Discussion can be found at:
+http://patchwork.ozlabs.org/patch/128730/
+
+This patch add image fragmentation statistics while using qemu-img check.
+
+Signed-off-by: Dong Xu Wang <wdongxu@linux.vnet.ibm.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit f8111c241afa75544032dcfa23df0699c91f9866)
+
+Conflicts:
+	qemu-img.c
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block.h    | 7 +++++++
+ qemu-img.c | 7 +++++++
+ 2 files changed, 14 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.h    | 7 +++++++
+ qemu-img.c | 7 +++++++
+ 2 files changed, 14 insertions(+)
+
+diff --git a/block.h b/block.h
+index 6bf79e1..33c135c 100644
+--- a/block.h
++++ b/block.h
+@@ -16,6 +16,12 @@ typedef struct BlockDriverInfo {
+     int64_t vm_state_offset;
+ } BlockDriverInfo;
+ 
++typedef struct BlockFragInfo {
++    uint64_t allocated_clusters;
++    uint64_t total_clusters;
++    uint64_t fragmented_clusters;
++} BlockFragInfo;
++
+ typedef struct QEMUSnapshotInfo {
+     char id_str[128]; /* unique snapshot id */
+     /* the following fields are informative. They are not needed for
+@@ -205,6 +211,7 @@ typedef struct BdrvCheckResult {
+     int corruptions;
+     int leaks;
+     int check_errors;
++    BlockFragInfo bfi;
+ } BdrvCheckResult;
+ 
+ int bdrv_check(BlockDriverState *bs, BdrvCheckResult *res);
+diff --git a/qemu-img.c b/qemu-img.c
+index 1686527..c36a0ce 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -451,6 +451,13 @@ static int img_check(int argc, char **argv)
+         }
+     }
+ 
++    if (result.bfi.total_clusters != 0 && result.bfi.allocated_clusters != 0) {
++        printf("%" PRId64 "/%" PRId64 "= %0.2f%% allocated, %0.2f%% fragmented\n",
++        result.bfi.allocated_clusters, result.bfi.total_clusters,
++        result.bfi.allocated_clusters * 100.0 / result.bfi.total_clusters,
++        result.bfi.fragmented_clusters * 100.0 / result.bfi.allocated_clusters);
++    }
++
+     bdrv_delete(bs);
+ 
+     if (ret < 0 || result.check_errors) {
+-- 
+1.7.11.7
+

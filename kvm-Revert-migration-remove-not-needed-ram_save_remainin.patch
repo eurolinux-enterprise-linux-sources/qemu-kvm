@@ -1,0 +1,62 @@
+From 6d2c0c343723e511d1407836559e3dd15843aaf5 Mon Sep 17 00:00:00 2001
+Message-Id: <6d2c0c343723e511d1407836559e3dd15843aaf5.1411757522.git.jen@redhat.com>
+In-Reply-To: <c52ca58a7a8b9f87bde7ca1ab5b11a39d82854e5.1411757522.git.jen@redhat.com>
+References: <c52ca58a7a8b9f87bde7ca1ab5b11a39d82854e5.1411757522.git.jen@redhat.com>
+From: Jeff Nelson <jenelson@redhat.com>
+Date: Fri, 26 Sep 2014 16:39:45 -0400
+Subject: [CHANGE 3/7] Revert "migration: remove not needed ram_save_remaining
+ function"
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Jeff Nelson <jenelson@redhat.com>
+Message-id: <1e4821c35c736f9dd065bc9a95b0ba4c4ed60692.1411747689.git.jen@redhat.com>
+Patchwork-id: 61462
+O-Subject: [RHEL-6.6.z qemu-kvm PATCH 3/7] Revert "migration: remove not needed ram_save_remaining function"
+Bugzilla: 970103
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+This reverts commit 99b9de007b712a8b4cc804f82c734a705989384b.
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ vl.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ vl.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/vl.c b/vl.c
+index 8ad11c6..a0fb1cb 100644
+--- a/vl.c
++++ b/vl.c
+@@ -2833,9 +2833,14 @@ static int ram_save_block(QEMUFile *f)
+ 
+ static uint64_t bytes_transferred;
+ 
++static ram_addr_t ram_save_remaining(void)
++{
++    return ram_list.dirty_pages;
++}
++
+ uint64_t ram_bytes_remaining(void)
+ {
+-    return ram_list.dirty_pages * TARGET_PAGE_SIZE;
++    return ram_save_remaining() * TARGET_PAGE_SIZE;
+ }
+ 
+ uint64_t ram_bytes_transferred(void)
+@@ -2954,7 +2959,7 @@ static int ram_save_live(Monitor *mon, QEMUFile *f, int stage, void *opaque)
+     if (stage == 2) {
+         uint64_t expected_time;
+ 
+-        expected_time = ram_bytes_remaining() / bwidth;
++        expected_time = ram_save_remaining() * TARGET_PAGE_SIZE / bwidth;
+         return expected_time <= migrate_max_downtime();
+     }
+     return 0;
+-- 
+1.9.3
+

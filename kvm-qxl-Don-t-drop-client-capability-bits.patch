@@ -1,0 +1,62 @@
+From 8912da14ed0cc87fca2a4b5db8ce59344135777e Mon Sep 17 00:00:00 2001
+Message-Id: <8912da14ed0cc87fca2a4b5db8ce59344135777e.1376572530.git.minovotn@redhat.com>
+In-Reply-To: <1ab1cadd348058496d2f900c3d4ac4b7c325d3e6.1376572530.git.minovotn@redhat.com>
+References: <1ab1cadd348058496d2f900c3d4ac4b7c325d3e6.1376572530.git.minovotn@redhat.com>
+From: Markus Armbruster <armbru@redhat.com>
+Date: Wed, 14 Aug 2013 15:12:52 +0200
+Subject: [PATCH 10/11] qxl: Don't drop client capability bits
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1376493173-5884-3-git-send-email-armbru@redhat.com>
+Patchwork-id: 53414
+O-Subject: [PATCH 6.5 qemu-kvm 2/3] qxl: Don't drop client capability bits
+Bugzilla: 880990
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Markus Armbruster <armbru@redhat.com>
+
+interface_set_client_capabilities() copies only the first few bits,
+because it falls into a Classic C trap: you can declare a parameter
+uint8_t caps[58], but the resulting parameter type is uint8_t *, not
+uint8_t[58].  In particular, sizeof(caps) is sizeof(uint8_t *), not
+the intended sizeof(uint8_t[58]).
+
+Harmless, because the bits aren't used, yet.  Broken in commit
+c10018d6.  Spotted by Coverity.
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 08688af04dc1137ac2f420b35c235183926b4a23)
+---
+ hw/qxl.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/qxl.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/hw/qxl.c b/hw/qxl.c
+index a121d42..2e86c6c 100644
+--- a/hw/qxl.c
++++ b/hw/qxl.c
+@@ -974,9 +974,11 @@ static void interface_set_client_capabilities(QXLInstance *sin,
+     }
+ 
+     qxl->shadow_rom.client_present = client_present;
+-    memcpy(qxl->shadow_rom.client_capabilities, caps, sizeof(caps));
++    memcpy(qxl->shadow_rom.client_capabilities, caps,
++           sizeof(qxl->shadow_rom.client_capabilities));
+     qxl->rom->client_present = client_present;
+-    memcpy(qxl->rom->client_capabilities, caps, sizeof(caps));
++    memcpy(qxl->rom->client_capabilities, caps,
++           sizeof(qxl->rom->client_capabilities));
+     qxl_rom_set_dirty(qxl);
+ 
+     qxl_send_events(qxl, QXL_INTERRUPT_CLIENT);
+-- 
+1.7.11.7
+

@@ -1,0 +1,153 @@
+From 718cacee86336c6d7b42dbc6fbdad69a925ea45e Mon Sep 17 00:00:00 2001
+Message-Id: <718cacee86336c6d7b42dbc6fbdad69a925ea45e.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:03 +0200
+Subject: [PATCH 29/65] rename IOCanRWHandler to IOCanReadHandler
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <bca45ef8a4403cb4694ca95d88952680dfd9c054.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50807
+O-Subject: [RHEL6.5 qemu-kvm PATCH 29/65] rename IOCanRWHandler to IOCanReadHandler
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Juan Quintela <quintela@redhat.com>
+
+It was always only used for reads
+
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 7b27a769f139102c906c8d11d844d51dce068a6a)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ qemu-char.c   | 4 ++--
+ qemu-char.h   | 7 +++----
+ qemu-common.h | 2 +-
+ qemu-tool.c   | 2 +-
+ vl.c          | 4 ++--
+ 5 files changed, 9 insertions(+), 10 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c   | 4 ++--
+ qemu-char.h   | 7 +++----
+ qemu-common.h | 2 +-
+ qemu-tool.c   | 2 +-
+ vl.c          | 4 ++--
+ 5 files changed, 9 insertions(+), 10 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index f116671..4324b68 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -186,7 +186,7 @@ void qemu_chr_fe_printf(CharDriverState *s, const char *fmt, ...)
+ }
+ 
+ void qemu_chr_add_handlers(CharDriverState *s,
+-                           IOCanRWHandler *fd_can_read,
++                           IOCanReadHandler *fd_can_read,
+                            IOReadHandler *fd_read,
+                            IOEventHandler *fd_event,
+                            void *opaque)
+@@ -228,7 +228,7 @@ static CharDriverState *qemu_chr_open_null(QemuOpts *opts)
+ #define MUX_BUFFER_SIZE 32	/* Must be a power of 2.  */
+ #define MUX_BUFFER_MASK (MUX_BUFFER_SIZE - 1)
+ typedef struct {
+-    IOCanRWHandler *chr_can_read[MAX_MUX];
++    IOCanReadHandler *chr_can_read[MAX_MUX];
+     IOReadHandler *chr_read[MAX_MUX];
+     IOEventHandler *chr_event[MAX_MUX];
+     void *ext_opaque[MAX_MUX];
+diff --git a/qemu-char.h b/qemu-char.h
+index f09d658..db48b35 100644
+--- a/qemu-char.h
++++ b/qemu-char.h
+@@ -58,7 +58,7 @@ struct CharDriverState {
+     int (*chr_ioctl)(struct CharDriverState *s, int cmd, void *arg);
+     int (*get_msgfd)(struct CharDriverState *s);
+     IOEventHandler *chr_event;
+-    IOCanRWHandler *chr_can_read;
++    IOCanReadHandler *chr_can_read;
+     IOReadHandler *chr_read;
+     void *handler_opaque;
+     void (*chr_close)(struct CharDriverState *chr);
+@@ -223,7 +223,7 @@ void qemu_chr_be_write(CharDriverState *s, uint8_t *buf, int len);
+ void qemu_chr_be_event(CharDriverState *s, int event);
+ 
+ void qemu_chr_add_handlers(CharDriverState *s,
+-                           IOCanRWHandler *fd_can_read,
++                           IOCanReadHandler *fd_can_read,
+                            IOReadHandler *fd_read,
+                            IOEventHandler *fd_event,
+                            void *opaque);
+@@ -244,7 +244,7 @@ size_t qemu_chr_mem_osize(const CharDriverState *chr);
+ /* async I/O support */
+ 
+ int qemu_set_fd_handler2(int fd,
+-                         IOCanRWHandler *fd_read_poll,
++                         IOCanReadHandler *fd_read_poll,
+                          IOHandler *fd_read,
+                          IOHandler *fd_write,
+                          void *opaque);
+@@ -252,5 +252,4 @@ int qemu_set_fd_handler(int fd,
+                         IOHandler *fd_read,
+                         IOHandler *fd_write,
+                         void *opaque);
+-
+ #endif
+diff --git a/qemu-common.h b/qemu-common.h
+index 1f26638..c959017 100644
+--- a/qemu-common.h
++++ b/qemu-common.h
+@@ -187,7 +187,7 @@ void QEMU_NORETURN hw_error(const char *fmt, ...)
+ 
+ /* IO callbacks.  */
+ typedef void IOReadHandler(void *opaque, const uint8_t *buf, int size);
+-typedef int IOCanRWHandler(void *opaque);
++typedef int IOCanReadHandler(void *opaque);
+ typedef void IOHandler(void *opaque);
+ 
+ struct ParallelIOArg {
+diff --git a/qemu-tool.c b/qemu-tool.c
+index d80a0c1..f10727f 100644
+--- a/qemu-tool.c
++++ b/qemu-tool.c
+@@ -80,7 +80,7 @@ void qemu_mod_timer(QEMUTimer *ts, int64_t expire_time)
+ }
+ 
+ int qemu_set_fd_handler2(int fd,
+-                         IOCanRWHandler *fd_read_poll,
++                         IOCanReadHandler *fd_read_poll,
+                          IOHandler *fd_read,
+                          IOHandler *fd_write,
+                          void *opaque)
+diff --git a/vl.c b/vl.c
+index ac8e525..b6ab703 100644
+--- a/vl.c
++++ b/vl.c
+@@ -2636,7 +2636,7 @@ static void dumb_display_init(void)
+ 
+ typedef struct IOHandlerRecord {
+     int fd;
+-    IOCanRWHandler *fd_read_poll;
++    IOCanReadHandler *fd_read_poll;
+     IOHandler *fd_read;
+     IOHandler *fd_write;
+     int deleted;
+@@ -2653,7 +2653,7 @@ static QLIST_HEAD(, IOHandlerRecord) io_handlers =
+ /* XXX: fd_read_poll should be suppressed, but an API change is
+    necessary in the character devices to suppress fd_can_read(). */
+ int qemu_set_fd_handler2(int fd,
+-                         IOCanRWHandler *fd_read_poll,
++                         IOCanReadHandler *fd_read_poll,
+                          IOHandler *fd_read,
+                          IOHandler *fd_write,
+                          void *opaque)
+-- 
+1.7.11.7
+

@@ -1,0 +1,67 @@
+From 0aeea2c7e9daabc6b8846f289b75507728b4c33d Mon Sep 17 00:00:00 2001
+Message-Id: <0aeea2c7e9daabc6b8846f289b75507728b4c33d.1375955382.git.minovotn@redhat.com>
+In-Reply-To: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+References: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+From: Alon Levy <alevy@redhat.com>
+Date: Thu, 1 Aug 2013 11:53:49 +0200
+Subject: [PATCH 30/35] uhci: egsm fix
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Alon Levy <alevy@redhat.com>
+Message-id: <1375358029-12968-31-git-send-email-alevy@redhat.com>
+Patchwork-id: 52920
+O-Subject: [RHEL-6.5 RHEL-6.4.z qemu-kvm v6 30/30] uhci: egsm fix
+Bugzilla: 917860
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+From: Gerd Hoffman <kraxel@redhat.com>
+
+When the guest goes suspend the uhci controller while there are
+pending resume requests on the ports go signal global resume
+instantly.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+
+upstream: 9f0f1a0c096f29a856f2e6903beda45b44ce9cdd
+---
+ hw/usb-uhci.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/usb-uhci.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/hw/usb-uhci.c b/hw/usb-uhci.c
+index 79f7bed..78ded71 100644
+--- a/hw/usb-uhci.c
++++ b/hw/usb-uhci.c
+@@ -169,6 +169,8 @@ typedef struct UHCI_QH {
+     uint32_t el_link;
+ } UHCI_QH;
+ 
++static void uhci_resume (void *opaque);
++
+ static UHCIAsync *uhci_async_alloc(UHCIState *s)
+ {
+     UHCIAsync *async = qemu_malloc(sizeof(UHCIAsync));
+@@ -458,6 +460,12 @@ static void uhci_ioport_writew(void *opaque, uint32_t addr, uint32_t val)
+             return;
+         }
+         s->cmd = val;
++        if (val & UHCI_CMD_EGSM) {
++            if ((s->ports[0].ctrl & UHCI_PORT_RD) ||
++                (s->ports[1].ctrl & UHCI_PORT_RD)) {
++                uhci_resume(s);
++            }
++        }
+         break;
+     case 0x02:
+         s->status &= ~val;
+-- 
+1.7.11.7
+

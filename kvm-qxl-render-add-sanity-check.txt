@@ -1,0 +1,50 @@
+From 5f98d0354cd36cce8cfbf6836beecee5e9cd0b9a Mon Sep 17 00:00:00 2001
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Wed, 2 Jul 2014 10:18:35 -0400
+Subject: [CHANGE 1/2] qxl-render: add sanity check
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1404296315-31098-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 59434
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 1/1] qxl-render: add sanity check
+Bugzilla: 1095612
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Bandan Das <bsd@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Verify dirty rectangle is completely within the primary surface,
+just ignore it in case it isn't.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 788fbf042fc6d5aaeab56757e6dad622ac5f0c21)
+---
+ hw/qxl-render.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/qxl-render.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/hw/qxl-render.c b/hw/qxl-render.c
+index 474948d..dadc26b 100644
+--- a/hw/qxl-render.c
++++ b/hw/qxl-render.c
+@@ -141,6 +141,12 @@ static void qxl_render_update_area_unlocked(PCIQXLDevice *qxl)
+         if (qemu_spice_rect_is_empty(qxl->dirty+i)) {
+             break;
+         }
++        if (qxl->dirty[i].left > qxl->dirty[i].right ||
++            qxl->dirty[i].top > qxl->dirty[i].bottom ||
++            qxl->dirty[i].right > qxl->guest_primary.surface.width ||
++            qxl->dirty[i].bottom > qxl->guest_primary.surface.height) {
++            continue;
++        }
+         qxl_blit(qxl, qxl->dirty+i);
+         dpy_update(vga->ds,
+                    qxl->dirty[i].left, qxl->dirty[i].top,
+-- 
+1.9.3
+

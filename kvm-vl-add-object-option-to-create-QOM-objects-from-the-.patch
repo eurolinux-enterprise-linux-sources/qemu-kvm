@@ -1,0 +1,180 @@
+From d4ecc344cb1118c54fcd00e3f007bcee29e90505 Mon Sep 17 00:00:00 2001
+From: Amos Kong <akong@redhat.com>
+Date: Tue, 10 Sep 2013 06:07:50 +0200
+Subject: [PATCH 08/39] vl: add -object option to create QOM objects from the command line
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1378793288-3371-9-git-send-email-akong@redhat.com>
+Patchwork-id: 54243
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v3 08/26] vl: add -object option to create QOM objects from the command line
+Bugzilla: 786407
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+This will create a new QOM object in the '/objects' path.  Note that properties
+are set in order which allows for simple objects to be initialized entirely
+with this option and then realized.
+
+This option is roughly equivalent to -device but for things that are not
+devices.
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(backport from commit 68d98d3e42b2b291274537d1ae4092e11d321437)
+
+This patch also contains a small error handling from commit
+49295ebc56a303a60c6ca2ead6f548eae3521150
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+---
+ qemu-config.c   |   10 +++++++++
+ qemu-options.hx |    7 ++++++
+ vl.c            |   60 +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 77 insertions(+), 0 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ qemu-config.c   |   10 +++++++++
+ qemu-options.hx |    7 ++++++
+ vl.c            |   60 +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 77 insertions(+), 0 deletions(-)
+
+diff --git a/qemu-config.c b/qemu-config.c
+index 1240b64..7ba6502 100644
+--- a/qemu-config.c
++++ b/qemu-config.c
+@@ -525,6 +525,15 @@ static QemuOptsList qemu_msg_opts = {
+     },
+ };
+ 
++static QemuOptsList qemu_object_opts = {
++    .name = "object",
++    .implied_opt_name = "qom-type",
++    .head = QTAILQ_HEAD_INITIALIZER(qemu_object_opts.head),
++    .desc = {
++        { }
++    },
++};
++
+ static QemuOptsList *vm_config_groups[] = {
+     &qemu_drive_opts,
+     &qemu_simple_drive_opts,
+@@ -542,6 +551,7 @@ static QemuOptsList *vm_config_groups[] = {
+     &qemu_boot_opts,
+     &qemu_realtime_opts,
+     &qemu_msg_opts,
++    &qemu_object_opts,
+     NULL,
+ };
+ 
+diff --git a/qemu-options.hx b/qemu-options.hx
+index 8bcf1b4..4a4244d 100644
+--- a/qemu-options.hx
++++ b/qemu-options.hx
+@@ -2264,3 +2264,10 @@ STEXI
+ @findex -msg
+ prepend a timestamp to each log message.(default:on)
+ ETEXI
++
++DEF("object", HAS_ARG, QEMU_OPTION_object,
++    "-object TYPENAME[,PROP1=VALUE1,...]\n"
++    "                create an new object of type TYPENAME setting properties\n"
++    "                in the order they are specified.  Note that the 'id'\n"
++    "                property must be set.  These objects are placed in the\n"
++    "                '/objects' path.\n")
+diff --git a/vl.c b/vl.c
+index 711ceec..01e08c0 100644
+--- a/vl.c
++++ b/vl.c
+@@ -177,6 +177,8 @@ int main(int argc, char **argv)
+ #include "trace.h"
+ 
+ #include "ui/qemu-spice.h"
++#include "qapi/string-input-visitor.h"
++#include "qom/object.h"
+ 
+ //#define DEBUG_NET
+ //#define DEBUG_SLIRP
+@@ -5180,6 +5182,53 @@ static const QEMUOption *lookup_opt(int argc, char **argv,
+     return popt;
+ }
+ 
++static int object_set_property(const char *name, const char *value, void *opaque)
++{
++    Object *obj = OBJECT(opaque);
++    StringInputVisitor *siv;
++    Error *local_err = NULL;
++
++    if (strcmp(name, "qom-type") == 0 || strcmp(name, "id") == 0) {
++        return 0;
++    }
++
++    siv = string_input_visitor_new(value);
++    object_property_set(obj, string_input_get_visitor(siv), name, &local_err);
++    string_input_visitor_cleanup(siv);
++
++    if (local_err) {
++        qerror_report_err(local_err);
++        error_free(local_err);
++        return -1;
++    }
++
++    return 0;
++}
++
++static int object_create(QemuOpts *opts, void *opaque)
++{
++    const char *type = qemu_opt_get(opts, "qom-type");
++    const char *id = qemu_opts_id(opts);
++    Object *obj;
++
++    g_assert(type != NULL);
++
++    if (id == NULL) {
++        qerror_report(QERR_MISSING_PARAMETER, "id");
++        return -1;
++    }
++
++    obj = object_new(type);
++    if (qemu_opt_foreach(opts, object_set_property, obj, 1) < 0) {
++        return -1;
++    }
++
++    object_property_add_child(container_get(object_get_root(), "/objects"),
++                              id, obj, NULL);
++
++    return 0;
++}
++
+ int main(int argc, char **argv, char **envp)
+ {
+     const char *gdbstub_dev = NULL;
+@@ -6114,12 +6163,23 @@ int main(int argc, char **argv, char **envp)
+                 }
+                 configure_msg(opts);
+                 break;
++            case QEMU_OPTION_object:
++                opts = qemu_opts_parse(qemu_find_opts("object"), optarg, 1);
++                if (!opts) {
++                    exit(1);
++                }
++                break;
+             }
+         }
+     }
+     fips_set_state(true);
+     loc_set_none();
+ 
++    if (qemu_opts_foreach(qemu_find_opts("object"),
++                          object_create, NULL, 0) != 0) {
++        exit(1);
++    }
++
+     /* If no data_dir is specified then try to find it relative to the
+        executable path.  */
+     if (!data_dir) {
+-- 
+1.7.1
+

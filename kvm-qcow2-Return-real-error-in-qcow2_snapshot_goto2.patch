@@ -1,0 +1,132 @@
+From 16fe3721ea7baa32ec92a26329a8ddf3d4d28fcb Mon Sep 17 00:00:00 2001
+Message-Id: <16fe3721ea7baa32ec92a26329a8ddf3d4d28fcb.1368098699.git.minovotn@redhat.com>
+In-Reply-To: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+References: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Fri, 5 Apr 2013 19:44:46 +0200
+Subject: [PATCH 07/24] qcow2: Return real error in qcow2_snapshot_goto
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1365191091-25631-8-git-send-email-kwolf@redhat.com>
+Patchwork-id: 50168
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 07/12] qcow2: Return real error in qcow2_snapshot_goto
+Bugzilla: 796011
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+Bugzilla: 796011
+
+Besides fixing the return code, this adds some comments that make clear
+how the code works and that it potentially breaks images if we fail in
+the wrong place. Actually fixing this is left for the next patch.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+(cherry picked from commit 589f284b7690bbb4ed37170590bae9527ed31b42)
+
+Conflicts:
+	block/qcow2-snapshot.c
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/qcow2-snapshot.c | 51 +++++++++++++++++++++++++++++++++++++++-----------
+ 1 file changed, 40 insertions(+), 11 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/qcow2-snapshot.c | 51 +++++++++++++++++++++++++++++++++++++++-----------
+ 1 file changed, 40 insertions(+), 11 deletions(-)
+
+diff --git a/block/qcow2-snapshot.c b/block/qcow2-snapshot.c
+index 5ae1ccb..445efbe 100644
+--- a/block/qcow2-snapshot.c
++++ b/block/qcow2-snapshot.c
+@@ -383,17 +383,32 @@ int qcow2_snapshot_goto(BlockDriverState *bs, const char *snapshot_id)
+     QCowSnapshot *sn;
+     int i, snapshot_index;
+     int cur_l1_bytes, sn_l1_bytes;
++    int ret;
+ 
++    /* Search the snapshot */
+     snapshot_index = find_snapshot_by_id_or_name(bs, snapshot_id);
+-    if (snapshot_index < 0)
++    if (snapshot_index < 0) {
+         return -ENOENT;
++    }
+     sn = &s->snapshots[snapshot_index];
+ 
+-    if (qcow2_update_snapshot_refcount(bs, s->l1_table_offset, s->l1_size, -1) < 0)
++    /* Decrease refcount of clusters of current L1 table.
++     * FIXME This is too early! */
++    ret = qcow2_update_snapshot_refcount(bs, s->l1_table_offset,
++                                         s->l1_size, -1);
++    if (ret < 0) {
+         goto fail;
++    }
+ 
+-    if (qcow2_grow_l1_table(bs, sn->l1_size) < 0)
++    /*
++     * Make sure that the current L1 table is big enough to contain the whole
++     * L1 table of the snapshot. If the snapshot L1 table is smaller, the
++     * current one must be padded with zeros.
++     */
++    ret = qcow2_grow_l1_table(bs, sn->l1_size);
++    if (ret < 0) {
+         goto fail;
++    }
+ 
+     cur_l1_bytes = s->l1_size * sizeof(uint64_t);
+     sn_l1_bytes = sn->l1_size * sizeof(uint64_t);
+@@ -402,26 +417,40 @@ int qcow2_snapshot_goto(BlockDriverState *bs, const char *snapshot_id)
+         memset(s->l1_table + sn->l1_size, 0, cur_l1_bytes - sn_l1_bytes);
+     }
+ 
+-    /* copy the snapshot l1 table to the current l1 table */
+-    if (bdrv_pread(bs->file, sn->l1_table_offset,
+-                   s->l1_table, sn_l1_bytes) < 0)
++    /*
++     * Copy the snapshot L1 table to the current L1 table.
++     *
++     * Before overwriting the old current L1 table on disk, make sure to
++     * increase all refcounts for the clusters referenced by the new one.
++     */
++    ret = bdrv_pread(bs->file, sn->l1_table_offset, s->l1_table, sn_l1_bytes);
++    if (ret < 0) {
+         goto fail;
+-    if (bdrv_pwrite_sync(bs->file, s->l1_table_offset,
+-                    s->l1_table, cur_l1_bytes) < 0)
++    }
++
++    ret = bdrv_pwrite_sync(bs->file, s->l1_table_offset, s->l1_table,
++                           cur_l1_bytes);
++    if (ret < 0) {
+         goto fail;
++    }
++
+     for(i = 0;i < s->l1_size; i++) {
+         be64_to_cpus(&s->l1_table[i]);
+     }
+ 
+-    if (qcow2_update_snapshot_refcount(bs, s->l1_table_offset, s->l1_size, 1) < 0)
++    /* FIXME This is too late! */
++    ret = qcow2_update_snapshot_refcount(bs, s->l1_table_offset, s->l1_size, 1);
++    if (ret < 0) {
+         goto fail;
++    }
+ 
+ #ifdef DEBUG_ALLOC
+     qcow2_check_refcounts(bs);
+ #endif
+     return 0;
+- fail:
+-    return -EIO;
++
++fail:
++    return ret;
+ }
+ 
+ int qcow2_snapshot_delete(BlockDriverState *bs, const char *snapshot_id)
+-- 
+1.7.11.7
+

@@ -1,0 +1,59 @@
+From 99b9de007b712a8b4cc804f82c734a705989384b Mon Sep 17 00:00:00 2001
+Message-Id: <99b9de007b712a8b4cc804f82c734a705989384b.1411497349.git.jen@redhat.com>
+In-Reply-To: <c1a65d1a3f9888636f1026da1d5f77d985a8815b.1411497349.git.jen@redhat.com>
+References: <c1a65d1a3f9888636f1026da1d5f77d985a8815b.1411497349.git.jen@redhat.com>
+From: Juan Quintela <quintela@redhat.com>
+Date: Tue, 16 Sep 2014 15:50:21 -0400
+Subject: [CHANGE 5/7] migration: remove not needed ram_save_remaining function
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Juan Quintela <quintela@redhat.com>
+Message-id: <1410882623-10906-6-git-send-email-quintela@redhat.com>
+Patchwork-id: 61188
+O-Subject: [PATCH qemu-kvm RHEL6.6 5/7] migration: remove not needed ram_save_remaining function
+Bugzilla: 1142756 970103
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+We were really needing ram_bytes_remaining() anyways.
+
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ vl.c | 9 ++-------
+ 1 file changed, 2 insertions(+), 7 deletions(-)
+
+diff --git a/vl.c b/vl.c
+index a0fb1cb..8ad11c6 100644
+--- a/vl.c
++++ b/vl.c
+@@ -2833,14 +2833,9 @@ static int ram_save_block(QEMUFile *f)
+ 
+ static uint64_t bytes_transferred;
+ 
+-static ram_addr_t ram_save_remaining(void)
+-{
+-    return ram_list.dirty_pages;
+-}
+-
+ uint64_t ram_bytes_remaining(void)
+ {
+-    return ram_save_remaining() * TARGET_PAGE_SIZE;
++    return ram_list.dirty_pages * TARGET_PAGE_SIZE;
+ }
+ 
+ uint64_t ram_bytes_transferred(void)
+@@ -2959,7 +2954,7 @@ static int ram_save_live(Monitor *mon, QEMUFile *f, int stage, void *opaque)
+     if (stage == 2) {
+         uint64_t expected_time;
+ 
+-        expected_time = ram_save_remaining() * TARGET_PAGE_SIZE / bwidth;
++        expected_time = ram_bytes_remaining() / bwidth;
+         return expected_time <= migrate_max_downtime();
+     }
+     return 0;
+-- 
+1.9.3
+

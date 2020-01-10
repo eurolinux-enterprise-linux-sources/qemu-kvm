@@ -1,0 +1,63 @@
+From e896a4e13fc95ac26b7c190b43d4237a619fc090 Mon Sep 17 00:00:00 2001
+Message-Id: <e896a4e13fc95ac26b7c190b43d4237a619fc090.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:14 +0200
+Subject: [PATCH 40/65] char: add gio watch fn for tcp backends
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <4af5c436f3ed3df3e6bb2fab994ae90798824919.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50818
+O-Subject: [RHEL6.5 qemu-kvm PATCH 40/65] char: add gio watch fn for tcp backends
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Message-id: b50e668c4f4146a654c5d4412440eb9e589f2c02.1362505276.git.amit.shah@redhat.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit d3cc5bc416cdf25bae0f3f6de58830be8ac5b648)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	qemu-char.c
+---
+ qemu-char.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 9c34483..ccf3a37 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -2230,6 +2230,12 @@ static ssize_t tcp_chr_recv(CharDriverState *chr, char *buf, size_t len)
+ }
+ #endif
+ 
++static GSource *tcp_chr_add_watch(CharDriverState *chr, GIOCondition cond)
++{
++    TCPCharDriver *s = chr->opaque;
++    return g_io_create_watch(s->chan, cond);
++}
++
+ static gboolean tcp_chr_read(GIOChannel *chan, GIOCondition cond, void *opaque)
+ {
+     CharDriverState *chr = opaque;
+@@ -2421,6 +2427,7 @@ static CharDriverState *qemu_chr_open_socket(QemuOpts *opts)
+     chr->chr_write = tcp_chr_write;
+     chr->chr_close = tcp_chr_close;
+     chr->get_msgfd = tcp_get_msgfd;
++    chr->chr_add_watch = tcp_chr_add_watch;
+ 
+     if (is_listen) {
+         s->listen_fd = fd;
+-- 
+1.7.11.7
+

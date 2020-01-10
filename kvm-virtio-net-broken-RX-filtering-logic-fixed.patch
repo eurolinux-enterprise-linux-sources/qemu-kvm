@@ -1,0 +1,54 @@
+From a3c2320531598d75f5f9ed4d6d0ab82305a97266 Mon Sep 17 00:00:00 2001
+Message-Id: <a3c2320531598d75f5f9ed4d6d0ab82305a97266.1389010971.git.minovotn@redhat.com>
+In-Reply-To: <a87ad12db7a2b9bd2cbee8587d4f4bb359fa7ea5.1389010971.git.minovotn@redhat.com>
+References: <a87ad12db7a2b9bd2cbee8587d4f4bb359fa7ea5.1389010971.git.minovotn@redhat.com>
+From: Dmitry Fleytman <dfleytma@redhat.com>
+Date: Tue, 19 Nov 2013 13:19:19 +0100
+Subject: [PATCH 3/3] virtio-net: broken RX filtering logic fixed
+
+RH-Author: Dmitry Fleytman <dfleytma@redhat.com>
+Message-id: <1384867159-25340-1-git-send-email-dfleytma@redhat.com>
+Patchwork-id: 55757
+O-Subject: [RHEL-6.6 qemu-kvm PATCH] virtio-net: broken RX filtering logic fixed
+Bugzilla: 1010688
+RH-Acked-by: Yan Vugenfirer <yvugenfi@redhat.com>
+RH-Acked-by: Vlad Yasevich <vyasevic@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+
+BZ: https://bugzilla.redhat.com/show_bug.cgi?id=1029370
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=6606728
+Upstream-status: cc386e96727442f5b67052d4e0a602f6f652ffe6
+
+Upon processing of VIRTIO_NET_CTRL_MAC_TABLE_SET command
+multicast list overwrites unicast list in mac_table.
+This leads to broken logic for both unicast and multicast RX filtering.
+
+Signed-off-by: Dmitry Fleytman <dfleytma@redhat.com>
+---
+ hw/virtio-net.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/virtio-net.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/hw/virtio-net.c b/hw/virtio-net.c
+index ae0cf65..4f24ef7 100644
+--- a/hw/virtio-net.c
++++ b/hw/virtio-net.c
+@@ -466,8 +466,9 @@ static int virtio_net_handle_mac(VirtIONet *n, uint8_t cmd,
+     }
+ 
+     if (n->mac_table.in_use + mac_data.entries <= MAC_TABLE_ENTRIES) {
+-        s = iov_to_buf(iov, iov_cnt, n->mac_table.macs, 0,
+-                       mac_data.entries * ETH_ALEN);
++        s = iov_to_buf(iov, iov_cnt,
++                       &n->mac_table.macs[n->mac_table.in_use * ETH_ALEN],
++                       0, mac_data.entries * ETH_ALEN);
+         if (s != mac_data.entries * ETH_ALEN) {
+             return VIRTIO_NET_ERR;
+         }
+-- 
+1.7.11.7
+

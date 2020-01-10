@@ -1,0 +1,59 @@
+From d2eb2bec876ce962f17e965bfc95315d8380bdcd Mon Sep 17 00:00:00 2001
+From: Michael S. Tsirkin <mst@redhat.com>
+Date: Thu, 20 Mar 2014 18:05:22 +0200
+Subject: [PATCH 01/48] virtio-net: fix guest-triggerable buffer overrun
+
+RH-Author: Michael S. Tsirkin <mst@redhat.com>
+Message-id: <1395331440-2208-1-git-send-email-mst@redhat.com>
+Patchwork-id: n/a
+O-Subject: [PATCH qemu-kvm EMBARGOED RHEL6.6/6.5.z] virtio-net: fix
+           guest-triggerable buffer overrun
+Bugzilla: 1078605
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Vlad Yasevich <vyasevic@redhat.com>
+RH-Acked-by: Marcel Apfelbaum <marcel.a@redhat.com>
+
+When VM guest programs multicast addresses for
+a virtio net card, it supplies a 32 bit
+entries counter for the number of addresses.
+These addresses are read into tail portion of
+a fixed macs array which has size MAC_TABLE_ENTRIES,
+at offset equal to in_use.
+
+To avoid overflow of this array by guest, qemu attempts
+to test the size as follows:
+-    if (in_use + mac_data.entries <= MAC_TABLE_ENTRIES) {
+
+however, as mac_data.entries is uint32_t, this sum
+can overflow, e.g. if in_use is 1 and mac_data.entries
+is 0xffffffff then in_use + mac_data.entries will be 0.
+
+Qemu will then read guest supplied buffer into this
+memory, overflowing buffer on heap.
+
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+
+Upstream status: EMBARGOED
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1078605
+Brew build: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7231517
+Tested: lightly on developer's box
+---
+ hw/virtio-net.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/hw/virtio-net.c b/hw/virtio-net.c
+index 4f24ef7..2173428 100644
+--- a/hw/virtio-net.c
++++ b/hw/virtio-net.c
+@@ -465,7 +465,7 @@ static int virtio_net_handle_mac(VirtIONet *n, uint8_t cmd,
+         return VIRTIO_NET_ERR;
+     }
+ 
+-    if (n->mac_table.in_use + mac_data.entries <= MAC_TABLE_ENTRIES) {
++    if (mac_data.entries <= MAC_TABLE_ENTRIES - n->mac_table.in_use) {
+         s = iov_to_buf(iov, iov_cnt,
+                        &n->mac_table.macs[n->mac_table.in_use * ETH_ALEN],
+                        0, mac_data.entries * ETH_ALEN);
+-- 
+1.7.1
+

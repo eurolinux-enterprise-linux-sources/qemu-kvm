@@ -1,0 +1,70 @@
+From 96a0a238a796385839a73b0172ccba62cae39397 Mon Sep 17 00:00:00 2001
+Message-Id: <96a0a238a796385839a73b0172ccba62cae39397.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:56 +0200
+Subject: [PATCH 45/65] qemu-char: move text console init to console.c
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-46-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52168
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 45/65] qemu-char: move text console init to console.c
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Message-id: 17cefde0a8d7807294bab95e93c3328a20d3f2ed.1362505276.git.amit.shah@redhat.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 01f45d986fb0b7c2d4f0466efe3cde9708f325be)
+
+Conflicts:
+
+	qemu-char.c
+	ui/console.c
+---
+ console.c   |    7 +++++++
+ qemu-char.c |    1 -
+ 2 files changed, 7 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ console.c   | 7 +++++++
+ qemu-char.c | 1 -
+ 2 files changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/console.c b/console.c
+index dafdac0..bc186dd 100644
+--- a/console.c
++++ b/console.c
+@@ -1608,3 +1608,10 @@ void defaultallocator_free_displaysurface(DisplaySurface *surface)
+         qemu_free(surface->data);
+     qemu_free(surface);
+ }
++
++static void register_types(void)
++{
++    register_char_driver("vc", text_console_init);
++}
++
++machine_init(register_types);
+diff --git a/qemu-char.c b/qemu-char.c
+index 1b94c00..5763a43 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -3222,7 +3222,6 @@ static void register_types(void)
+     register_char_driver("null", qemu_chr_open_null);
+     register_char_driver("socket", qemu_chr_open_socket);
+     register_char_driver("udp", qemu_chr_open_udp);
+-    register_char_driver("vc", text_console_init);
+ #ifdef _WIN32
+     register_char_driver("file", qemu_chr_open_win_file_out);
+     register_char_driver("pipe", qemu_chr_open_win_pipe);
+-- 
+1.7.11.7
+

@@ -1,0 +1,111 @@
+From 17f83612c866a213d6786eeb36123cec5c39c527 Mon Sep 17 00:00:00 2001
+Message-Id: <17f83612c866a213d6786eeb36123cec5c39c527.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:53 +0200
+Subject: [PATCH 38/47] vmdk: Fix data corruption bug in WRITE and READ
+ handling
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-39-git-send-email-famz@redhat.com>
+Patchwork-id: 51474
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 38/47] vmdk: Fix data corruption bug in WRITE and READ handling
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Gerhard Wiesinger <lists@wiesinger.com>
+
+Fixed a MAJOR BUG in VMDK files on file boundaries on reads
+and ALSO ON WRITES WHICH MIGHT CORRUPT THE IMAGE AND DATA!!!!!!
+
+Triggered for example with the following VMDK file (partly listed):
+RW 4193792 FLAT "XP-W1-f001.vmdk" 0
+RW 2097664 FLAT "XP-W1-f002.vmdk" 0
+RW 4193792 FLAT "XP-W1-f003.vmdk" 0
+RW 512 FLAT "XP-W1-f004.vmdk" 0
+RW 4193792 FLAT "XP-W1-f005.vmdk" 0
+RW 2097664 FLAT "XP-W1-f006.vmdk" 0
+RW 4193792 FLAT "XP-W1-f007.vmdk" 0
+RW 512 FLAT "XP-W1-f008.vmdk" 0
+
+Patch includes:
+1.) Patch fixes wrong calculation on extent boundaries. Especially it
+fixes the relativeness of the sector number to the current extent.
+
+Verfied correctness with:
+1.) Converted either with Virtualbox to VDI and then with qemu-img and
+    then with qemu-img only:
+
+    VBoxManage clonehd --format vdi /VM/XP-W/new/XP-W1.vmdk ~/.VirtualBox/Harddisks/XP-W1-new-test.vdi
+    ./qemu-img convert -O raw ~/.VirtualBox/Harddisks/XP-W1-new-test.vdi /root/QEMU/VM-XP-W1/XP-W1-via-VBOX.img
+    md5sum /root/QEMU/VM-XP-W/XP-W1-direct.img
+    md5sum /root/QEMU/VM-XP-W/XP-W1-via-VBOX.img
+    => same MD5 hash
+
+2.) Verified debug log files
+3.) Run Windows XP successfully
+4.) chkdsk run successfully without any errors
+
+Signed-off-by: Gerhard Wiesinger <lists@wiesinger.com>
+Acked-by: Fam Zheng <famcool@gmail.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit b1649fae49a899a222c3ac53c5009dd6f23349e1)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index c1e83ba..a4ced38 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -1083,6 +1083,7 @@ static int vmdk_read(BlockDriverState *bs, int64_t sector_num,
+     BDRVVmdkState *s = bs->opaque;
+     int ret;
+     uint64_t n, index_in_cluster;
++    uint64_t extent_begin_sector, extent_relative_sector_num;
+     VmdkExtent *extent = NULL;
+     uint64_t cluster_offset;
+ 
+@@ -1094,7 +1095,9 @@ static int vmdk_read(BlockDriverState *bs, int64_t sector_num,
+         ret = get_cluster_offset(
+                             bs, extent, NULL,
+                             sector_num << 9, 0, &cluster_offset);
+-        index_in_cluster = sector_num % extent->cluster_sectors;
++        extent_begin_sector = extent->end_sector - extent->sectors;
++        extent_relative_sector_num = sector_num - extent_begin_sector;
++        index_in_cluster = extent_relative_sector_num % extent->cluster_sectors;
+         n = extent->cluster_sectors - index_in_cluster;
+         if (n > nb_sectors) {
+             n = nb_sectors;
+@@ -1145,6 +1148,7 @@ static int vmdk_write(BlockDriverState *bs, int64_t sector_num,
+     VmdkExtent *extent = NULL;
+     int n, ret;
+     int64_t index_in_cluster;
++    uint64_t extent_begin_sector, extent_relative_sector_num;
+     uint64_t cluster_offset;
+     VmdkMetaData m_data;
+ 
+@@ -1187,7 +1191,9 @@ static int vmdk_write(BlockDriverState *bs, int64_t sector_num,
+         if (ret) {
+             return -EINVAL;
+         }
+-        index_in_cluster = sector_num % extent->cluster_sectors;
++        extent_begin_sector = extent->end_sector - extent->sectors;
++        extent_relative_sector_num = sector_num - extent_begin_sector;
++        index_in_cluster = extent_relative_sector_num % extent->cluster_sectors;
+         n = extent->cluster_sectors - index_in_cluster;
+         if (n > nb_sectors) {
+             n = nb_sectors;
+-- 
+1.7.11.7
+

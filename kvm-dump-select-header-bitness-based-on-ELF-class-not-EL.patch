@@ -1,0 +1,60 @@
+From dd7bbdb13739e66da072ec37e27f748c1cc3dbf0 Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Tue, 17 Jun 2014 13:11:46 +0200
+Subject: [PATCH 06/44] dump: select header bitness based on ELF class, not ELF architecture
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1403010708-7504-7-git-send-email-lersek@redhat.com>
+Patchwork-id: 59255
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 6/8] dump: select header bitness based on ELF class, not ELF architecture
+Bugzilla: 1102659
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+The specific ELF architecture (d_machine) carries Too Much Information
+(TM) for deciding between create_header32() and create_header64(), use
+"d_class" instead (ELFCLASS32 vs. ELFCLASS64).
+
+This change adapts write_dump_header() to write_elf_loads(), dump_begin()
+etc. that also rely on the ELF class of the target for bitness selection.
+
+Considering the current targets that support dumping, cpu_get_dump_info()
+works as follows:
+- target-s390x/arch_dump.c: (EM_S390, ELFCLASS64) only
+- target-ppc/arch_dump.c (EM_PPC64, ELFCLASS64) only
+- target-i386/arch_dump.c: sets (EM_X86_64, ELFCLASS64) vs. (EM_386,
+  ELFCLASS32) keying off the same Long Mode Active flag.
+
+Hence no observable change.
+
+Approximately-suggested-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 24aeeace7a9f264688e9eda77b6c04db607cbdfd)
+---
+ dump.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ dump.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/dump.c b/dump.c
+index 8d58d9a..510a5b5 100644
+--- a/dump.c
++++ b/dump.c
+@@ -1000,7 +1000,7 @@ out:
+ 
+ static int write_dump_header(DumpState *s)
+ {
+-    if (s->dump_info.d_machine == EM_386) {
++    if (s->dump_info.d_class == ELFCLASS32) {
+         return create_header32(s);
+     } else {
+         return create_header64(s);
+-- 
+1.7.1
+

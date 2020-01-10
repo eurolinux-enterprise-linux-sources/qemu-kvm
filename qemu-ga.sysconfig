@@ -1,0 +1,44 @@
+# Transport method may be one of following:
+#   * unix-listen
+#   * virtio-serial
+#   * isa-serial
+# Default: virtio-serial
+TRANSPORT_METHOD="virtio-serial"
+
+# You also can override the device/socket path
+# Default: /dev/virtio-ports/org.qemu.guest_agent.0
+DEVPATH="/dev/virtio-ports/org.qemu.guest_agent.0"
+
+# If logfile is unset it defaults to stderr but the daemon
+# function of init script redirects stderr to /dev/null
+LOGFILE="/var/log/qemu-ga/qemu-ga.log"
+
+# Override pidfile name
+# Default: /var/run/qemu-ga.pid
+PIDFILE="/var/run/qemu-ga.pid"
+
+# SELinux note:
+#  About guest arbitrary file read/write
+#
+# A new selinux policy is introduced on RHEL-6.4 to deny qemu-ga to
+# read/write arbitrary guest files except the device file used to talk
+# with host processes, LOGFILE and PIDFILE.
+#
+# You can disable this policy by "restorecon -R -v /usr/bin/qemu-ga"
+
+# Comma-separated blacklist of RPCs to disable or empty list to enable all
+# Tip: You can get the list of RPC commands using `qemu-ga --blacklist ?`
+# Default: blank list to enable all RPCs
+# Note: There should be no spaces between commas and commands in the blacklist
+BLACKLIST_RPC="guest-file-open,guest-file-close,guest-file-read,guest-file-write,guest-file-seek,guest-file-flush"
+
+# Enable fsfreeze hook. See the --fsfreeze-hook option in "qemu-ga --help".
+FSFREEZE_HOOK_ENABLE=0
+
+# Set the option argument for --fsfreeze-hook, which is the full pathname of
+# the hook script. An empty or unset value designates the default script
+# (invoke "qemu-ga --help" to interrogate).
+#
+# This setting (independently of value) takes effect only when
+# FSFREEZE_HOOK_ENABLE is nonzero.
+FSFREEZE_HOOK_PATHNAME=/usr/libexec/qemu-ga/fsfreeze-hook

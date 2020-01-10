@@ -1,0 +1,95 @@
+From f5ac38b2d217d7364cce9391ff5ffe399437303c Mon Sep 17 00:00:00 2001
+Message-Id: <f5ac38b2d217d7364cce9391ff5ffe399437303c.1378813438.git.minovotn@redhat.com>
+In-Reply-To: <b80f97e724da8388b544413d6a3dcac35d347d9b.1378813438.git.minovotn@redhat.com>
+References: <b80f97e724da8388b544413d6a3dcac35d347d9b.1378813438.git.minovotn@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Wed, 28 Aug 2013 13:14:53 +0200
+Subject: [PATCH 11/13] block: vpc support for ~2 TB disks
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <38fec61496385364d8bdbf83111a495263b51248.1377694139.git.jcody@redhat.com>
+Patchwork-id: 53846
+O-Subject: [RHEL6.5 qemu-kvm PATCH 11/13] block: vpc support for ~2 TB disks
+Bugzilla: 999779
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Charles Arnold <carnold@suse.com>
+
+The VHD specification allows for up to a 2 TB disk size. The current
+implementation in qemu emulates EIDE and ATA-2 hardware which only allows
+for up to 127 GB.  This disk size limitation can be overridden by allowing
+up to 255 heads instead of the normal 4 bit limitation of 16.  Doing so
+allows disk images to be created of up to nearly 2 TB.  This change does
+not violate the VHD format specification nor does it change how smaller
+disks (ie, <=127GB) are defined.
+
+[Charles Arnold also writes: "In analyzing a 160 GB VHD fixed disk image
+created on Windows 2008 R2, it appears that MS is also ignoring the CHS
+values in the footer geometry field in whatever driver they use for
+accessing the image.  The CHS values are set at 65535,16,255 which
+obviously doesn't represent an image size of 160 GB." -- Stefan]
+
+Signed-off-by: Charles Arnold <carnold@suse.com>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 258d2edbcd4bb5d267c96163333820332e1c14fa)
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ block/vpc.c | 17 +++++++++++++----
+ 1 file changed, 13 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vpc.c | 17 +++++++++++++----
+ 1 file changed, 13 insertions(+), 4 deletions(-)
+
+diff --git a/block/vpc.c b/block/vpc.c
+index 4b6a132..e7fea9a 100644
+--- a/block/vpc.c
++++ b/block/vpc.c
+@@ -198,7 +198,8 @@ static int vpc_open(BlockDriverState *bs, int flags)
+     bs->total_sectors = (int64_t)
+         be16_to_cpu(footer->cyls) * footer->heads * footer->secs_per_cyl;
+ 
+-    if (bs->total_sectors >= 65535 * 16 * 255) {
++    /* Allow a maximum disk size of approximately 2 TB */
++    if (bs->total_sectors >= 65535LL * 255 * 255) {
+         err = -EFBIG;
+         goto fail;
+     }
+@@ -522,19 +523,27 @@ static coroutine_fn int vpc_co_flush(BlockDriverState *bs)
+  * Note that the geometry doesn't always exactly match total_sectors but
+  * may round it down.
+  *
+- * Returns 0 on success, -EFBIG if the size is larger than 127 GB
++ * Returns 0 on success, -EFBIG if the size is larger than ~2 TB. Override
++ * the hardware EIDE and ATA-2 limit of 16 heads (max disk size of 127 GB)
++ * and instead allow up to 255 heads.
+  */
+ static int calculate_geometry(int64_t total_sectors, uint16_t* cyls,
+     uint8_t* heads, uint8_t* secs_per_cyl)
+ {
+     uint32_t cyls_times_heads;
+ 
+-    if (total_sectors > 65535 * 16 * 255)
++    /* Allow a maximum disk size of approximately 2 TB */
++    if (total_sectors > 65535LL * 255 * 255) {
+         return -EFBIG;
++    }
+ 
+     if (total_sectors > 65535 * 16 * 63) {
+         *secs_per_cyl = 255;
+-        *heads = 16;
++        if (total_sectors > 65535 * 16 * 255) {
++            *heads = 255;
++        } else {
++            *heads = 16;
++        }
+         cyls_times_heads = total_sectors / *secs_per_cyl;
+     } else {
+         *secs_per_cyl = 17;
+-- 
+1.7.11.7
+

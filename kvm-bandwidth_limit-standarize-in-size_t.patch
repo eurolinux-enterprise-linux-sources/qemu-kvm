@@ -1,0 +1,183 @@
+From edf11b676b2dc97f8fad30e55c1e1714a3492d39 Mon Sep 17 00:00:00 2001
+Message-Id: <edf11b676b2dc97f8fad30e55c1e1714a3492d39.1421272770.git.jen@redhat.com>
+In-Reply-To: <acd6d327ae856e72f084949fd71314237a4b9b8b.1421272770.git.jen@redhat.com>
+References: <acd6d327ae856e72f084949fd71314237a4b9b8b.1421272770.git.jen@redhat.com>
+From: Juan Quintela <quintela@redhat.com>
+Date: Wed, 7 Jan 2015 16:45:14 -0600
+Subject: [CHANGE 10/10] bandwidth_limit: standarize in size_t
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Juan Quintela <quintela@redhat.com>
+Message-id: <1420649114-17435-11-git-send-email-quintela@redhat.com>
+Patchwork-id: 63167
+O-Subject: [PATCH qemu-kvm RHEL6.7 10/10] bandwidth_limit: standarize in size_t
+Bugzilla: 970103
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+Right now we:
+
+- read from migrate_set_speed() as a double
+- there we compare it with UINT32_MAX
+- store it in a uint32_t
+- then we call *_start_outgoing_migration() with that uint32_t
+  but that functions take an int64_t
+- inside that function we store that int64_t value into an int64_t
+- we call migrate_fd_connect after several hoops
+- we call there qemu_fopen_ops_buffered that expects a size_t
+- we store there as xfer_limit, that is a size_t
+
+To make things ever more interesting, the value is called:
+- max_throttle (uint32_t)
+- bandwdith_limit (int64_t)
+- bytes_per_sec (size_t): until here, everything is bytes_per_sec
+- xfer_limit (size_t): this one is bytes per 100ms
+
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+---
+ migration-exec.c |  2 +-
+ migration-fd.c   |  2 +-
+ migration-tcp.c  |  2 +-
+ migration-unix.c |  2 +-
+ migration.c      |  4 ++--
+ migration.h      | 10 +++++-----
+ 6 files changed, 11 insertions(+), 11 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ migration-exec.c |  2 +-
+ migration-fd.c   |  2 +-
+ migration-tcp.c  |  2 +-
+ migration-unix.c |  2 +-
+ migration.c      |  4 ++--
+ migration.h      | 10 +++++-----
+ 6 files changed, 11 insertions(+), 11 deletions(-)
+
+diff --git a/migration-exec.c b/migration-exec.c
+index 1c7c2ae..a267ea6 100644
+--- a/migration-exec.c
++++ b/migration-exec.c
+@@ -63,7 +63,7 @@ static int exec_close(FdMigrationState *s)
+ 
+ MigrationState *exec_start_outgoing_migration(Monitor *mon,
+                                               const char *command,
+-					      int64_t bandwidth_limit,
++					      size_t bandwidth_limit,
+ 					      int detach,
+ 					      int blk,
+ 					      int inc)
+diff --git a/migration-fd.c b/migration-fd.c
+index 54684d9..110208e 100644
+--- a/migration-fd.c
++++ b/migration-fd.c
+@@ -75,7 +75,7 @@ static int fd_close(FdMigrationState *s)
+ 
+ MigrationState *fd_start_outgoing_migration(Monitor *mon,
+ 					    const char *fdname,
+-					    int64_t bandwidth_limit,
++					    size_t bandwidth_limit,
+ 					    int detach,
+ 					    int blk,
+ 					    int inc)
+diff --git a/migration-tcp.c b/migration-tcp.c
+index 475219c..b7687cb 100644
+--- a/migration-tcp.c
++++ b/migration-tcp.c
+@@ -67,7 +67,7 @@ static void tcp_wait_for_connect(int fd, void *opaque)
+ 
+ MigrationState *tcp_start_outgoing_migration(Monitor *mon,
+                                              const char *host_port,
+-                                             int64_t bandwidth_limit,
++                                             size_t bandwidth_limit,
+                                              int detach,
+                                              int blk,
+                                              int inc,
+diff --git a/migration-unix.c b/migration-unix.c
+index c645d94..f3af435 100644
+--- a/migration-unix.c
++++ b/migration-unix.c
+@@ -78,7 +78,7 @@ static void unix_wait_for_connect(void *opaque)
+ 
+ MigrationState *unix_start_outgoing_migration(Monitor *mon,
+                                               const char *path,
+-					      int64_t bandwidth_limit,
++					      size_t bandwidth_limit,
+ 					      int detach,
+ 					      int blk,
+ 					      int inc)
+diff --git a/migration.c b/migration.c
+index e29262d..0fba529 100644
+--- a/migration.c
++++ b/migration.c
+@@ -40,7 +40,7 @@ static int64_t start, stop;
+ #endif
+ 
+ /* Migration speed throttling */
+-static uint32_t max_throttle = (32 << 20);
++static size_t max_throttle = (32 << 20);
+ 
+ static MigrationState *current_migration;
+ 
+@@ -191,7 +191,7 @@ int do_migrate_set_speed(Monitor *mon, const QDict *qdict, QObject **ret_data)
+     FdMigrationState *s;
+ 
+     d = qdict_get_double(qdict, "value");
+-    d = MAX(0, MIN(UINT32_MAX, d));
++    d = MAX(0, MIN(SIZE_MAX, d));
+     max_throttle = d;
+ 
+     s = migrate_to_fms(current_migration);
+diff --git a/migration.h b/migration.h
+index 7eb3bad..9f7bdbc 100644
+--- a/migration.h
++++ b/migration.h
+@@ -45,7 +45,7 @@ typedef struct FdMigrationState FdMigrationState;
+ struct FdMigrationState
+ {
+     MigrationState mig_state;
+-    int64_t bandwidth_limit;
++    size_t bandwidth_limit;
+     QEMUFile *file;
+     int fd;
+     Monitor *mon;
+@@ -79,7 +79,7 @@ int exec_start_incoming_migration(const char *host_port);
+ 
+ MigrationState *exec_start_outgoing_migration(Monitor *mon,
+                                               const char *host_port,
+-					      int64_t bandwidth_limit,
++					      size_t bandwidth_limit,
+ 					      int detach,
+ 					      int blk,
+ 					      int inc);
+@@ -88,7 +88,7 @@ int tcp_start_incoming_migration(const char *host_port, Error **errp);
+ 
+ MigrationState *tcp_start_outgoing_migration(Monitor *mon,
+                                              const char *host_port,
+-					     int64_t bandwidth_limit,
++					     size_t bandwidth_limit,
+ 					     int detach,
+ 					     int blk,
+                                              int inc,
+@@ -98,7 +98,7 @@ int unix_start_incoming_migration(const char *path);
+ 
+ MigrationState *unix_start_outgoing_migration(Monitor *mon,
+                                               const char *path,
+-					      int64_t bandwidth_limit,
++					      size_t bandwidth_limit,
+ 					      int detach,
+ 					      int blk,
+ 					      int inc);
+@@ -107,7 +107,7 @@ int fd_start_incoming_migration(const char *path);
+ 
+ MigrationState *fd_start_outgoing_migration(Monitor *mon,
+ 					    const char *fdname,
+-					    int64_t bandwidth_limit,
++					    size_t bandwidth_limit,
+ 					    int detach,
+ 					    int blk,
+ 					    int inc);
+-- 
+2.1.0
+

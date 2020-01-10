@@ -1,0 +1,123 @@
+From 6f987d5e468287a8a0f978b522d6faaebb5d9710 Mon Sep 17 00:00:00 2001
+Message-Id: <6f987d5e468287a8a0f978b522d6faaebb5d9710.1368098699.git.minovotn@redhat.com>
+In-Reply-To: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+References: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+From: Bandan Das <bsd@redhat.com>
+Date: Tue, 7 May 2013 04:45:54 +0200
+Subject: [PATCH 22/24] target-i386: cpu: Enable SEP by default for rhel6.5.0
+ machine type
+
+RH-Author: Bandan Das <bsd@redhat.com>
+Message-id: <1367901955-8217-3-git-send-email-bsd@redhat.com>
+Patchwork-id: 51160
+O-Subject: [PATCH RHEL-6.5 qemu-kvm 2/3 v2] target-i386: cpu: Enable SEP by default for rhel6.5.0 machine type
+Bugzilla: 821741
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Orit Wasserman <owasserm@redhat.com>
+RH-Acked-by: Eduardo Habkost <ehabkost@redhat.com>
+
+Signed-off-by: Bandan Das <bsd@redhat.com>
+---
+ v2: Replace kvm_sep_enabled with kvm_sep_disabled to
+ avoid corner cases. Add a compat function that older machine
+ types can call to disable SEP
+
+ hw/pc.c             |  7 +++++++
+ hw/pc.h             |  1 +
+ target-i386/cpuid.c | 13 +++++++++++++
+ 3 files changed, 21 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/pc.c             |  7 +++++++
+ hw/pc.h             |  1 +
+ target-i386/cpuid.c | 13 +++++++++++++
+ 3 files changed, 21 insertions(+)
+
+diff --git a/hw/pc.c b/hw/pc.c
+index 526369c..5164a56 100644
+--- a/hw/pc.c
++++ b/hw/pc.c
+@@ -1734,8 +1734,14 @@ static void rhel_common_init(const char *type1_version,
+             .value    = stringify(1),\
+         }
+ 
++static void pc_rhel640_compat(void)
++{
++    disable_kvm_sep();
++}
++
+ static void pc_rhel630_compat(void)
+ {
++    pc_rhel640_compat();
+     set_cpu_model_level("Conroe", 2);
+     set_cpu_model_level("Penryn", 2);
+     set_cpu_model_level("Nehalem", 2);
+@@ -1780,6 +1786,7 @@ static void pc_init_rhel640(ram_addr_t ram_size,
+                             const char *cpu_model)
+ {
+     rhel_common_init("RHEL 6.4.0 PC", 0);
++    pc_rhel640_compat();
+     pc_init_pci(ram_size, boot_device, kernel_filename, kernel_cmdline,
+                 initrd_filename, setdef_cpu_model(cpu_model, "cpu64-rhel6"));
+ }
+diff --git a/hw/pc.h b/hw/pc.h
+index cdf3dd6..8392c5b 100644
+--- a/hw/pc.h
++++ b/hw/pc.h
+@@ -183,6 +183,7 @@ int cpu_is_bsp(CPUState *env);
+ void set_pmu_passthrough(bool enable);
+ void disable_kvm_pv_eoi(void);
+ void disable_tsc_deadline(void);
++void disable_kvm_sep(void);
+ void set_cpu_model_level(const char *name, int level);
+ 
+ #endif
+diff --git a/target-i386/cpuid.c b/target-i386/cpuid.c
+index db99112..cbe580e 100644
+--- a/target-i386/cpuid.c
++++ b/target-i386/cpuid.c
+@@ -99,6 +99,7 @@ int enforce_cpuid = 0;
+ static bool kvm_pv_eoi_disabled;
+ static bool pmu_passthrough_enabled;
+ static bool tsc_deadline_disabled;
++static bool kvm_sep_disabled;
+ 
+ static void host_cpuid(uint32_t function, uint32_t count, uint32_t *eax,
+                        uint32_t *ebx, uint32_t *ecx, uint32_t *edx);
+@@ -942,6 +943,11 @@ static int cpu_x86_find_by_name(x86_def_t *x86_cpu_def, const char *cpu_model)
+         x86_cpu_def->ext_features &= ~CPUID_EXT_TSC_DEADLINE_TIMER;
+     }
+ 
++    /* RHEL 6.4 and below machine types have SEP disabled */
++    if (kvm_sep_disabled) {
++	    x86_cpu_def->features &= ~CPUID_SEP;
++    }
++
+     /* end of machine-type compatibility bits */
+ 
+     add_flagname_to_bitmaps("hypervisor", &plus_features,
+@@ -1509,6 +1515,8 @@ void cpu_x86_cpuid(CPUX86State *env, uint32_t index, uint32_t count,
+ void set_pmu_passthrough(bool enable);
+ void disable_kvm_pv_eoi(void);
+ void disable_tsc_deadline(void);
++void disable_kvm_sep(void);
++
+ void set_cpu_model_level(const char *name, int level);
+ 
+ void set_pmu_passthrough(bool enable)
+@@ -1526,6 +1534,11 @@ void disable_tsc_deadline(void)
+     tsc_deadline_disabled = true;
+ }
+ 
++void disable_kvm_sep(void)
++{
++	kvm_sep_disabled = true;
++}
++
+ void set_cpu_model_level(const char *name, int level)
+ {
+     x86_def_t *def;
+-- 
+1.7.11.7
+

@@ -1,0 +1,49 @@
+From 6e171bfe981afa4a187a06b71aa0ab561303a0d8 Mon Sep 17 00:00:00 2001
+Message-Id: <6e171bfe981afa4a187a06b71aa0ab561303a0d8.1381245467.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Thu, 26 Sep 2013 02:58:16 +0200
+Subject: [PATCH 1/2] block: don't lose data from last incomplete sector
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1380164297-19677-2-git-send-email-famz@redhat.com>
+Patchwork-id: 54537
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 1/2] block: don't lose data from last incomplete sector
+Bugzilla: 1009370
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+To read the last sector that is not aligned to sector boundary, current
+code for growable backends, since commit 893a8f6 "block: Produce zeros
+when protocols reading beyond end of file", drops the data and directly
+returns zeroes. That is incorrect.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit bcb9d66e8590151967e1dbe3724eec7ec71392e0)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/block.c b/block.c
+index 6ab6e54..d5cbfe7 100644
+--- a/block.c
++++ b/block.c
+@@ -2198,7 +2198,7 @@ static int coroutine_fn bdrv_co_do_readv(BlockDriverState *bs,
+             goto out;
+         }
+ 
+-        total_sectors = len >> BDRV_SECTOR_BITS;
++        total_sectors = (len + BDRV_SECTOR_SIZE - 1) >> BDRV_SECTOR_BITS;
+         max_nb_sectors = MAX(0, total_sectors - sector_num);
+         if (max_nb_sectors > 0) {
+             ret = drv->bdrv_co_readv(bs, sector_num,
+-- 
+1.7.11.7
+

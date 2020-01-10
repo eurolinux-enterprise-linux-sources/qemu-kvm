@@ -1,0 +1,75 @@
+From a5fa72adf7e9a705dbbd1c64a08cf4cb133fc03e Mon Sep 17 00:00:00 2001
+Message-Id: <a5fa72adf7e9a705dbbd1c64a08cf4cb133fc03e.1422637807.git.jen@redhat.com>
+In-Reply-To: <d57bff8cf3457c2e855eeca4b18266bf5956270d.1422637807.git.jen@redhat.com>
+References: <d57bff8cf3457c2e855eeca4b18266bf5956270d.1422637807.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Mon, 19 Jan 2015 14:52:10 -0500
+Subject: [CHANGE 09/10] block/raw-posix: Catch fsync() errors
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1421679130-22714-10-git-send-email-mreitz@redhat.com>
+Patchwork-id: 63369
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 9/9] block/raw-posix: Catch fsync() errors
+Bugzilla: 1040220
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1040220
+
+fsync() may fail, and that case should be handled.
+
+Reported-by: László Érsek <lersek@redhat.com>
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 098ffa6674a82ceac0e3ccb3a8a5bf6ca44adcd5)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	block/raw-posix.c
+
+Different error handling downstream and upstream (no "errp", therefore
+the error message just has to be emitted).
+
+On a downstream note, this patch fixes another bug as well: If all the
+write() operations were successful, result was greater than 0 before;
+therefore, if qemu_close() failed, the error code was not propagated
+(because result != 0). Since fsync() returns 0 on success, this issue is
+resolved by this patch.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/raw-posix.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/raw-posix.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/block/raw-posix.c b/block/raw-posix.c
+index 79a2253..3407de9 100644
+--- a/block/raw-posix.c
++++ b/block/raw-posix.c
+@@ -679,7 +679,12 @@ static int raw_create(const char *filename, QEMUOptionParameter *options)
+             left -= result;
+         }
+         if (result >= 0) {
+-            fsync(fd);
++            result = fsync(fd);
++            if (result < 0) {
++                result = -errno;
++                error_report("Could not flush new file to disk: %s",
++                             strerror(-result));
++            }
+         }
+         g_free(buf);
+     } else if (prealloc != PREALLOC_MODE_OFF) {
+-- 
+2.1.0
+

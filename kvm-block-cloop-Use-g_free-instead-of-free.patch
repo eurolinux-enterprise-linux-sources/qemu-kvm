@@ -1,0 +1,55 @@
+From 46135e0b1655ab8142b4d22900d67da35d299836 Mon Sep 17 00:00:00 2001
+From: Dong Xu Wang <wdongxu@linux.vnet.ibm.com>
+Date: Tue, 25 Mar 2014 11:45:41 +0100
+Subject: [PATCH 23/48] block/cloop: Use g_free instead of free
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1395744364-16049-23-git-send-email-kwolf@redhat.com>
+Patchwork-id: n/a
+O-Subject: [EMBARGOED RHEL-6.6/6.5.z qemu-kvm PATCH v2 22/45]
+           block/cloop: Use g_free instead of free
+Bugzilla: 1079518
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeff Cody <jcody@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1079518
+
+Fix mismatching allocation and deallocation: g_free should be used to pair with
+g_malloc.
+
+Reviewed-by: Andreas Färber <afaerber@suse.de>
+Reviewed_by: Ray Wang <raywang@linux.vnet.ibm.com>
+Signed-off-by: Dong Xu Wang <wdongxu@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+
+(cherry picked from commit 756f51e408febecdaff041f096527b820e857762)
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/cloop.c |    6 +++---
+ 1 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/block/cloop.c b/block/cloop.c
+index 1fecad7..f39dc77 100644
+--- a/block/cloop.c
++++ b/block/cloop.c
+@@ -241,10 +241,10 @@ static void cloop_close(BlockDriverState *bs)
+ {
+     BDRVCloopState *s = bs->opaque;
+     if (s->n_blocks > 0) {
+-        free(s->offsets);
++        g_free(s->offsets);
+     }
+-    free(s->compressed_block);
+-    free(s->uncompressed_block);
++    g_free(s->compressed_block);
++    g_free(s->uncompressed_block);
+     inflateEnd(&s->zstream);
+ }
+ 
+-- 
+1.7.1
+

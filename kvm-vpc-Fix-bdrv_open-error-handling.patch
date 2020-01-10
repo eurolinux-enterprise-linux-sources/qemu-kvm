@@ -1,0 +1,135 @@
+From 8c8371e060f698bf56e78b37502573ae6f4d4dd1 Mon Sep 17 00:00:00 2001
+Message-Id: <8c8371e060f698bf56e78b37502573ae6f4d4dd1.1378813438.git.minovotn@redhat.com>
+In-Reply-To: <b80f97e724da8388b544413d6a3dcac35d347d9b.1378813438.git.minovotn@redhat.com>
+References: <b80f97e724da8388b544413d6a3dcac35d347d9b.1378813438.git.minovotn@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Wed, 28 Aug 2013 13:14:54 +0200
+Subject: [PATCH 12/13] vpc: Fix bdrv_open() error handling
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <24ff4fe8e888c1870afa2a10f20948c7284b1935.1377694139.git.jcody@redhat.com>
+Patchwork-id: 53847
+O-Subject: [RHEL6.5 qemu-kvm PATCH 12/13] vpc: Fix bdrv_open() error handling
+Bugzilla: 999779
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+Return -errno instead of -1 on errors. While touching the
+code, fix a memory leak.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 59294e465953ffb07d42dc61c827bb98cc0ca423)
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ block/vpc.c | 42 ++++++++++++++++++++++++++++++------------
+ 1 file changed, 30 insertions(+), 12 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vpc.c | 42 ++++++++++++++++++++++++++++++------------
+ 1 file changed, 30 insertions(+), 12 deletions(-)
+
+diff --git a/block/vpc.c b/block/vpc.c
+index e7fea9a..9d3bbfc 100644
+--- a/block/vpc.c
++++ b/block/vpc.c
+@@ -160,24 +160,33 @@ static int vpc_open(BlockDriverState *bs, int flags)
+     struct vhd_dyndisk_header* dyndisk_header;
+     uint8_t buf[HEADER_SIZE];
+     uint32_t checksum;
+-    int err = -1;
+     int disk_type = VHD_DYNAMIC;
++    int ret;
+ 
+-    if (bdrv_pread(bs->file, 0, s->footer_buf, HEADER_SIZE) != HEADER_SIZE)
++    ret = bdrv_pread(bs->file, 0, s->footer_buf, HEADER_SIZE);
++    if (ret < 0) {
+         goto fail;
++    }
+ 
+     footer = (struct vhd_footer*) s->footer_buf;
+     if (strncmp(footer->creator, "conectix", 8)) {
+         int64_t offset = bdrv_getlength(bs->file);
+-        if (offset < HEADER_SIZE) {
++        if (offset < 0) {
++            ret = offset;
++            goto fail;
++        } else if (offset < HEADER_SIZE) {
++            ret = -EINVAL;
+             goto fail;
+         }
++
+         /* If a fixed disk, the footer is found only at the end of the file */
+-        if (bdrv_pread(bs->file, offset-HEADER_SIZE, s->footer_buf, HEADER_SIZE)
+-                != HEADER_SIZE) {
++        ret = bdrv_pread(bs->file, offset-HEADER_SIZE, s->footer_buf,
++                         HEADER_SIZE);
++        if (ret < 0) {
+             goto fail;
+         }
+         if (strncmp(footer->creator, "conectix", 8)) {
++            ret = -EMEDIUMTYPE;
+             goto fail;
+         }
+         disk_type = VHD_FIXED;
+@@ -200,19 +209,21 @@ static int vpc_open(BlockDriverState *bs, int flags)
+ 
+     /* Allow a maximum disk size of approximately 2 TB */
+     if (bs->total_sectors >= 65535LL * 255 * 255) {
+-        err = -EFBIG;
++        ret = -EFBIG;
+         goto fail;
+     }
+ 
+     if (disk_type == VHD_DYNAMIC) {
+-        if (bdrv_pread(bs->file, be64_to_cpu(footer->data_offset), buf,
+-                HEADER_SIZE) != HEADER_SIZE) {
++        ret = bdrv_pread(bs->file, be64_to_cpu(footer->data_offset), buf,
++                         HEADER_SIZE);
++        if (ret < 0) {
+             goto fail;
+         }
+ 
+         dyndisk_header = (struct vhd_dyndisk_header *) buf;
+ 
+         if (strncmp(dyndisk_header->magic, "cxsparse", 8)) {
++            ret = -EINVAL;
+             goto fail;
+         }
+ 
+@@ -223,8 +234,10 @@ static int vpc_open(BlockDriverState *bs, int flags)
+         s->pagetable = g_malloc(s->max_table_entries * 4);
+ 
+         s->bat_offset = be64_to_cpu(dyndisk_header->table_offset);
+-        if (bdrv_pread(bs->file, s->bat_offset, s->pagetable,
+-                s->max_table_entries * 4) != s->max_table_entries * 4) {
++
++        ret = bdrv_pread(bs->file, s->bat_offset, s->pagetable,
++                         s->max_table_entries * 4);
++        if (ret < 0) {
+             goto fail;
+         }
+ 
+@@ -255,8 +268,13 @@ static int vpc_open(BlockDriverState *bs, int flags)
+ 
+     qemu_co_mutex_init(&s->lock);
+     return 0;
+- fail:
+-    return err;
++
++fail:
++    g_free(s->pagetable);
++#ifdef CACHE
++    g_free(s->pageentry_u8);
++#endif
++    return ret;
+ }
+ 
+ static int vpc_reopen_prepare(BDRVReopenState *state,
+-- 
+1.7.11.7
+

@@ -1,0 +1,122 @@
+From 7fb520b18c607eecbf1942ca6aa2b1dea11726c7 Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Sat, 22 Mar 2014 03:30:58 +0100
+Subject: [PATCH 07/30] dump: add argument to write_elfxx_notes
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1395459071-19118-7-git-send-email-lersek@redhat.com>
+Patchwork-id: 58216
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 06/19] dump: add argument to write_elfxx_notes
+Bugzilla: 1035162
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: qiaonuohan <qiaonuohan@cn.fujitsu.com>
+
+write_elf32_notes/wirte_elf64_notes use fd_write_vmcore to write elf notes to
+vmcore. Adding parameter "WriteCoreDumpFunction f" makes it available to choose
+the method of writing elf notes
+
+Signed-off-by: Qiao Nuohan <qiaonuohan@cn.fujitsu.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 6a519918b3f666759e20bcd0bb88378f3e4ffb57)
+
+Conflicts:
+	dump.c
+
+Conflicts due to:
+- CPU_FOREACH() in upstream vs. open-coded CPU loop in RHEL-6
+- CPUState in upstream vs. CPUArchState in RHEL-6
+- WriteCoreDumpFunction in upstream vs. write_core_dump_function in RHEL-6
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ dump.c | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ dump.c |   16 ++++++++--------
+ 1 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/dump.c b/dump.c
+index 16fc5e6..adf7949 100644
+--- a/dump.c
++++ b/dump.c
+@@ -271,7 +271,7 @@ static int write_elf64_note(DumpState *s)
+     return 0;
+ }
+ 
+-static int write_elf64_notes(DumpState *s)
++static int write_elf64_notes(write_core_dump_function f, DumpState *s)
+ {
+     CPUArchState *env;
+     int ret;
+@@ -279,7 +279,7 @@ static int write_elf64_notes(DumpState *s)
+ 
+     for (env = first_cpu; env != NULL; env = env->next_cpu) {
+         id = cpu_index(env);
+-        ret = cpu_write_elf64_note(fd_write_vmcore, env, id, s);
++        ret = cpu_write_elf64_note(f, env, id, s);
+         if (ret < 0) {
+             dump_error(s, "dump: failed to write elf notes.\n");
+             return -1;
+@@ -287,7 +287,7 @@ static int write_elf64_notes(DumpState *s)
+     }
+ 
+     for (env = first_cpu; env != NULL; env = env->next_cpu) {
+-        ret = cpu_write_elf64_qemunote(fd_write_vmcore, env, s);
++        ret = cpu_write_elf64_qemunote(f, env, s);
+         if (ret < 0) {
+             dump_error(s, "dump: failed to write CPU status.\n");
+             return -1;
+@@ -321,7 +321,7 @@ static int write_elf32_note(DumpState *s)
+     return 0;
+ }
+ 
+-static int write_elf32_notes(DumpState *s)
++static int write_elf32_notes(write_core_dump_function f, DumpState *s)
+ {
+     CPUArchState *env;
+     int ret;
+@@ -329,7 +329,7 @@ static int write_elf32_notes(DumpState *s)
+ 
+     for (env = first_cpu; env != NULL; env = env->next_cpu) {
+         id = cpu_index(env);
+-        ret = cpu_write_elf32_note(fd_write_vmcore, env, id, s);
++        ret = cpu_write_elf32_note(f, env, id, s);
+         if (ret < 0) {
+             dump_error(s, "dump: failed to write elf notes.\n");
+             return -1;
+@@ -337,7 +337,7 @@ static int write_elf32_notes(DumpState *s)
+     }
+ 
+     for (env = first_cpu; env != NULL; env = env->next_cpu) {
+-        ret = cpu_write_elf32_qemunote(fd_write_vmcore, env, s);
++        ret = cpu_write_elf32_qemunote(f, env, s);
+         if (ret < 0) {
+             dump_error(s, "dump: failed to write CPU status.\n");
+             return -1;
+@@ -574,7 +574,7 @@ static int dump_begin(DumpState *s)
+         }
+ 
+         /* write notes to vmcore */
+-        if (write_elf64_notes(s) < 0) {
++        if (write_elf64_notes(fd_write_vmcore, s) < 0) {
+             return -1;
+         }
+ 
+@@ -597,7 +597,7 @@ static int dump_begin(DumpState *s)
+         }
+ 
+         /* write notes to vmcore */
+-        if (write_elf32_notes(s) < 0) {
++        if (write_elf32_notes(fd_write_vmcore, s) < 0) {
+             return -1;
+         }
+     }
+-- 
+1.7.1
+

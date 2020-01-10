@@ -1,0 +1,45 @@
+From c928eb1e33c7d57b417cc183b581d31acf2b8f18 Mon Sep 17 00:00:00 2001
+Message-Id: <c928eb1e33c7d57b417cc183b581d31acf2b8f18.1368098699.git.minovotn@redhat.com>
+In-Reply-To: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+References: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+From: Bandan Das <bsd@redhat.com>
+Date: Tue, 7 May 2013 19:04:26 +0200
+Subject: [PATCH 24/24] target-i386: cpu: Enable SEP for Haswell models
+
+RH-Author: Bandan Das <bsd@redhat.com>
+Message-id: <1367953466-5062-1-git-send-email-bsd@redhat.com>
+Patchwork-id: 51175
+O-Subject: [PATCH RHEL-6.5 qemu-kvm 4/3 v2] target-i386: cpu: Enable SEP for Haswell models
+Bugzilla: 821741
+RH-Acked-by: Eduardo Habkost <ehabkost@redhat.com>
+RH-Acked-by: Orit Wasserman <owasserm@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Signed-off-by: Bandan Das <bsd@redhat.com>
+---
+ v2: new patch
+
+ target-i386/cpuid.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ target-i386/cpuid.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/target-i386/cpuid.c b/target-i386/cpuid.c
+index 6cac9e7..639d41f 100644
+--- a/target-i386/cpuid.c
++++ b/target-i386/cpuid.c
+@@ -604,7 +604,7 @@ static x86_def_t builtin_x86_defs[] = {
+         .stepping = 1,
+         .features = CPUID_SSE2 | CPUID_SSE | CPUID_FXSR | CPUID_MMX |
+              CPUID_CLFLUSH | CPUID_PSE36 | CPUID_PAT | CPUID_CMOV | CPUID_MCA |
+-             CPUID_PGE | CPUID_MTRR | CPUID_APIC | CPUID_CX8 |
++             CPUID_PGE | CPUID_MTRR | CPUID_SEP | CPUID_APIC | CPUID_CX8 |
+              CPUID_MCE | CPUID_PAE | CPUID_MSR | CPUID_TSC | CPUID_PSE |
+              CPUID_DE | CPUID_FP87,
+         .ext_features = CPUID_EXT_AVX | CPUID_EXT_XSAVE | CPUID_EXT_AES |
+-- 
+1.7.11.7
+

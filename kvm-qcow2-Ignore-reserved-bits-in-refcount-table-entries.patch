@@ -1,0 +1,62 @@
+From e8c970f617182711390c4305560c97f638ed0d94 Mon Sep 17 00:00:00 2001
+From: Max Reitz <mreitz@redhat.com>
+Date: Fri, 2 May 2014 16:58:36 -0500
+Subject: [PATCH 04/26] qcow2: Ignore reserved bits in refcount table entries
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1399049936-13496-5-git-send-email-mreitz@redhat.com>
+Patchwork-id: 58650
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 04/24] qcow2: Ignore reserved bits in refcount table entries
+Bugzilla: 1004420
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+BZ: 1004420
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 76dc9e0c8f369f1695e5413de2e28d69108476bb)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-refcount.c | 2 +-
+ block/qcow2.h          | 2 ++
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-refcount.c |    2 +-
+ block/qcow2.h          |    2 ++
+ 2 files changed, 3 insertions(+), 1 deletions(-)
+
+diff --git a/block/qcow2-refcount.c b/block/qcow2-refcount.c
+index 161abe2..7770a9e 100644
+--- a/block/qcow2-refcount.c
++++ b/block/qcow2-refcount.c
+@@ -169,7 +169,7 @@ static int alloc_refcount_block(BlockDriverState *bs,
+     if (refcount_table_index < s->refcount_table_size) {
+ 
+         uint64_t refcount_block_offset =
+-            s->refcount_table[refcount_table_index];
++            s->refcount_table[refcount_table_index] & REFT_OFFSET_MASK;
+ 
+         /* If it's already there, we're done */
+         if (refcount_block_offset) {
+diff --git a/block/qcow2.h b/block/qcow2.h
+index 23eb660..fc352da 100644
+--- a/block/qcow2.h
++++ b/block/qcow2.h
+@@ -204,6 +204,8 @@ enum {
+ #define L2E_OFFSET_MASK 0x00ffffffffffff00ULL
+ #define L2E_COMPRESSED_OFFSET_SIZE_MASK 0x3fffffffffffffffULL
+ 
++#define REFT_OFFSET_MASK 0xffffffffffffff00ULL
++
+ static inline int size_to_clusters(BDRVQcowState *s, int64_t size)
+ {
+     return (size + (s->cluster_size - 1)) >> s->cluster_bits;
+-- 
+1.7.1
+

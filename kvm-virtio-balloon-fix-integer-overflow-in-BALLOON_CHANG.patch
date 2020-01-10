@@ -1,0 +1,72 @@
+From 2d1baa793df2de0a160b2889c0fa4c4588fbb033 Mon Sep 17 00:00:00 2001
+Message-Id: <2d1baa793df2de0a160b2889c0fa4c4588fbb033.1367330031.git.minovotn@redhat.com>
+In-Reply-To: <aefb5be5bb2e1e9cff25a846b497bc0d4368f495.1367330031.git.minovotn@redhat.com>
+References: <aefb5be5bb2e1e9cff25a846b497bc0d4368f495.1367330031.git.minovotn@redhat.com>
+From: Luiz Capitulino <lcapitulino@redhat.com>
+Date: Mon, 22 Apr 2013 15:35:04 +0200
+Subject: [PATCH 4/4] virtio-balloon: fix integer overflow in BALLOON_CHANGE
+ QMP event
+
+RH-Author: Luiz Capitulino <lcapitulino@redhat.com>
+Message-id: <20130422113504.6b401eb3@redhat.com>
+Patchwork-id: 50746
+O-Subject: [RHEL6.5 qemu-kvm PATCH] virtio-balloon: fix integer overflow in BALLOON_CHANGE QMP event
+Bugzilla: 927336
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Bugzilla: 927336
+
+Because dev->actual is uint32_t, the expression 'dev->actual <<
+VIRTIO_BALLOON_PFN_SHIFT' is truncated to 32 bits. This overflows when
+dev->actual >= 1048576.
+
+To reproduce:
+
+1. Start a VM with a QMP socket and 5G of RAM
+2. Connect to the QMP socket, negotiate capabilities and issue:
+
+  { "execute":"balloon", "arguments": { "value": 1073741824 } }
+
+3. Watch for BALLOON_CHANGE QMP events, the last one will incorretly be:
+
+  { "timestamp": { "seconds": 1366228965, "microseconds": 245466 },
+    "event": "BALLOON_CHANGE", "data": { "actual": 5368709120 } }
+
+To fix it this commit casts it to ram_addr_t, which is ram_size's type.
+
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+(cherry picked from commit dcc6ceffc066745777960a1f0d32f3a555924f65)
+
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+---
+
+PS: Don't how to make git cherry-pick learn that the file is at a different
+    location downstream. Did this backport manually with patch.
+
+ hw/virtio-balloon.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/virtio-balloon.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/hw/virtio-balloon.c b/hw/virtio-balloon.c
+index 695ade4..495a483 100644
+--- a/hw/virtio-balloon.c
++++ b/hw/virtio-balloon.c
+@@ -199,7 +199,7 @@ static void virtio_balloon_set_config(VirtIODevice *vdev,
+     dev->actual = config.actual;
+     if (dev->actual != oldactual) {
+         qemu_balloon_changed(ram_size -
+-                             (dev->actual << VIRTIO_BALLOON_PFN_SHIFT));
++                       ((ram_addr_t) dev->actual << VIRTIO_BALLOON_PFN_SHIFT));
+     }
+ }
+ 
+-- 
+1.7.11.7
+

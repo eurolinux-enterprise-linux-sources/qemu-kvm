@@ -1,0 +1,57 @@
+From f1f3ab0133c9197a9f82addfa28a10f1e554c72c Mon Sep 17 00:00:00 2001
+Message-Id: <f1f3ab0133c9197a9f82addfa28a10f1e554c72c.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:28:07 +0200
+Subject: [PATCH 102/114] qemu-ga: make guest-sync-delimited available during
+ fsfreeze
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-45-git-send-email-lersek@redhat.com>
+Patchwork-id: 51143
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 44/56] qemu-ga: make guest-sync-delimited available during fsfreeze
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Michael Roth <mdroth@linux.vnet.ibm.com>
+
+We currently maintain a whitelist of commands that are safe during
+fsfreeze. During fsfreeze, we disable all commands that aren't part of
+that whitelist.
+
+guest-sync-delimited meets the criteria for being whitelisted, and is
+also required for qemu-ga clients that rely on guest-sync-delimited for
+re-syncing the channel after a timeout.
+
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Cc: qemu-stable@nongnu.org
+Reviewed-by: Eric Blake <eblake@redhat.com>
+(cherry picked from commit c5dcb6ae23a3ed7a01bae1cd75ce02abea31db5e)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qemu-ga.c |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-ga.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/qemu-ga.c b/qemu-ga.c
+index d0cce36..0441ce0 100644
+--- a/qemu-ga.c
++++ b/qemu-ga.c
+@@ -85,6 +85,7 @@ static const char *ga_freeze_whitelist[] = {
+     "guest-ping",
+     "guest-info",
+     "guest-sync",
++    "guest-sync-delimited",
+     "guest-fsfreeze-status",
+     "guest-fsfreeze-thaw",
+     NULL
+-- 
+1.7.11.7
+

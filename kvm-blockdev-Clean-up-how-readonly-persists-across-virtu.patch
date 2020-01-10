@@ -1,0 +1,61 @@
+From 490a26425f909297acf53693026c77272c3921ec Mon Sep 17 00:00:00 2001
+From: Max Reitz <mreitz@redhat.com>
+Date: Fri, 1 Nov 2013 13:46:22 +0100
+Subject: [PATCH 34/39] blockdev: Clean up how readonly persists across virtual media change
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1383313582-11559-1-git-send-email-mreitz@redhat.com>
+Patchwork-id: 55214
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] blockdev: Clean up how readonly persists across virtual media change
+Bugzilla: 1025235
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Markus Armbruster <armbru@redhat.com>
+
+BZ: 1025235
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=6508767
+
+Since commit cb4e5f8e, monitor command change makes the new media
+readonly iff the type hint is BDRV_TYPE_CDROM, i.e. the drive was
+created with media=cdrom.  The intention is to avoid changing a block
+device's read-only-ness.  However, BDRV_TYPE_CDROM is only a hint.  It
+is currently sufficent for read-only.  But it's not necessary, and it
+may not remain sufficient.
+
+Use bdrv_is_read_only() instead.
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 528f7663473e146fd1b435d73ca21b219451877c)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+
+Conflicts:
+	blockdev.c
+---
+ blockdev.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ blockdev.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/blockdev.c b/blockdev.c
+index 31eba97..1a93089 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -1242,7 +1242,7 @@ int do_change_block(Monitor *mon, const char *device,
+     if (eject_device(mon, bs, 0) < 0) {
+         return -1;
+     }
+-    bdrv_flags = bdrv_get_type_hint(bs) == BDRV_TYPE_CDROM ? 0 : BDRV_O_RDWR;
++    bdrv_flags = bdrv_is_read_only(bs) ? 0 : BDRV_O_RDWR;
+     bdrv_flags |= bdrv_is_snapshot(bs) ? BDRV_O_SNAPSHOT : 0;
+     ret = bdrv_open(bs, filename, bdrv_flags, drv);
+     if (ret < 0) {
+-- 
+1.7.1
+

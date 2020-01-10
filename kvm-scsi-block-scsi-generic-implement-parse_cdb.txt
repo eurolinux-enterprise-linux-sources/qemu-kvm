@@ -1,0 +1,132 @@
+From 9b65707aed370ae5dfb2160cbe620df4541bffe5 Mon Sep 17 00:00:00 2001
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Tue, 29 Jul 2014 15:40:02 -0500
+Subject: [CHANGE 10/11] scsi-block, scsi-generic: implement parse_cdb
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: <1406648403-29466-5-git-send-email-pbonzini@redhat.com>
+Patchwork-id: 60303
+O-Subject: [RHEL 6.6/6.5.z qemu-kvm PATCH 4/5] scsi-block, scsi-generic: implement parse_cdb
+Bugzilla: 1113917
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+The callback lets the bus provide the direction and transfer count
+for passthrough commands, enabling passthrough of vendor-specific
+commands.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 3e7e180ab3f970a4e5b64b5fafd57c48c98ee560)
+
+[RHEL: SCSIDeviceInfo vs. SCSIDeviceClass differences for QOM]
+---
+ hw/scsi-bus.c     |  3 +--
+ hw/scsi-disk.c    | 14 ++++++++++++++
+ hw/scsi-generic.c |  7 +++++++
+ hw/scsi.h         |  1 +
+ 4 files changed, 23 insertions(+), 2 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/scsi-bus.c     |  3 +--
+ hw/scsi-disk.c    | 14 ++++++++++++++
+ hw/scsi-generic.c |  7 +++++++
+ hw/scsi.h         |  1 +
+ 4 files changed, 23 insertions(+), 2 deletions(-)
+
+diff --git a/hw/scsi-bus.c b/hw/scsi-bus.c
+index d2cac54..27874a7 100644
+--- a/hw/scsi-bus.c
++++ b/hw/scsi-bus.c
+@@ -9,7 +9,6 @@
+ 
+ static char *scsibus_get_dev_path(DeviceState *dev);
+ static char *scsibus_get_fw_dev_path(DeviceState *dev);
+-static int scsi_req_parse_cdb(SCSIDevice *dev, SCSICommand *cmd, uint8_t *buf);
+ static void scsi_req_dequeue(SCSIRequest *req);
+ static uint8_t *scsi_target_alloc_buf(SCSIRequest *req, size_t len);
+ static void scsi_target_free_buf(SCSIRequest *req);
+@@ -1027,7 +1026,7 @@ static uint64_t scsi_cmd_lba(SCSICommand *cmd)
+     return lba;
+ }
+ 
+-static int scsi_req_parse_cdb(SCSIDevice *dev, SCSICommand *cmd, uint8_t *buf)
++int scsi_req_parse_cdb(SCSIDevice *dev, SCSICommand *cmd, uint8_t *buf)
+ {
+     int rc;
+ 
+diff --git a/hw/scsi-disk.c b/hw/scsi-disk.c
+index 35565fa..9da1c6a 100644
+--- a/hw/scsi-disk.c
++++ b/hw/scsi-disk.c
+@@ -1966,6 +1966,19 @@ static SCSIRequest *scsi_block_new_request(SCSIDevice *d, uint32_t tag,
+                               hba_private);
+     }
+ }
++
++static int scsi_block_parse_cdb(SCSIDevice *d, SCSICommand *cmd,
++                                  uint8_t *buf, void *hba_private)
++{
++    SCSIDiskState *s = DO_UPCAST(SCSIDiskState, qdev, d);
++
++    if (scsi_block_is_passthrough(s, buf)) {
++        return scsi_bus_parse_cdb(&s->qdev, cmd, buf, hba_private);
++    } else {
++        return scsi_req_parse_cdb(&s->qdev, cmd, buf);
++    }
++}
++
+ #endif
+ 
+ #define DEFINE_SCSI_DISK_PROPERTIES()                           \
+@@ -2034,6 +2047,7 @@ static SCSIDeviceInfo scsi_disk_info[] = {
+         .init         = scsi_block_initfn,
+         .destroy      = scsi_destroy,
+         .alloc_req    = scsi_block_new_request,
++        .parse_cdb    = scsi_block_parse_cdb,
+         .qdev.props   = (Property[]) {
+             DEFINE_PROP_DRIVE("drive", SCSIDiskState, qdev.conf.bs),
+             DEFINE_PROP_INT32("bootindex", SCSIDiskState, qdev.conf.bootindex, -1),
+diff --git a/hw/scsi-generic.c b/hw/scsi-generic.c
+index 6019c38..bc6e29e 100644
+--- a/hw/scsi-generic.c
++++ b/hw/scsi-generic.c
+@@ -493,6 +493,12 @@ static SCSIRequest *scsi_new_request(SCSIDevice *d, uint32_t tag, uint32_t lun,
+     return req;
+ }
+ 
++static int scsi_generic_parse_cdb(SCSIDevice *dev, SCSICommand *cmd,
++                                  uint8_t *buf, void *hba_private)
++{
++    return scsi_bus_parse_cdb(dev, cmd, buf, hba_private);
++}
++
+ static SCSIDeviceInfo scsi_generic_info = {
+     .qdev.name    = "scsi-generic",
+     .qdev.fw_name = "disk",
+@@ -503,6 +509,7 @@ static SCSIDeviceInfo scsi_generic_info = {
+     .init         = scsi_generic_initfn,
+     .destroy      = scsi_destroy,
+     .alloc_req    = scsi_new_request,
++    .parse_cdb    = scsi_generic_parse_cdb,
+     .qdev.props   = (Property[]) {
+         DEFINE_PROP_DRIVE("drive", SCSIDevice, conf.bs),
+         DEFINE_PROP_INT32("bootindex", SCSIDevice, conf.bootindex, -1),
+diff --git a/hw/scsi.h b/hw/scsi.h
+index ff8ac30..167ad03 100644
+--- a/hw/scsi.h
++++ b/hw/scsi.h
+@@ -228,6 +228,7 @@ void scsi_req_unref(SCSIRequest *req);
+ 
+ int scsi_bus_parse_cdb(SCSIDevice *dev, SCSICommand *cmd, uint8_t *buf,
+                        void *hba_private);
++int scsi_req_parse_cdb(SCSIDevice *dev, SCSICommand *cmd, uint8_t *buf);
+ void scsi_req_build_sense(SCSIRequest *req, SCSISense sense);
+ void scsi_req_print(SCSIRequest *req);
+ void scsi_req_continue(SCSIRequest *req);
+-- 
+1.9.3
+

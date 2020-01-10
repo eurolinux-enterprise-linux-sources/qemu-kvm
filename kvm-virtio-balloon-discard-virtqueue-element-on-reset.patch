@@ -1,0 +1,60 @@
+From 6aa519420bf67a8d1e780b9a53435c67a7067bc5 Mon Sep 17 00:00:00 2001
+Message-Id: <6aa519420bf67a8d1e780b9a53435c67a7067bc5.1481738366.git.ymankad@redhat.com>
+In-Reply-To: <be7cc66c94d4b6c77f9f1e674d4783c7d1c3efac.1481738366.git.ymankad@redhat.com>
+References: <be7cc66c94d4b6c77f9f1e674d4783c7d1c3efac.1481738366.git.ymankad@redhat.com>
+From: Ladi Prosek <lprosek@redhat.com>
+Date: Mon, 5 Dec 2016 13:57:46 -0500
+Subject: [CHANGE 05/10] virtio-balloon: discard virtqueue element on reset
+To: ymankad@redhat.com
+
+RH-Author: Ladi Prosek <lprosek@redhat.com>
+Message-id: <1480946267-6514-6-git-send-email-lprosek@redhat.com>
+Patchwork-id: 72987
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 5/6] virtio-balloon: discard virtqueue element on reset
+Bugzilla: 1392520
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Ladi Prosek <lprosek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+
+The one pending element is being freed but not discarded on device
+reset, which causes svq->inuse to creep up, eventually hitting the
+"Virtqueue size exceeded" error.
+
+Properly discarding the element on device reset makes sure that its
+buffers are unmapped and the inuse counter stays balanced.
+
+Cc: Michael S. Tsirkin <mst@redhat.com>
+Cc: Roman Kagan <rkagan@virtuozzo.com>
+Cc: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Ladi Prosek <lprosek@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
+Reviewed-by: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+(cherry picked from commit 104e70cae78bd4afd95d948c6aff188f10508a9c)
+Signed-off-by: Ladi Prosek <lprosek@redhat.com>
+
+Conflicts:
+  * s->stats_vq_elem => &s->stats_vq_elem because the field is not
+    a pointer in 0.12.1.2
+
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ hw/virtio-balloon.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/hw/virtio-balloon.c b/hw/virtio-balloon.c
+index 24e50af..95e5194 100644
+--- a/hw/virtio-balloon.c
++++ b/hw/virtio-balloon.c
+@@ -192,6 +192,7 @@ static void virtio_balloon_device_reset(VirtIODevice *vdev)
+     VirtIOBalloon *s = to_virtio_balloon(vdev);
+ 
+     if (s->stats_vq_elem_pending) {
++        virtqueue_discard(s->svq, &s->stats_vq_elem, 0);
+         s->stats_vq_elem_pending = false;
+     }
+ }
+-- 
+2.7.4
+

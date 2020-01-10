@@ -1,0 +1,85 @@
+From 13168d62bc035570e773e33d16d9ca2e699a5db1 Mon Sep 17 00:00:00 2001
+Message-Id: <13168d62bc035570e773e33d16d9ca2e699a5db1.1368098699.git.minovotn@redhat.com>
+In-Reply-To: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+References: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Fri, 5 Apr 2013 19:44:50 +0200
+Subject: [PATCH 11/24] qcow2: Return real error in
+ qcow2_update_snapshot_refcount
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1365191091-25631-12-git-send-email-kwolf@redhat.com>
+Patchwork-id: 50172
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 11/12] qcow2: Return real error in qcow2_update_snapshot_refcount
+Bugzilla: 796011
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+Bugzilla: 796011
+
+This fixes the error message triggered by the following script:
+
+    cat > /tmp/blkdebug.cfg <<EOF
+    [inject-error]
+    event = "cluster_free"
+    errno = "28"
+    immediately = "off"
+    EOF
+
+    $qemu_img create -f qcow2 test.qcow2 10G
+    $qemu_img snapshot -c snap test.qcow2
+    $qemu_img snapshot -d snap blkdebug:/tmp/blkdebug.cfg:test.qcow2
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit c2bc78b6a975ea2dcd7eee9f0dce22cc060cdcdc)
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/qcow2-refcount.c | 11 +++++------
+ 1 file changed, 5 insertions(+), 6 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/qcow2-refcount.c | 11 +++++------
+ 1 file changed, 5 insertions(+), 6 deletions(-)
+
+diff --git a/block/qcow2-refcount.c b/block/qcow2-refcount.c
+index 82b747b..d898324 100644
+--- a/block/qcow2-refcount.c
++++ b/block/qcow2-refcount.c
+@@ -729,10 +729,9 @@ int qcow2_update_snapshot_refcount(BlockDriverState *bs,
+             l1_table = NULL;
+         }
+         l1_allocated = 1;
+-        if (bdrv_pread(bs->file, l1_table_offset,
+-                       l1_table, l1_size2) != l1_size2)
+-        {
+-            ret = -EIO;
++
++        ret = bdrv_pread(bs->file, l1_table_offset, l1_table, l1_size2);
++        if (ret < 0) {
+             goto fail;
+         }
+ 
+@@ -787,7 +786,7 @@ int qcow2_update_snapshot_refcount(BlockDriverState *bs,
+                         }
+ 
+                         if (refcount < 0) {
+-                            ret = -EIO;
++                            ret = refcount;
+                             goto fail;
+                         }
+                     }
+@@ -818,7 +817,7 @@ int qcow2_update_snapshot_refcount(BlockDriverState *bs,
+                 refcount = get_refcount(bs, l2_offset >> s->cluster_bits);
+             }
+             if (refcount < 0) {
+-                ret = -EIO;
++                ret = refcount;
+                 goto fail;
+             } else if (refcount == 1) {
+                 l2_offset |= QCOW_OFLAG_COPIED;
+-- 
+1.7.11.7
+

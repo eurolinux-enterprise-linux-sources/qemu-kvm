@@ -1,0 +1,62 @@
+From bf30121b1135e09a5917a90f0f92ff98ce50de89 Mon Sep 17 00:00:00 2001
+Message-Id: <bf30121b1135e09a5917a90f0f92ff98ce50de89.1429847625.git.jen@redhat.com>
+In-Reply-To: <67fe78a504035b7baf527bbd4726c75b0a1f8ba4.1429847625.git.jen@redhat.com>
+References: <67fe78a504035b7baf527bbd4726c75b0a1f8ba4.1429847625.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Wed, 22 Apr 2015 03:17:54 -0500
+Subject: [CHANGE 5/7] virtio-blk: fix use-after-free while handling scsi
+ commands
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429672676-18444-4-git-send-email-famz@redhat.com>
+Patchwork-id: 64863
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v4 3/5] virtio-blk: fix use-after-free while handling scsi commands
+Bugzilla: 1006871
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Avi Kivity <avi@redhat.com>
+
+The scsi passthrough handler falls through after completing a
+request into the failure path, resulting in a use after free.
+
+Reproducible by running a guest with aio=native on a block device.
+
+Reported-by: Stefan Priebe <s.priebe@profihost.ag>
+Signed-off-by: Avi Kivity <avi@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 730a9c53b4e52681fcfe31cf38854cbf91e132c7)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	hw/virtio-blk.c
+    Context conflict due to qemu_free/g_free.
+---
+ hw/virtio-blk.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/virtio-blk.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/hw/virtio-blk.c b/hw/virtio-blk.c
+index 2cc4971..1f394dd 100644
+--- a/hw/virtio-blk.c
++++ b/hw/virtio-blk.c
+@@ -256,6 +256,7 @@ static void virtio_blk_handle_scsi(VirtIOBlockReq *req)
+ 
+     virtio_blk_req_complete(req, status);
+     qemu_free(req);
++    return;
+ #else
+     abort();
+ #endif
+-- 
+2.1.0
+

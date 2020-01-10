@@ -1,0 +1,69 @@
+From dc57eef738994ee8d9055cd3dc92ef0f3f2a9dbe Mon Sep 17 00:00:00 2001
+Message-Id: <dc57eef738994ee8d9055cd3dc92ef0f3f2a9dbe.1421086081.git.jen@redhat.com>
+From: Amos Kong <akong@redhat.com>
+Date: Fri, 19 Dec 2014 15:26:04 -0600
+Subject: [CHANGE] qom: Fix class cast of NULL classes
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1419002764-25090-1-git-send-email-akong@redhat.com>
+Patchwork-id: 62997
+O-Subject: [RHEL-6.7 qemu-kvm PATCH] qom: Fix class cast of NULL classes
+Bugzilla: 1102730
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Marcel Apfelbaum <marcel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Peter Crosthwaite <peter.crosthwaite@xilinx.com>
+
+Its clear from the implementation that class casting is supposed to work
+with a NULL class argument. Guard all dereferences of the class argument
+against NULL accordingly.
+
+Signed-off-by: Peter Crosthwaite <peter.crosthwaite@xilinx.com>
+Message-id: 94cd5ba46b74eea289a7e582635820c1c54e66fa.1371546907.git.peter.crosthwaite@xilinx.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 9d6a3d58e4d1431ab3809ff621cfd1f9ec75eef5)
+
+This fix also help to suppress Covscan warning about Null-checking "class".
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ qom/object.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/qom/object.c b/qom/object.c
+index 769e0b4..aee0ed4 100644
+--- a/qom/object.c
++++ b/qom/object.c
+@@ -531,14 +531,14 @@ ObjectClass *object_class_dynamic_cast_assert(ObjectClass *class,
+ #ifdef CONFIG_QOM_CAST_DEBUG
+     int i;
+ 
+-    for (i = 0; i < OBJECT_CLASS_CAST_CACHE; i++) {
++    for (i = 0; class && i < OBJECT_CLASS_CAST_CACHE; i++) {
+         if (class->cast_cache[i] == typename) {
+             ret = class;
+             goto out;
+         }
+     }
+ #else
+-    if (!class->interfaces) {
++    if (!class || !class->interfaces) {
+         return class;
+     }
+ #endif
+@@ -551,7 +551,7 @@ ObjectClass *object_class_dynamic_cast_assert(ObjectClass *class,
+     }
+ 
+ #ifdef CONFIG_QOM_CAST_DEBUG
+-    if (ret == class) {
++    if (class && ret == class) {
+         for (i = 1; i < OBJECT_CLASS_CAST_CACHE; i++) {
+             class->cast_cache[i - 1] = class->cast_cache[i];
+         }
+-- 
+2.1.0
+

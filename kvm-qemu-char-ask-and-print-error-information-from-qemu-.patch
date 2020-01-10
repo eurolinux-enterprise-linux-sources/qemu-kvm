@@ -1,0 +1,154 @@
+From 666277bd24839c4280fe2b16b2a7ede2a082fe0b Mon Sep 17 00:00:00 2001
+Message-Id: <666277bd24839c4280fe2b16b2a7ede2a082fe0b.1374754301.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:37 +0200
+Subject: [PATCH 26/65] qemu-char: ask and print error information from
+ qemu-sockets
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-27-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52170
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 26/65] qemu-char: ask and print error information from qemu-sockets
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Before:
+
+    $ qemu-system-x86_64 -monitor tcp:localhost:6000
+    (starts despite error)
+
+    $ qemu-system-x86_64 -monitor tcp:foo.bar:12345
+    getaddrinfo(foo.bar,12345): Name or service not known
+    chardev: opening backend "socket" failed
+
+    $ qemu-system-x86_64 -monitor tcp:localhost:443,server=on
+    inet_listen_opts: bind(ipv4,127.0.0.1,443): Permission denied
+    inet_listen_opts: FAILED
+    chardev: opening backend "socket" failed
+
+After:
+
+    $ x86_64-softmmu/qemu-system-x86_64 -monitor tcp:localhost:6000
+    x86_64-softmmu/qemu-system-x86_64: -monitor tcp:localhost:6000: Failed to connect to socket: Connection refused
+    chardev: opening backend "socket" failed
+
+    $ x86_64-softmmu/qemu-system-x86_64 -monitor tcp:foo.bar:12345
+    qemu-system-x86_64: -monitor tcp:foo.bar:12345: address resolution failed for foo.bar:12345: Name or service not known
+    chardev: opening backend "socket" failed
+
+    $ x86_64-softmmu/qemu-system-x86_64 -monitor tcp:localhost:443,server=on
+    qemu-system-x86_64: -monitor tcp:localhost:443,server=on: Failed to bind socket: Permission denied
+    chardev: opening backend "socket" failed
+
+Reviewed-by: Luiz Capitulino <lcapitulino@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 87d5f24f3f5edc4b69d071d5966cea0aec7b571d)
+
+Conflicts:
+
+	qemu-char.c
+---
+ qemu-char.c |   36 +++++++++++++++++++++++-------------
+ 1 file changed, 23 insertions(+), 13 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 36 +++++++++++++++++++++++-------------
+ 1 file changed, 23 insertions(+), 13 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 1ab71fc..ece595b 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -2123,12 +2123,13 @@ static CharDriverState *qemu_chr_open_udp(QemuOpts *opts)
+ {
+     CharDriverState *chr = NULL;
+     NetCharDriver *s = NULL;
++    Error *local_err = NULL;
+     int fd = -1;
+ 
+     chr = qemu_mallocz(sizeof(CharDriverState));
+     s = qemu_mallocz(sizeof(NetCharDriver));
+ 
+-    fd = inet_dgram_opts(opts, NULL);
++    fd = inet_dgram_opts(opts, &local_err);
+     if (fd < 0) {
+         goto return_err;
+     }
+@@ -2144,12 +2145,15 @@ static CharDriverState *qemu_chr_open_udp(QemuOpts *opts)
+     return chr;
+ 
+ return_err:
+-    if (chr)
+-        free(chr);
+-    if (s)
+-        free(s);
+-    if (fd >= 0)
++    if (local_err) {
++        qerror_report_err(local_err);
++        error_free(local_err);
++    }
++    g_free(chr);
++    g_free(s);
++    if (fd >= 0) {
+         closesocket(fd);
++    }
+     return NULL;
+ }
+ 
+@@ -2463,6 +2467,7 @@ static CharDriverState *qemu_chr_open_socket(QemuOpts *opts)
+ {
+     CharDriverState *chr = NULL;
+     TCPCharDriver *s = NULL;
++    Error *local_err = NULL;
+     int fd = -1;
+     int is_listen;
+     int is_waitconnect;
+@@ -2483,15 +2488,15 @@ static CharDriverState *qemu_chr_open_socket(QemuOpts *opts)
+ 
+     if (is_unix) {
+         if (is_listen) {
+-            fd = unix_listen_opts(opts, NULL);
++            fd = unix_listen_opts(opts, &local_err);
+         } else {
+-            fd = unix_connect_opts(opts, NULL, NULL, NULL);
++            fd = unix_connect_opts(opts, &local_err, NULL, NULL);
+         }
+     } else {
+         if (is_listen) {
+-            fd = inet_listen_opts(opts, 0, NULL);
++            fd = inet_listen_opts(opts, 0, &local_err);
+         } else {
+-            fd = inet_connect_opts(opts, NULL, NULL, NULL);
++            fd = inet_connect_opts(opts, &local_err, NULL, NULL);
+         }
+     }
+     if (fd < 0)
+@@ -2553,10 +2558,15 @@ static CharDriverState *qemu_chr_open_socket(QemuOpts *opts)
+     return chr;
+ 
+  fail:
+-    if (fd >= 0)
++    if (local_err) {
++        qerror_report_err(local_err);
++        error_free(local_err);
++    }
++    if (fd >= 0) {
+         closesocket(fd);
+-    qemu_free(s);
+-    qemu_free(chr);
++    }
++    g_free(s);
++    g_free(chr);
+     return NULL;
+ }
+ 
+-- 
+1.7.11.7
+

@@ -1,0 +1,57 @@
+From bcd5871c47de3ae0020f10cf5af2a2ed3e3a9cc9 Mon Sep 17 00:00:00 2001
+Message-Id: <bcd5871c47de3ae0020f10cf5af2a2ed3e3a9cc9.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:22:06 -0500
+Subject: [CHANGE 23/42] qcow2: Use sizeof(**refcount_table)
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-24-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64487
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 23/39] qcow2: Use sizeof(**refcount_table)
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1129892
+
+When implementing variable refcounts, we want to be able to easily find
+all the places in qemu which are tied to a certain refcount order.
+Replace sizeof(uint16_t) in the check code by sizeof(**refcount_table)
+so we can later find it more easily.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 78fb328e854542d79bebe54f3a426cba6d46dbf1)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-refcount.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-refcount.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/block/qcow2-refcount.c b/block/qcow2-refcount.c
+index e99a052..f921d5a 100644
+--- a/block/qcow2-refcount.c
++++ b/block/qcow2-refcount.c
+@@ -1458,7 +1458,7 @@ static int check_refblocks(BlockDriverState *bs, BdrvCheckResult *res,
+                                                   *nb_clusters);
+                         memset(&(*refcount_table)[old_nb_clusters], 0,
+                                (*nb_clusters - old_nb_clusters) *
+-                               sizeof(uint16_t));
++                               sizeof(**refcount_table));
+                     }
+                     (*refcount_table)[cluster]--;
+                     inc_refcounts(bs, res, *refcount_table, *nb_clusters,
+-- 
+2.1.0
+

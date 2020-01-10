@@ -1,0 +1,52 @@
+From 55e7035455a9f6dddb782e7480130baa27c053f4 Mon Sep 17 00:00:00 2001
+Message-Id: <55e7035455a9f6dddb782e7480130baa27c053f4.1380025695.git.minovotn@redhat.com>
+In-Reply-To: <302054727f76123c6d4ce996a7410f188ba37c4b.1380025695.git.minovotn@redhat.com>
+References: <302054727f76123c6d4ce996a7410f188ba37c4b.1380025695.git.minovotn@redhat.com>
+From: "Michael S. Tsirkin" <mst@redhat.com>
+Date: Tue, 17 Sep 2013 09:38:10 +0200
+Subject: [PATCH 3/4] virtio-net: fix up HMP NIC info string on reset
+
+RH-Author: Michael S. Tsirkin <mst@redhat.com>
+Message-id: <1379410600-18436-2-git-send-email-mst@redhat.com>
+Patchwork-id: 54409
+O-Subject: [PATCH RHEL6.5 2/2] virtio-net: fix up HMP NIC info string on reset
+Bugzilla: 890265
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Yan Vugenfirer <yvugenfi@redhat.com>
+RH-Acked-by: Dmitry Fleytman <dfleytma@redhat.com>
+RH-Acked-by: Vadim Rozenfeld <vrozenfe@redhat.com>
+
+When mac is updated on reset, info string has stale data.
+Fix it up.
+
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+
+Upstream status: posted
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=890265
+Brew build: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=6292458
+Tested: using WHQL
+
+---
+ hw/virtio-net.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/virtio-net.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/hw/virtio-net.c b/hw/virtio-net.c
+index 587a218..ae0cf65 100644
+--- a/hw/virtio-net.c
++++ b/hw/virtio-net.c
+@@ -201,6 +201,7 @@ static void virtio_net_reset(VirtIODevice *vdev)
+     n->mac_table.uni_overflow = 0;
+     memset(n->mac_table.macs, 0, MAC_TABLE_ENTRIES * ETH_ALEN);
+     memcpy(&n->mac[0], &n->nic->conf->macaddr, sizeof(n->mac));
++    qemu_format_nic_info_str(&n->nic->nc, n->mac);
+     memset(n->vlans, 0, MAX_VLAN >> 3);
+ }
+ 
+-- 
+1.7.11.7
+

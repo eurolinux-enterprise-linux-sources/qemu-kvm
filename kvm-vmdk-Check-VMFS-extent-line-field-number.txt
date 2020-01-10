@@ -1,0 +1,68 @@
+From 87d906bc7ca21dfb3684de1f5a534357ccd9c12d Mon Sep 17 00:00:00 2001
+From: Fam Zheng <famz@redhat.com>
+Date: Tue, 15 Jul 2014 12:27:22 -0500
+Subject: [CHANGE 04/17] vmdk: Check VMFS extent line field number
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1405427243-28134-5-git-send-email-famz@redhat.com>
+Patchwork-id: 59900
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 4/5] vmdk: Check VMFS extent line field number
+Bugzilla: 1088788
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+VMFS extent line in description file should be with 4 fields:
+
+    RW <size> VMFS "file-name.vmdk"
+
+Check the number explicitly and report error if offset is appended as
+FLAT, which should be invalid format.
+
+Reported-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit b47053bd0359c68094d7a25a65687c0844771e34)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	block/vmdk.c
+Different error reporting.
+	tests/qemu-iotests/059
+	tests/qemu-iotests/059.out
+qemu-iotests not present in RHEL 6.
+---
+ block/vmdk.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ block/vmdk.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index d369d0e..0050de5 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -719,8 +719,14 @@ static int vmdk_parse_extents(const char *desc, BlockDriverState *bs,
+                 return -EINVAL;
+             }
+         } else if (!strcmp(type, "VMFS")) {
+-            flat_offset = 0;
++            if (ret == 4) {
++                flat_offset = 0;
++            } else {
++                fprintf(stderr, "Invalid extent lines:\n%s\n", p);
++                return -EINVAL;
++            }
+         } else if (ret != 4) {
++            fprintf(stderr, "Invalid extent lines:\n%s\n", p);
+             return -EINVAL;
+         }
+ 
+-- 
+1.9.3
+

@@ -1,0 +1,58 @@
+From 47db50baa0d2d122151e634bae10f9b97fd55daf Mon Sep 17 00:00:00 2001
+Message-Id: <47db50baa0d2d122151e634bae10f9b97fd55daf.1427300678.git.jen@redhat.com>
+In-Reply-To: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+References: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+From: Vlad Yasevich <vyasevic@redhat.com>
+Date: Thu, 12 Mar 2015 19:13:05 -0500
+Subject: [CHANGE 09/33] aio: test node->deleted before calling io_flush
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Vlad Yasevich <vyasevic@redhat.com>
+Message-id: <1426187601-21396-10-git-send-email-vyasevic@redhat.com>
+Patchwork-id: 64345
+O-Subject: [RHEL6.7 qemu-kvm PATCH v2 09/25] aio: test node->deleted before calling io_flush
+Bugzilla: 1005016
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Otherwise, there could be a case where io_flush accesses freed
+memory because it should not have been called.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 4231c88d27d9e46e6ad6e6b7bbb6e442bcf9cd05)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	aio.c
+        - Minor conflict due to older code.
+
+Signed-off-by: Vladislav Yasevich <vyasevic@redhat.com>
+---
+ aio.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ aio.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/aio.c b/aio.c
+index 91302f9..a258f87 100644
+--- a/aio.c
++++ b/aio.c
+@@ -111,7 +111,7 @@ bool aio_wait(AioContext *ctx)
+          * Otherwise, if there are no AIO requests, qemu_aio_wait() would
+          * wait indefinitely.
+          */
+-        if (node->io_flush) {
++        if (!node->deleted && node->io_flush) {
+             if (node->io_flush(node->opaque) == 0) {
+                 continue;
+             }
+-- 
+2.1.0
+

@@ -1,0 +1,76 @@
+From 71de32eab71edf0b10fc2c57298c3ea7fb3d4981 Mon Sep 17 00:00:00 2001
+From: Max Reitz <mreitz@redhat.com>
+Date: Fri, 2 May 2014 16:58:44 -0500
+Subject: [PATCH 12/26] qmp: Documentation for BLOCK_IMAGE_CORRUPTED
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1399049936-13496-13-git-send-email-mreitz@redhat.com>
+Patchwork-id: 58658
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 12/24] qmp: Documentation for BLOCK_IMAGE_CORRUPTED
+Bugzilla: 1004420
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1004420
+
+Add an appropriate entry describing this event and its parameters into
+qmp-events.txt.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 0ca0b0d5f8a87dbc6daa5095771d036d0e6dc5b4)
+
+Conflicts:
+	QMP/qmp-events.txt
+
+The BALLOON_CHANGE entry is missing downstream.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ QMP/qmp-events.txt | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ QMP/qmp-events.txt |   22 ++++++++++++++++++++++
+ 1 files changed, 22 insertions(+), 0 deletions(-)
+
+diff --git a/QMP/qmp-events.txt b/QMP/qmp-events.txt
+index a7cc553..55bfd46 100644
+--- a/QMP/qmp-events.txt
++++ b/QMP/qmp-events.txt
+@@ -1,6 +1,28 @@
+                    QEMU Monitor Protocol Events
+                    ============================
+ 
++BLOCK_IMAGE_CORRUPTED
++---------------------
++
++Emitted when a disk image is being marked corrupt.
++
++Data:
++
++- "device": Device name (json-string)
++- "msg":    Informative message (e.g., reason for the corruption) (json-string)
++- "offset": If the corruption resulted from an image access, this is the access
++            offset into the image (json-int)
++- "size":   If the corruption resulted from an image access, this is the access
++            size (json-int)
++
++Example:
++
++{ "event": "BLOCK_IMAGE_CORRUPTED",
++    "data": { "device": "ide0-hd0",
++        "msg": "Prevented active L1 table overwrite", "offset": 196608,
++        "size": 65536 },
++    "timestamp": { "seconds": 1378126126, "microseconds": 966463 } }
++
+ BLOCK_IO_ERROR
+ --------------
+ 
+-- 
+1.7.1
+

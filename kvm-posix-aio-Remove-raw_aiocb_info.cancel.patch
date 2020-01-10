@@ -1,0 +1,95 @@
+From 4b1d4427a2368bcaa2968fc3c9be06a729dd9ba1 Mon Sep 17 00:00:00 2001
+Message-Id: <4b1d4427a2368bcaa2968fc3c9be06a729dd9ba1.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:29 -0500
+Subject: [CHANGE 09/29] posix-aio: Remove raw_aiocb_info.cancel
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-10-git-send-email-famz@redhat.com>
+Patchwork-id: 64910
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 09/28] posix-aio: Remove raw_aiocb_info.cancel
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Downstream only patch.
+
+Upstream has completely different thread pool code, so it's not
+backportable. To keep it simple, just remove it and leave it to block layer to
+wait for the request completion.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ posix-aio-compat.c | 44 --------------------------------------------
+ 1 file changed, 44 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ posix-aio-compat.c | 44 --------------------------------------------
+ 1 file changed, 44 deletions(-)
+
+diff --git a/posix-aio-compat.c b/posix-aio-compat.c
+index 07a9952..c3741b4 100644
+--- a/posix-aio-compat.c
++++ b/posix-aio-compat.c
+@@ -547,52 +547,8 @@ static int posix_aio_flush(void *opaque)
+ 
+ static PosixAioState *posix_aio_state;
+ 
+-static void paio_remove(struct qemu_paiocb *acb)
+-{
+-    struct qemu_paiocb **pacb;
+-
+-    /* remove the callback from the queue */
+-    pacb = &posix_aio_state->first_aio;
+-    for(;;) {
+-        if (*pacb == NULL) {
+-            fprintf(stderr, "paio_remove: aio request not found!\n");
+-            break;
+-        } else if (*pacb == acb) {
+-            *pacb = acb->next;
+-            qemu_aio_release(acb);
+-            break;
+-        }
+-        pacb = &(*pacb)->next;
+-    }
+-}
+-
+-static void paio_cancel(BlockDriverAIOCB *blockacb)
+-{
+-    struct qemu_paiocb *acb = (struct qemu_paiocb *)blockacb;
+-    int active = 0;
+-
+-    mutex_lock(&lock);
+-    if (!acb->active) {
+-        QTAILQ_REMOVE(&request_list, acb, node);
+-        acb->ret = -ECANCELED;
+-    } else if (acb->ret == -EINPROGRESS) {
+-        active = 1;
+-    }
+-    mutex_unlock(&lock);
+-
+-    if (active) {
+-        /* fail safe: if the aio could not be canceled, we wait for
+-           it */
+-        while (qemu_paio_error(acb) == EINPROGRESS)
+-            ;
+-    }
+-
+-    paio_remove(acb);
+-}
+-
+ static AIOCBInfo raw_aiocb_info = {
+     .aiocb_size         = sizeof(struct qemu_paiocb),
+-    .cancel             = paio_cancel,
+ };
+ 
+ BlockDriverAIOCB *paio_submit(BlockDriverState *bs, int fd,
+-- 
+2.1.0
+

@@ -1,0 +1,56 @@
+From a0abf124d19384e05702973bb3706e881fcef5d3 Mon Sep 17 00:00:00 2001
+Message-Id: <a0abf124d19384e05702973bb3706e881fcef5d3.1379425497.git.minovotn@redhat.com>
+In-Reply-To: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+References: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+From: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Date: Fri, 6 Sep 2013 18:12:24 +0200
+Subject: [PATCH 04/25] stream: complete early if end of backing file is
+ reached
+
+It is possible to create an image that is larger than its backing file.
+Reading beyond the end of the backing file produces zeroes if no writes
+have been made to those sectors in the image file.
+
+This patch finishes streaming early when the end of the backing file is
+reached.  Without this patch the block job hangs and continually tries
+to stream the first sectors beyond the end of the backing file.
+
+To reproduce the hung block job bug:
+
+  $ qemu-img create -f qcow2 backing.qcow2 128M
+  $ qemu-img create -f qcow2 -o backing_file=backing.qcow2 image.qcow2 6G
+  $ qemu -drive if=virtio,cache=none,file=image.qcow2
+  (qemu) block_stream virtio0
+  (qemu) info block-jobs
+
+The qemu-iotests 030 streaming test still passes.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 571cd9dcc7f2fee59e47913365ced7781f33c2d3)
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/stream.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/block/stream.c b/block/stream.c
+index f03c934..4043d9d 100644
+--- a/block/stream.c
++++ b/block/stream.c
+@@ -149,6 +149,12 @@ wait:
+              * known-unallocated area [sector_num, sector_num+n).  */
+             ret = bdrv_co_is_allocated_above(bs->backing_hd, base,
+                                              sector_num, n, &n);
++
++            /* Finish early if end of backing file has been reached */
++            if (ret == 0 && n == 0) {
++                n = end - sector_num;
++            }
++
+             copy = (ret == 1);
+         }
+         trace_stream_one_iteration(s, sector_num, n, ret);
+-- 
+1.7.11.7
+

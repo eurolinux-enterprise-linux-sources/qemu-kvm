@@ -1,0 +1,53 @@
+From ddda9a560ba23527010eccd3840d67e0849457d6 Mon Sep 17 00:00:00 2001
+Message-Id: <ddda9a560ba23527010eccd3840d67e0849457d6.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:28:04 +0200
+Subject: [PATCH 099/114] qemu-ga: Fix unchecked strdup() by converting to
+ g_strdup()
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-42-git-send-email-lersek@redhat.com>
+Patchwork-id: 51140
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 41/56] qemu-ga: Fix unchecked strdup() by converting to g_strdup()
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Markus Armbruster <armbru@redhat.com>
+
+I figure it's freed somewhere deep down in QAPI, with g_free().
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Luiz Capitulino <lcapitulino@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 24a53049537886cf93273c01e3d7727444321afc)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qga/commands.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/commands.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/qga/commands.c b/qga/commands.c
+index 46b0b08..248110e 100644
+--- a/qga/commands.c
++++ b/qga/commands.c
+@@ -61,7 +61,7 @@ struct GuestAgentInfo *qmp_guest_info(Error **err)
+ 
+     while (*cmd_list) {
+         cmd_info = g_malloc0(sizeof(GuestAgentCommandInfo));
+-        cmd_info->name = strdup(*cmd_list);
++        cmd_info->name = g_strdup(*cmd_list);
+         cmd_info->enabled = qmp_command_is_enabled(cmd_info->name);
+ 
+         cmd_info_list = g_malloc0(sizeof(GuestAgentCommandInfoList));
+-- 
+1.7.11.7
+

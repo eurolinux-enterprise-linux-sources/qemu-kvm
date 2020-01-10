@@ -1,0 +1,94 @@
+From 1eb3c5469a9764c3dfc9d165bf3902d513f468e7 Mon Sep 17 00:00:00 2001
+From: Vlad Yasevich <vyasevic@redhat.com>
+Date: Fri, 4 Apr 2014 18:44:28 +0200
+Subject: [PATCH 26/30] qdev: Allow vlan or netdev for -device, not both
+
+RH-Author: Vlad Yasevich <vyasevic@redhat.com>
+Message-id: <1396637068-30901-1-git-send-email-vyasevic@redhat.com>
+Patchwork-id: 58346
+O-Subject: [RHEL6 v2 PATCH] qdev: Allow vlan or netdev for -device, not both
+Bugzilla: 998865
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Xiao Wang <jasowang@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=998865
+Upstream: NA.
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=7306334
+Testing:  Tested manually using reproducer in the BZ.
+
+Description:
+
+It is currently possible to specify things like:
+    -device e1000,netdev=foo,vlan=1
+
+This triggeres the following error at startup:
+qemu-kvm: /builddir/build/BUILD/qemu-kvm-0.12.1.2/net.c:249:
+qemu_new_net_client: Assertion `!peer' failed.
+
+The assert is an overkill, but specifying netdev and vlan creates
+a conflict for the device specification.  In the case of old style
+'-net nic' usage, we continue to prefer using netdev over vlan.
+In the case of new style '-device' usage, this patch prohibts
+combining 'vlan' and 'netdev' options same as upstream.
+
+Note:
+The idea of this patch is similar to upstream commit
+30c367ed446b6ea53245589a5cf373578ac075d7 and this implementation
+was suggested by Markus Armbruster.  The implementation, though,
+is very different from upstream since the code that sets devices
+properties is completely different.
+
+Signed-off-by: Vlad Yasevich <vyasevic@redhat.com>
+---
+ hw/qdev-properties.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ hw/qdev-properties.c |    8 ++++++++
+ 1 files changed, 8 insertions(+), 0 deletions(-)
+
+diff --git a/hw/qdev-properties.c b/hw/qdev-properties.c
+index 52fe9ba..0f77568 100644
+--- a/hw/qdev-properties.c
++++ b/hw/qdev-properties.c
+@@ -400,6 +400,7 @@ PropertyInfo qdev_prop_chr = {
+ static int parse_netdev(DeviceState *dev, Property *prop, const char *str)
+ {
+     VLANClientState **ptr = qdev_get_prop_ptr(dev, prop);
++    NICConf *conf = container_of(ptr, NICConf, peer);
+ 
+     *ptr = qemu_find_netdev(str);
+     if (*ptr == NULL)
+@@ -407,6 +408,9 @@ static int parse_netdev(DeviceState *dev, Property *prop, const char *str)
+     if ((*ptr)->peer) {
+         return -EEXIST;
+     }
++    if (conf->vlan) {
++        return -EINVAL;
++    }
+     return 0;
+ }
+ 
+@@ -434,6 +438,7 @@ PropertyInfo qdev_prop_netdev = {
+ static int parse_vlan(DeviceState *dev, Property *prop, const char *str)
+ {
+     VLANState **ptr = qdev_get_prop_ptr(dev, prop);
++    NICConf *conf = container_of(ptr, NICConf, vlan);
+     int id;
+ 
+     if (sscanf(str, "%d", &id) != 1)
+@@ -441,6 +446,9 @@ static int parse_vlan(DeviceState *dev, Property *prop, const char *str)
+     *ptr = qemu_find_vlan(id, 1);
+     if (*ptr == NULL)
+         return -ENOENT;
++    if (conf->peer) {
++        return -EINVAL;
++    }
+     return 0;
+ }
+ 
+-- 
+1.7.1
+

@@ -1,0 +1,102 @@
+From 8221570059f4afffcf0bcc89ae9d5f715873e520 Mon Sep 17 00:00:00 2001
+Message-Id: <8221570059f4afffcf0bcc89ae9d5f715873e520.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:38 +0200
+Subject: [PATCH 64/65] char: introduce a blocking version of
+ qemu_chr_fe_write
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <13d246640ef1dcfc81646f0ccf4a9104b676819a.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50842
+O-Subject: [RHEL6.5 qemu-kvm PATCH 64/65] char: introduce a blocking version of qemu_chr_fe_write
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit cd18720a294bd7244ffda719677dd9c737317b67)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ qemu-char.c | 27 +++++++++++++++++++++++++++
+ qemu-char.h | 15 +++++++++++++++
+ 2 files changed, 42 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 27 +++++++++++++++++++++++++++
+ qemu-char.h | 15 +++++++++++++++
+ 2 files changed, 42 insertions(+)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index f02706d..1e38cbd 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -145,6 +145,33 @@ int qemu_chr_fe_write(CharDriverState *s, const uint8_t *buf, int len)
+     return s->chr_write(s, buf, len);
+ }
+ 
++int qemu_chr_fe_write_all(CharDriverState *s, const uint8_t *buf, int len)
++{
++    int offset = 0;
++    int res;
++
++    while (offset < len) {
++        do {
++            res = s->chr_write(s, buf + offset, len - offset);
++            if (res == -1 && errno == EAGAIN) {
++                g_usleep(100);
++            }
++        } while (res == -1 && errno == EAGAIN);
++
++        if (res == 0) {
++            break;
++        }
++
++        if (res < 0) {
++            return res;
++        }
++
++        offset += res;
++    }
++
++    return offset;
++}
++
+ int qemu_chr_fe_ioctl(CharDriverState *s, int cmd, void *arg)
+ {
+     if (!s->chr_ioctl)
+diff --git a/qemu-char.h b/qemu-char.h
+index 3a1b28f..d0b5691 100644
+--- a/qemu-char.h
++++ b/qemu-char.h
+@@ -167,6 +167,21 @@ int qemu_chr_fe_add_watch(CharDriverState *s, GIOCondition cond,
+ int qemu_chr_fe_write(CharDriverState *s, const uint8_t *buf, int len);
+ 
+ /**
++ * @qemu_chr_fe_write_all:
++ *
++ * Write data to a character backend from the front end.  This function will
++ * send data from the front end to the back end.  Unlike @qemu_chr_fe_write,
++ * this function will block if the back end cannot consume all of the data
++ * attempted to be written.
++ *
++ * @buf the data
++ * @len the number of bytes to send
++ *
++ * Returns: the number of bytes consumed
++ */
++int qemu_chr_fe_write_all(CharDriverState *s, const uint8_t *buf, int len);
++
++/**
+  * @qemu_chr_fe_ioctl:
+  *
+  * Issue a device specific ioctl to a backend.
+-- 
+1.7.11.7
+

@@ -1,0 +1,89 @@
+From 0e741f93da41b39a6d5b4b24cf0e843bd7a31c48 Mon Sep 17 00:00:00 2001
+Message-Id: <0e741f93da41b39a6d5b4b24cf0e843bd7a31c48.1381329939.git.minovotn@redhat.com>
+In-Reply-To: <fdc2f959b4c2370865a73f9df8a0dc4e2c26d31a.1381329939.git.minovotn@redhat.com>
+References: <fdc2f959b4c2370865a73f9df8a0dc4e2c26d31a.1381329939.git.minovotn@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Wed, 9 Oct 2013 09:00:49 +0200
+Subject: [PATCH 4/4] os-posix: block SIGUSR2 in
+ os_setup_early_signal_handling()
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1381309249-24651-1-git-send-email-stefanha@redhat.com>
+Patchwork-id: 54791
+O-Subject: [RHEL6.5 qemu-kvm v2] os-posix: block SIGUSR2 in os_setup_early_signal_handling()
+Bugzilla: 996814
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+Ensure that all threads have SIGUSR2 blocked so posix-aio-compat.c can
+use signalfd(2).  Do this during early signal setup so that all threads,
+even those created by libraries like libgfapi, will have the signal
+blocked.
+
+Failure to do this exposes threads with SIGUSR2 unblocked.  When the
+process receives the signal it may go to such a thread and the default
+signal disposition is to kill the process.  This abort can be reproduced
+with the following GlusterFS command-line:
+
+  qemu-system-x86_64 -enable-kvm -m 1024 -cpu host,+x2apic \
+                     -drive if=none,id=drive0,cache=none,\
+                            file=gluster+tcp://server/volume/vm001.img \
+                     -device virtio-blk-pci,drive=drive0 \
+                     -cdrom local.iso
+
+The local.iso image file will cause posix-aio-compat.c calls to be made.
+When the SIGUSR2 signal is sent, a libgfapi thread may receive it and
+the QEMU process terminates.  This happens because the GlusterFS image
+is initialized before the local.iso file.  paio_init() blocks SIGUSR2
+*after* GlusterFS has already created a thread.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+---
+This patch is identical to my first attempt.  Kevin noticed that
+vl.c:block_io_signals() already blocks SIGUSR2 and I looked into reusing that
+instead of duplicating code in v2.
+
+It turns out block_io_signals() cannot be reused since it is compiled out in
+qemu-kvm (qemu-kvm has a different iothread implementation) and installs a cpu
+kick signal handler which we don't have/want.
+
+It looks like the simplest fix is to go back to what we had in v1: block
+SIGUSR2 during early signal setup.
+
+ os-posix.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ os-posix.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/os-posix.c b/os-posix.c
+index 5a019bc..f6033c4 100644
+--- a/os-posix.c
++++ b/os-posix.c
+@@ -35,10 +35,20 @@
+ void os_setup_early_signal_handling(void)
+ {
+     struct sigaction act;
++    sigset_t mask;
++
+     sigfillset(&act.sa_mask);
+     act.sa_flags = 0;
+     act.sa_handler = SIG_IGN;
+     sigaction(SIGPIPE, &act, NULL);
++
++    /* posix-aio-compat.c uses SIGUSR2 with signalfd(2) and must therefore
++     * block the signal.  Do that right away so all threads inherit the blocked
++     * signal mask.
++     */
++    sigemptyset(&mask);
++    sigaddset(&mask, SIGUSR2);
++    sigprocmask(SIG_BLOCK, &mask, NULL);
+ }
+ 
+ int os_mlock(void)
+-- 
+1.7.11.7
+

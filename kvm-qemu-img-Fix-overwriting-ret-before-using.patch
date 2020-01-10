@@ -1,0 +1,97 @@
+From b22b6ea0319b01e98786ea32875a0d7bab66427a Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:29 -0500
+Subject: [CHANGE 07/31] qemu-img: Fix overwriting 'ret' before using
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-8-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60365
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 07/29] qemu-img: Fix overwriting 'ret' before using
+Bugzilla: 1122410
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+From: Fam Zheng <famz@redhat.com>
+
+This patch moves ret assignment after reporting original error.
+
+We were lucky to pass qemu-iotests 048 (qemu-img compare case) but when
+I tried to run with TEST_DIR=/tmp (tmpfs), it fails with a "wrong"
+mismatch offset. This fixes two bugs.
+
+In the first if branch, setting ret to 1 before using it makes dead code
+in the next line: pnum is never added to mismatch offset even if ret was
+0.
+
+In the other if branch, currently the output error is always -4:
+  strerror(-4) -> Unknown error -4
+
+Added regression test in case 048.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Amos Kong <akong@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Fam Zheng <famz@redhat.com>
+(cherry picked from commit 36452f12f877c60f004b34641287d74b14c96208)
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	qemu-img.c
+	tests/qemu-iotests/048
+
+qemu-img.c conflicts because of qprintf(). Removed test case part
+because we'll import a complete snapshot of qemu-iotests later in this
+series.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ qemu-img.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/qemu-img.c b/qemu-img.c
+index 5fd2f2b..782f920 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -974,10 +974,10 @@ static int img_compare(int argc, char **argv)
+                 }
+                 ret = compare_sectors(buf1, buf2, nb_sectors, &pnum);
+                 if (ret || pnum != nb_sectors) {
+-                    ret = 1;
+                     printf("Content mismatch at offset %" PRId64 "!\n",
+                             sectors_to_bytes(
+                                 ret ? sector_num : sector_num + pnum));
++                    ret = 1;
+                     goto out;
+                 }
+             }
+@@ -999,9 +999,9 @@ static int img_compare(int argc, char **argv)
+             }
+             if (ret) {
+                 if (ret < 0) {
+-                    ret = 4;
+                     error_report("Error while reading offset %" PRId64 ": %s",
+                                  sectors_to_bytes(sector_num), strerror(-ret));
++                    ret = 4;
+                 }
+                 goto out;
+             }
+@@ -1046,10 +1046,10 @@ static int img_compare(int argc, char **argv)
+                                           filename_over, buf1);
+                 if (ret) {
+                     if (ret < 0) {
+-                        ret = 4;
+                         error_report("Error while reading offset %" PRId64
+                                      " of %s: %s", sectors_to_bytes(sector_num),
+                                      filename_over, strerror(-ret));
++                        ret = 4;
+                     }
+                     goto out;
+                 }
+-- 
+1.9.3
+

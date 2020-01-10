@@ -1,0 +1,55 @@
+From 6e0749be251bd928bb0aba53a13f42601994b3e6 Mon Sep 17 00:00:00 2001
+Message-Id: <6e0749be251bd928bb0aba53a13f42601994b3e6.1379425497.git.minovotn@redhat.com>
+In-Reply-To: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+References: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Fri, 6 Sep 2013 18:12:23 +0200
+Subject: [PATCH 03/25] qemu-io: fix the alloc command
+
+Because sector_num is not updated, the loop would either go on
+forever or return garbage.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit cc785c349de002596a4f4d116e62846fc18d7b9e)
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-io.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/qemu-io.c b/qemu-io.c
+index 41df969..0a55cfe 100644
+--- a/qemu-io.c
++++ b/qemu-io.c
+@@ -1278,7 +1278,7 @@ static const cmdinfo_t info_cmd = {
+ 
+ static int alloc_f(int argc, char **argv)
+ {
+-    int64_t offset;
++    int64_t offset, sector_num;
+     int nb_sectors, remaining;
+     char s1[64];
+     int num, sum_alloc;
+@@ -1299,12 +1299,18 @@ static int alloc_f(int argc, char **argv)
+ 
+     remaining = nb_sectors;
+     sum_alloc = 0;
++    sector_num = offset >> 9;
+     while (remaining) {
+-        ret = bdrv_is_allocated(bs, offset >> 9, nb_sectors, &num);
++        ret = bdrv_is_allocated(bs, sector_num, remaining, &num);
++        sector_num += num;
+         remaining -= num;
+         if (ret) {
+             sum_alloc += num;
+         }
++        if (num == 0) {
++            nb_sectors -= remaining;
++            remaining = 0;
++        }
+     }
+ 
+     cvtstr(offset, s1, sizeof(s1));
+-- 
+1.7.11.7
+

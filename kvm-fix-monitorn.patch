@@ -1,0 +1,74 @@
+From b338dfe805101211e34e24406795771edcc8c218 Mon Sep 17 00:00:00 2001
+Message-Id: <b338dfe805101211e34e24406795771edcc8c218.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:21 +0200
+Subject: [PATCH 47/65] fix monitor
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <2af9bb29e771880bc145adb5faa66be023251b29.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50825
+O-Subject: [RHEL6.5 qemu-kvm PATCH 47/65] fix monitor
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Gerd Hoffmann <kraxel@redhat.com>
+
+chardev flow control broke monitor, fix it by adding watch support.
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit f628926bb423fa8a7e0b114511400ea9df38b76a)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ monitor.c | 23 +++++++++++++++++++++--
+ 1 file changed, 21 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ monitor.c | 23 +++++++++++++++++++++--
+ 1 file changed, 21 insertions(+), 2 deletions(-)
+
+diff --git a/monitor.c b/monitor.c
+index 3d81bf7..ddba3a4 100644
+--- a/monitor.c
++++ b/monitor.c
+@@ -264,11 +264,30 @@ static int monitor_read_password(Monitor *mon, ReadLineFunc *readline_func,
+     }
+ }
+ 
++static gboolean monitor_unblocked(GIOChannel *chan, GIOCondition cond,
++                                  void *opaque)
++{
++    monitor_flush(opaque);
++    return FALSE;
++}
++
+ void monitor_flush(Monitor *mon)
+ {
++    int rc;
++
+     if (mon && mon->outbuf_index != 0 && !mon->mux_out) {
+-        qemu_chr_fe_write(mon->chr, mon->outbuf, mon->outbuf_index);
+-        mon->outbuf_index = 0;
++        rc = qemu_chr_fe_write(mon->chr, mon->outbuf, mon->outbuf_index);
++        if (rc == mon->outbuf_index) {
++            /* all flushed */
++            mon->outbuf_index = 0;
++            return;
++        }
++        if (rc > 0) {
++            /* partinal write */
++            memmove(mon->outbuf, mon->outbuf + rc, mon->outbuf_index - rc);
++            mon->outbuf_index -= rc;
++        }
++        qemu_chr_fe_add_watch(mon->chr, G_IO_OUT, monitor_unblocked, mon);
+     }
+ }
+ 
+-- 
+1.7.11.7
+

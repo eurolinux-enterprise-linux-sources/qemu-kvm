@@ -1,0 +1,118 @@
+From 85cf0bfcad37fe28eb45a8d0f34d43effbfbe0da Mon Sep 17 00:00:00 2001
+Message-Id: <85cf0bfcad37fe28eb45a8d0f34d43effbfbe0da.1453414664.git.jen@redhat.com>
+In-Reply-To: <0771282bb5f6f5d03493b9539803e52fa8595171.1453414664.git.jen@redhat.com>
+References: <0771282bb5f6f5d03493b9539803e52fa8595171.1453414664.git.jen@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Fri, 15 Jan 2016 14:06:41 -0500
+Subject: [CHANGE 2/2] qxl: replace pipe signaling with bottom half
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1452866801-4764-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 68773
+O-Subject: [RHEL-6.8 qemu-kvm PATCH v2 1/1] qxl: replace pipe signaling with bottom half
+Bugzilla: 1290743
+RH-Acked-by: Jeff Nelson <jenelson@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Thomas Huth <thuth@redhat.com>
+
+qxl creates a pipe, then writes something to it to wake up the iothread
+from the spice server thread to raise an irq.  These days qemu bottom
+halves can be scheduled from threads and signals, so there is no reason
+to do this any more.  Time to clean it up.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 4a46c99c8118586f19894fe66fc6e353f159d4d9)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	hw/qxl.c
+	hw/qxl.h
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/qxl.c | 36 +++---------------------------------
+ hw/qxl.h |  3 +--
+ 2 files changed, 4 insertions(+), 35 deletions(-)
+
+diff --git a/hw/qxl.c b/hw/qxl.c
+index 9c3367b..9466033 100644
+--- a/hw/qxl.c
++++ b/hw/qxl.c
+@@ -1755,15 +1755,9 @@ static void qxl_map(PCIDevice *pci, int region_num,
+     }
+ }
+ 
+-static void pipe_read(void *opaque)
++static void qxl_update_irq_bh(void *opaque)
+ {
+     PCIQXLDevice *d = opaque;
+-    char dummy;
+-    int len;
+-
+-    do {
+-        len = read(d->pipe[0], &dummy, sizeof(dummy));
+-    } while (len == sizeof(dummy));
+     qxl_update_irq(d);
+ }
+ 
+@@ -1777,31 +1771,7 @@ static void qxl_send_events(PCIQXLDevice *d, uint32_t events)
+     if ((old_pending & le_events) == le_events) {
+         return;
+     }
+-    if (pthread_self() == d->main) {
+-        qxl_update_irq(d);
+-    } else {
+-        if (write(d->pipe[1], d, 1) != 1) {
+-            dprint(d, 1, "%s: write to pipe failed\n", __FUNCTION__);
+-        }
+-    }
+-}
+-
+-static void init_pipe_signaling(PCIQXLDevice *d)
+-{
+-   if (pipe(d->pipe) < 0) {
+-       dprint(d, 1, "%s: pipe creation failed\n", __FUNCTION__);
+-       return;
+-   }
+-#ifdef CONFIG_IOTHREAD
+-   fcntl(d->pipe[0], F_SETFL, O_NONBLOCK);
+-#else
+-   fcntl(d->pipe[0], F_SETFL, O_NONBLOCK /* | O_ASYNC */);
+-#endif
+-   fcntl(d->pipe[1], F_SETFL, O_NONBLOCK);
+-   fcntl(d->pipe[0], F_SETOWN, getpid());
+-
+-   d->main = pthread_self();
+-   qemu_set_fd_handler(d->pipe[0], pipe_read, NULL, d);
++    qemu_bh_schedule(d->update_irq);
+ }
+ 
+ /* graphics console */
+@@ -2058,7 +2028,7 @@ static int qxl_init_common(PCIQXLDevice *qxl)
+     qemu_spice_add_interface(&qxl->ssd.qxl.base);
+     qemu_add_vm_change_state_handler(qxl_vm_change_state_handler, qxl);
+ 
+-    init_pipe_signaling(qxl);
++    qxl->update_irq = qemu_bh_new(qxl_update_irq_bh, qxl);
+     qxl_reset_state(qxl);
+ 
+     qxl->update_area_bh = qemu_bh_new(qxl_render_update_area_bh, qxl);
+diff --git a/hw/qxl.h b/hw/qxl.h
+index b05b7bf..4152c11 100644
+--- a/hw/qxl.h
++++ b/hw/qxl.h
+@@ -71,8 +71,7 @@ typedef struct PCIQXLDevice {
+     QemuMutex          track_lock;
+ 
+     /* thread signaling */
+-    pthread_t          main;
+-    int                pipe[2];
++    QEMUBH             *update_irq;
+ 
+     /* ram pci bar */
+     QXLRam             *ram;
+-- 
+2.1.0
+

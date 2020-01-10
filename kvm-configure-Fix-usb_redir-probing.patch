@@ -1,0 +1,78 @@
+From 9227c9faa6e4a191eab1f86ba74001f0c9b17a79 Mon Sep 17 00:00:00 2001
+Message-Id: <9227c9faa6e4a191eab1f86ba74001f0c9b17a79.1429739396.git.jen@redhat.com>
+In-Reply-To: <933ebfcd0e18f4ed2c68553cf4bc257652872678.1429739396.git.jen@redhat.com>
+References: <933ebfcd0e18f4ed2c68553cf4bc257652872678.1429739396.git.jen@redhat.com>
+From: John Snow <jsnow@redhat.com>
+Date: Mon, 6 Apr 2015 18:46:16 -0500
+Subject: [CHANGE 03/11] configure: Fix usb_redir probing
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: John Snow <jsnow@redhat.com>
+Message-id: <1428345980-16249-2-git-send-email-jsnow@redhat.com>
+Patchwork-id: 64718
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 1/5] configure: Fix usb_redir probing
+Bugzilla: 1208605
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Bandan Das <bsd@redhat.com>
+
+Older versions of usb_redir in Fedora/RHEL name the package
+'libusbredirparser', but newer versions name the package
+'libusbredirparser-0.5'.
+
+This downstream-only patch will allow either to work, so builds
+will work both on RHEL6 hosts and more modern development machines.
+
+An upstream patch which corrects the change without backwards
+compatibility is 8b626aa7841ef79b70066c880b3b6c29496797af, but
+this is not suitable downstream for RHEL6.
+
+Signed-off-by: John Snow <jsnow@redhat.com>
+---
+ configure | 23 ++++++++++++++++-------
+ 1 file changed, 16 insertions(+), 7 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ configure | 23 ++++++++++++++++-------
+ 1 file changed, 16 insertions(+), 7 deletions(-)
+
+diff --git a/configure b/configure
+index 233fa86..970753d 100755
+--- a/configure
++++ b/configure
+@@ -2208,14 +2208,23 @@ if test "$smartcard" == "no" ; then
+ fi
+ 
+ # check for usbredirparser for usb network redirection support
++usb_redir_pkgs="libusbredirparser-0.5 libusbredirparser"
+ if test "$usb_redir" != "no" ; then
+-    if pkg-config --atleast-version=0.5 libusbredirparser >/dev/null 2>&1 ; then
+-        usb_redir="yes"
+-        usb_redir_cflags=$(pkg-config --cflags libusbredirparser 2>/dev/null)
+-        usb_redir_libs=$(pkg-config --libs libusbredirparser 2>/dev/null)
+-        QEMU_CFLAGS="$QEMU_CFLAGS $usb_redir_cflags"
+-        LIBS="$LIBS $usb_redir_libs"
+-    else
++    found_usb_redir="no"
++
++    for pkgname in ${usb_redir_pkgs}; do
++        if pkg-config --atleast-version=0.5 "${pkgname}" >/dev/null 2>&1 ; then
++            found_usb_redir="yes"
++            usb_redir="yes"
++            usb_redir_cflags=$(pkg-config --cflags "${pkgname}" 2>/dev/null)
++            usb_redir_libs=$(pkg-config --libs "${pkgname}" 2>/dev/null)
++            QEMU_CFLAGS="$QEMU_CFLAGS $usb_redir_cflags"
++            LIBS="$LIBS $usb_redir_libs"
++            break
++        fi
++    done
++
++    if test "$found_usb_redir" = "no"; then
+         if test "$usb_redir" = "yes"; then
+             feature_not_found "usb-redir"
+         fi
+-- 
+2.1.0
+

@@ -1,0 +1,92 @@
+From 466c9b03442b92bf4663c3edb95591b9b2af3c6a Mon Sep 17 00:00:00 2001
+Message-Id: <466c9b03442b92bf4663c3edb95591b9b2af3c6a.1375955382.git.minovotn@redhat.com>
+In-Reply-To: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+References: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+From: Alon Levy <alevy@redhat.com>
+Date: Thu, 1 Aug 2013 11:53:34 +0200
+Subject: [PATCH 15/35] hw/usb/dev-smartcard-reader.c: remove aborts (never
+ triggered, but just in case)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Alon Levy <alevy@redhat.com>
+Message-id: <1375358029-12968-16-git-send-email-alevy@redhat.com>
+Patchwork-id: 52905
+O-Subject: [RHEL-6.5 RHEL-6.4.z qemu-kvm v6 15/30] hw/usb/dev-smartcard-reader.c: remove aborts (never triggered, but just in case)
+Bugzilla: 917860
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+Signed-off-by: Alon Levy <alevy@redhat.com>
+Reviewed-by: Marc-André Lureau <mlureau@redhat.com>
+(cherry picked from commit 47bf53af7507986fc473cb308324340448fd85e7)
+
+Conflicts:
+	hw/usb/dev-smartcard-reader.c
+    renamed in upstream from hw/usb-ccid.c
+---
+ hw/usb-ccid.c | 20 ++++++++++++--------
+ 1 file changed, 12 insertions(+), 8 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/usb-ccid.c | 20 ++++++++++++--------
+ 1 file changed, 12 insertions(+), 8 deletions(-)
+
+diff --git a/hw/usb-ccid.c b/hw/usb-ccid.c
+index 9de226f..784748a 100644
+--- a/hw/usb-ccid.c
++++ b/hw/usb-ccid.c
+@@ -847,6 +847,12 @@ static void ccid_write_data_block(USBCCIDState *s, uint8_t slot, uint8_t seq,
+     ccid_reset_error_status(s);
+ }
+ 
++static void ccid_report_error_failed(USBCCIDState *s, uint8_t error)
++{
++    s->bmCommandStatus = COMMAND_STATUS_FAILED;
++    s->bError = error;
++}
++
+ static void ccid_write_data_block_answer(USBCCIDState *s,
+     const uint8_t *data, uint32_t len)
+ {
+@@ -854,7 +860,9 @@ static void ccid_write_data_block_answer(USBCCIDState *s,
+     uint8_t slot;
+ 
+     if (!ccid_has_pending_answers(s)) {
+-        abort();
++        DPRINTF(s, D_WARN, "error: no pending answer to return to guest\n");
++        ccid_report_error_failed(s, ERROR_ICC_MUTE);
++        return;
+     }
+     ccid_remove_pending_answer(s, &slot, &seq);
+     ccid_write_data_block(s, slot, seq, data, len);
+@@ -908,12 +916,6 @@ static void ccid_reset_parameters(USBCCIDState *s)
+    memcpy(s->abProtocolDataStructure, abDefaultProtocolDataStructure, len);
+ }
+ 
+-static void ccid_report_error_failed(USBCCIDState *s, uint8_t error)
+-{
+-    s->bmCommandStatus = COMMAND_STATUS_FAILED;
+-    s->bError = error;
+-}
+-
+ /* NOTE: only a single slot is supported (SLOT_0) */
+ static void ccid_on_slot_change(USBCCIDState *s, bool full)
+ {
+@@ -1208,7 +1210,9 @@ void ccid_card_send_apdu_to_guest(CCIDCardState *card,
+     s->bmCommandStatus = COMMAND_STATUS_NO_ERROR;
+     answer = ccid_peek_next_answer(s);
+     if (answer == NULL) {
+-        abort();
++        DPRINTF(s, D_WARN, "%s: error: unexpected lack of answer\n", __func__);
++        ccid_report_error_failed(s, ERROR_HW_ERROR);
++        return;
+     }
+     DPRINTF(s, 1, "APDU returned to guest %d (answer seq %d, slot %d)\n",
+         len, answer->seq, answer->slot);
+-- 
+1.7.11.7
+

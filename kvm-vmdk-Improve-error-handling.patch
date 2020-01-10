@@ -1,0 +1,94 @@
+From acebea1504f1d6ea4ac1921d2feb6fcf505f0218 Mon Sep 17 00:00:00 2001
+Message-Id: <acebea1504f1d6ea4ac1921d2feb6fcf505f0218.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:45 +0200
+Subject: [PATCH 30/47] vmdk: Improve error handling
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-31-git-send-email-famz@redhat.com>
+Patchwork-id: 51466
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 30/47] vmdk: Improve error handling
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+Return the right error values in some more places.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 99f1835d9bc744f98370254600530e66f32e6d81)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 21 +++++++++++++++------
+ 1 file changed, 15 insertions(+), 6 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 21 +++++++++++++++------
+ 1 file changed, 15 insertions(+), 6 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 78230bd..e9820e4 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -212,8 +212,10 @@ static uint32_t vmdk_read_cid(BlockDriverState *bs, int parent)
+     const char *p_name, *cid_str;
+     size_t cid_str_size;
+     BDRVVmdkState *s = bs->opaque;
++    int ret;
+ 
+-    if (bdrv_pread(bs->file, s->desc_offset, desc, DESC_SIZE) != DESC_SIZE) {
++    ret = bdrv_pread(bs->file, s->desc_offset, desc, DESC_SIZE);
++    if (ret < 0) {
+         return 0;
+     }
+ 
+@@ -239,10 +241,12 @@ static int vmdk_write_cid(BlockDriverState *bs, uint32_t cid)
+     char desc[DESC_SIZE], tmp_desc[DESC_SIZE];
+     char *p_name, *tmp_str;
+     BDRVVmdkState *s = bs->opaque;
++    int ret;
+ 
+     memset(desc, 0, sizeof(desc));
+-    if (bdrv_pread(bs->file, s->desc_offset, desc, DESC_SIZE) != DESC_SIZE) {
+-        return -EIO;
++    ret = bdrv_pread(bs->file, s->desc_offset, desc, DESC_SIZE);
++    if (ret < 0) {
++        return ret;
+     }
+ 
+     tmp_str = strstr(desc, "parentCID");
+@@ -254,9 +258,11 @@ static int vmdk_write_cid(BlockDriverState *bs, uint32_t cid)
+         pstrcat(desc, sizeof(desc), tmp_desc);
+     }
+ 
+-    if (bdrv_pwrite_sync(bs->file, s->desc_offset, desc, DESC_SIZE) < 0) {
+-        return -EIO;
++    ret = bdrv_pwrite_sync(bs->file, s->desc_offset, desc, DESC_SIZE);
++    if (ret < 0) {
++        return ret;
+     }
++
+     return 0;
+ }
+ 
+@@ -1111,7 +1117,10 @@ static int vmdk_write(BlockDriverState *bs, int64_t sector_num,
+         /* update CID on the first write every time the virtual disk is
+          * opened */
+         if (!s->cid_updated) {
+-            vmdk_write_cid(bs, time(NULL));
++            ret = vmdk_write_cid(bs, time(NULL));
++            if (ret < 0) {
++                return ret;
++            }
+             s->cid_updated = true;
+         }
+     }
+-- 
+1.7.11.7
+

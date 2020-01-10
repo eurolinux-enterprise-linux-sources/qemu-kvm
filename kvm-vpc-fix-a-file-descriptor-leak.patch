@@ -1,0 +1,123 @@
+From 23521be58e6ccfdfcaa0dc368ef9de24f4809c35 Mon Sep 17 00:00:00 2001
+Message-Id: <23521be58e6ccfdfcaa0dc368ef9de24f4809c35.1378813438.git.minovotn@redhat.com>
+In-Reply-To: <b80f97e724da8388b544413d6a3dcac35d347d9b.1378813438.git.minovotn@redhat.com>
+References: <b80f97e724da8388b544413d6a3dcac35d347d9b.1378813438.git.minovotn@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Wed, 28 Aug 2013 13:14:46 +0200
+Subject: [PATCH 04/13] vpc: fix a file descriptor leak
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <364b9cd8c50b14eff0e4be1f18e80b2c2e6bcfc9.1377694139.git.jcody@redhat.com>
+Patchwork-id: 53839
+O-Subject: [RHEL6.5 qemu-kvm PATCH 04/13] vpc: fix a file descriptor leak
+Bugzilla: 999779
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Blue Swirl <blauwirbel@gmail.com>
+
+Fix a file descriptor leak, reported by cppcheck:
+[/src/qemu/block/vpc.c:524]: (error) Resource leak: fd
+
+Signed-off-by: Blue Swirl <blauwirbel@gmail.com>
+(cherry picked from commit f0ff243a16362b82e4dae7bd991d13ba25bb5b2f)
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ block/vpc.c | 47 ++++++++++++++++++++++++++++++-----------------
+ 1 file changed, 30 insertions(+), 17 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vpc.c | 47 ++++++++++++++++++++++++++++++-----------------
+ 1 file changed, 30 insertions(+), 17 deletions(-)
+
+diff --git a/block/vpc.c b/block/vpc.c
+index 2076766..5203039 100644
+--- a/block/vpc.c
++++ b/block/vpc.c
+@@ -535,6 +535,7 @@ static int vpc_create(const char *filename, QEMUOptionParameter *options)
+     uint8_t secs_per_cyl = 0;
+     size_t block_size, num_bat_entries;
+     int64_t total_sectors = 0;
++    int ret = -EIO;
+ 
+     // Read out options
+     while (options && options->name) {
+@@ -554,7 +555,8 @@ static int vpc_create(const char *filename, QEMUOptionParameter *options)
+     for (i = 0; total_sectors > (int64_t)cyls * heads * secs_per_cyl; i++) {
+         if (calculate_geometry(total_sectors + i,
+                                &cyls, &heads, &secs_per_cyl)) {
+-            return -EFBIG;
++            ret = -EFBIG;
++            goto fail;
+         }
+     }
+     total_sectors = (int64_t) cyls * heads * secs_per_cyl;
+@@ -593,22 +595,28 @@ static int vpc_create(const char *filename, QEMUOptionParameter *options)
+     block_size = 0x200000;
+     num_bat_entries = (total_sectors + block_size / 512) / (block_size / 512);
+ 
+-    if (write(fd, buf, HEADER_SIZE) != HEADER_SIZE)
+-        return -EIO;
++    if (write(fd, buf, HEADER_SIZE) != HEADER_SIZE) {
++        goto fail;
++    }
+ 
+-    if (lseek(fd, 1536 + ((num_bat_entries * 4 + 511) & ~511), SEEK_SET) < 0)
+-        return -EIO;
+-    if (write(fd, buf, HEADER_SIZE) != HEADER_SIZE)
+-        return -EIO;
++    if (lseek(fd, 1536 + ((num_bat_entries * 4 + 511) & ~511), SEEK_SET) < 0) {
++        goto fail;
++    }
++    if (write(fd, buf, HEADER_SIZE) != HEADER_SIZE) {
++        goto fail;
++    }
+ 
+     // Write the initial BAT
+-    if (lseek(fd, 3 * 512, SEEK_SET) < 0)
+-        return -EIO;
++    if (lseek(fd, 3 * 512, SEEK_SET) < 0) {
++        goto fail;
++    }
+ 
+     memset(buf, 0xFF, 512);
+-    for (i = 0; i < (num_bat_entries * 4 + 511) / 512; i++)
+-        if (write(fd, buf, 512) != 512)
+-            return -EIO;
++    for (i = 0; i < (num_bat_entries * 4 + 511) / 512; i++) {
++        if (write(fd, buf, 512) != 512) {
++            goto fail;
++        }
++    }
+ 
+ 
+     // Prepare the Dynamic Disk Header
+@@ -629,13 +637,18 @@ static int vpc_create(const char *filename, QEMUOptionParameter *options)
+     dyndisk_header->checksum = be32_to_cpu(vpc_checksum(buf, 1024));
+ 
+     // Write the header
+-    if (lseek(fd, 512, SEEK_SET) < 0)
+-        return -EIO;
+-    if (write(fd, buf, 1024) != 1024)
+-        return -EIO;
++    if (lseek(fd, 512, SEEK_SET) < 0) {
++        goto fail;
++    }
+ 
++    if (write(fd, buf, 1024) != 1024) {
++        goto fail;
++    }
++    ret = 0;
++
++ fail:
+     close(fd);
+-    return 0;
++    return ret;
+ }
+ 
+ static void vpc_close(BlockDriverState *bs)
+-- 
+1.7.11.7
+

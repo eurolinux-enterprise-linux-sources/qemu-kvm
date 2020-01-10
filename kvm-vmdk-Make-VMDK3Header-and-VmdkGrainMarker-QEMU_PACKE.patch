@@ -1,0 +1,58 @@
+From f0434f805250fe54d303e0ae364d7bec828eabc5 Mon Sep 17 00:00:00 2001
+Message-Id: <f0434f805250fe54d303e0ae364d7bec828eabc5.1376387172.git.minovotn@redhat.com>
+In-Reply-To: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+References: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Thu, 8 Aug 2013 06:09:32 +0200
+Subject: [PATCH 02/13] vmdk: Make VMDK3Header and VmdkGrainMarker QEMU_PACKED
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1375942181-5262-3-git-send-email-famz@redhat.com>
+Patchwork-id: 53066
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 02/11] vmdk: Make VMDK3Header and VmdkGrainMarker QEMU_PACKED
+Bugzilla: 994804
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+It's best to make it consistent that all on disk structures are
+QEMU_PACKED.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 5d8caa543c9714bee36b04899797a3721dff4090)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 361836a..deb6743 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -62,7 +62,7 @@ typedef struct {
+     uint32_t cylinders;
+     uint32_t heads;
+     uint32_t sectors_per_track;
+-} VMDK3Header;
++} QEMU_PACKED VMDK3Header;
+ 
+ typedef struct {
+     uint32_t version;
+@@ -130,7 +130,7 @@ typedef struct VmdkGrainMarker {
+     uint64_t lba;
+     uint32_t size;
+     uint8_t  data[0];
+-} VmdkGrainMarker;
++} QEMU_PACKED VmdkGrainMarker;
+ 
+ enum {
+     MARKER_END_OF_STREAM    = 0,
+-- 
+1.7.11.7
+

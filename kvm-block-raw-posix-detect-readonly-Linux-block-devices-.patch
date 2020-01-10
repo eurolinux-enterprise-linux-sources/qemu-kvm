@@ -1,0 +1,134 @@
+From 8968a2f445754a4478c165c9bff746d559702c47 Mon Sep 17 00:00:00 2001
+Message-Id: <8968a2f445754a4478c165c9bff746d559702c47.1366117835.git.minovotn@redhat.com>
+In-Reply-To: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+References: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Wed, 13 Mar 2013 09:23:33 +0100
+Subject: [PATCH 17/19] block/raw-posix: detect readonly Linux block devices
+ using BLKROGET
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1363166613-23599-1-git-send-email-stefanha@redhat.com>
+Patchwork-id: 49519
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] block/raw-posix: detect readonly Linux block devices using BLKROGET
+Bugzilla: 901484
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Linux block devices can be set read-only with "blockdev --setro
+<device>".  The same thing can be done for LVM volumes using "lvchange
+--permission r <volume>".  This read-only setting is independent of
+device node permissions.  Therefore the device can still be opened
+O_RDWR but actual writes will fail.
+
+This results in odd behavior for QEMU.  bdrv_open() is supposed to fail
+if a read-only image is being opened with BDRV_O_RDWR.  By not failing
+for Linux block devices, the guest boots up but every write produces an
+I/O error.
+
+This patch checks whether the block device is read-only so that Linux
+block devices behave like regular files.
+
+Reported-by: Sibiao Luo <sluo@redhat.com>
+Suggested-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Reviewed-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit da888d37b0b85fc23e4ea55ab8b0c482d4918afb)
+
+Note we need to #include <linux/fs.h> for BLKROGET.  Upstream already
+had the include due to commit 5500316ded9db5b10072334cde1e27fb37682240
+("block: implement is_allocated for raw").
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+---
+ block/raw-posix.c | 50 +++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 49 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/raw-posix.c | 50 +++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 49 insertions(+), 1 deletion(-)
+
+diff --git a/block/raw-posix.c b/block/raw-posix.c
+index 7e068c4..3b2670f 100644
+--- a/block/raw-posix.c
++++ b/block/raw-posix.c
+@@ -53,6 +53,7 @@
+ #include <sys/vfs.h>
+ #include <linux/cdrom.h>
+ #include <linux/fd.h>
++#include <linux/fs.h>
+ #include <linux/magic.h>
+ #endif
+ #if defined (__FreeBSD__) || defined(__FreeBSD_kernel__)
+@@ -775,9 +776,43 @@ static int hdev_probe_device(const char *filename)
+     return 0;
+ }
+ 
++static int check_hdev_writable(BDRVRawState *s)
++{
++#if defined(BLKROGET)
++    /* Linux block devices can be configured "read-only" using blockdev(8).
++     * This is independent of device node permissions and therefore open(2)
++     * with O_RDWR succeeds.  Actual writes fail with EPERM.
++     *
++     * bdrv_open() is supposed to fail if the disk is read-only.  Explicitly
++     * check for read-only block devices so that Linux block devices behave
++     * properly.
++     */
++    struct stat st;
++    int readonly = 0;
++
++    if (fstat(s->fd, &st)) {
++        return -errno;
++    }
++
++    if (!S_ISBLK(st.st_mode)) {
++        return 0;
++    }
++
++    if (ioctl(s->fd, BLKROGET, &readonly) < 0) {
++        return -errno;
++    }
++
++    if (readonly) {
++        return -EACCES;
++    }
++#endif /* defined(BLKROGET) */
++    return 0;
++}
++
+ static int hdev_open(BlockDriverState *bs, const char *filename, int flags)
+ {
+     BDRVRawState *s = bs->opaque;
++    int ret;
+ 
+ #ifdef CONFIG_COCOA
+     if (strstart(filename, "/dev/cdrom", NULL)) {
+@@ -813,7 +848,20 @@ static int hdev_open(BlockDriverState *bs, const char *filename, int flags)
+     }
+ #endif
+ 
+-    return raw_open_common(bs, filename, flags, 0);
++    ret = raw_open_common(bs, filename, flags, 0);
++    if (ret < 0) {
++        return ret;
++    }
++
++    if (flags & BDRV_O_RDWR) {
++        ret = check_hdev_writable(s);
++        if (ret < 0) {
++            raw_close(bs);
++            return ret;
++        }
++    }
++
++    return ret;
+ }
+ 
+ #if defined(__linux__)
+-- 
+1.7.11.7
+

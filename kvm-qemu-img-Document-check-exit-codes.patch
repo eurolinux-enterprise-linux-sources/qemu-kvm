@@ -1,0 +1,99 @@
+From 21a5d01712add342b42f83883b77c16caf0b49a6 Mon Sep 17 00:00:00 2001
+From: Max Reitz <mreitz@redhat.com>
+Date: Sat, 14 Jun 2014 21:41:59 +0200
+Subject: [PATCH 22/26] qemu-img: Document check exit codes
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1402782119-29688-4-git-send-email-mreitz@redhat.com>
+Patchwork-id: 59225
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 3/3] qemu-img: Document check exit codes
+Bugzilla: 1054753
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+
+BZ: 1054753
+
+The exit code 63 (check not supported by image format) was not even
+documented in the comment above the check command in the source code;
+add it, as it does indeed seem useful.
+
+Also, document all of check's exit codes in the manpage.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reported-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Benoit Canet <benoit@irqsave.net>
+Reviewed-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit d6635c4dbbcfca7f5bd379dd970617fc3430428f)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ qemu-img.c    |  9 +++++----
+ qemu-img.texi | 23 +++++++++++++++++++++++
+ 2 files changed, 28 insertions(+), 4 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ qemu-img.c    |    9 +++++----
+ qemu-img.texi |   23 +++++++++++++++++++++++
+ 2 files changed, 28 insertions(+), 4 deletions(-)
+
+diff --git a/qemu-img.c b/qemu-img.c
+index 4bd1b2e..9500127 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -491,10 +491,11 @@ static int collect_image_check(BlockDriverState *bs,
+ /*
+  * Checks an image for consistency. Exit codes:
+  *
+- * 0 - Check completed, image is good
+- * 1 - Check not completed because of internal errors
+- * 2 - Check completed, image is corrupted
+- * 3 - Check completed, image has leaked clusters, but is good otherwise
++ *  0 - Check completed, image is good
++ *  1 - Check not completed because of internal errors
++ *  2 - Check completed, image is corrupted
++ *  3 - Check completed, image has leaked clusters, but is good otherwise
++ * 63 - Checks are not supported by the image format
+  */
+ static int img_check(int argc, char **argv)
+ {
+diff --git a/qemu-img.texi b/qemu-img.texi
+index 4e67f99..2267313 100644
+--- a/qemu-img.texi
++++ b/qemu-img.texi
+@@ -83,6 +83,29 @@ wrong fix or hiding corruption that has already occured.
+ Only the formats @code{qcow2}, @code{qed} and @code{vdi} support
+ consistency checks.
+ 
++In case the image does not have any inconsistencies, check exits with @code{0}.
++Other exit codes indicate the kind of inconsistency found or if another error
++occurred. The following table summarizes all exit codes of the check subcommand:
++
++@table @option
++
++@item 0
++Check completed, the image is (now) consistent
++@item 1
++Check not completed because of internal errors
++@item 2
++Check completed, image is corrupted
++@item 3
++Check completed, image has leaked clusters, but is not corrupted
++@item 63
++Checks are not supported by the image format
++
++@end table
++
++If @code{-r} is specified, exit codes representing the image state refer to the
++state after (the attempt at) repairing it. That is, a successful @code{-r all}
++will yield the exit code 0, independently of the image state before.
++
+ @item create [-f @var{fmt}] [-o @var{options}] @var{filename} [@var{size}]
+ 
+ Create the new disk image @var{filename} of size @var{size} and format
+-- 
+1.7.1
+

@@ -1,0 +1,114 @@
+From dc24bd8f736d459b4a1d3e3daf4f5a4573097ecf Mon Sep 17 00:00:00 2001
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Tue, 29 Jul 2014 18:38:05 -0500
+Subject: [CHANGE 1/2] block: gluster - code movements, state storage changes
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <5bfda5605773aa79d5b85c98d618944344d9938f.1406658609.git.jcody@redhat.com>
+Patchwork-id: 60307
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 1/2] block: gluster - code movements, state storage changes
+Bugzilla: 1118543
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+In preparation for supporting reopen on gluster, move flag
+parsing out to a function.  Also, add a NULL check in the
+gconf cleanup.
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 1b37b3442f78a77844fdaf7f53e5f04e4ce8f1d6)
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	block/gluster.c
+
+[ RHEL-6 Notes: conflict due to different arguments to
+                qemu_gluster_open, and some preceeding context. ]
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ block/gluster.c | 41 ++++++++++++++++++++++++++---------------
+ 1 file changed, 26 insertions(+), 15 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ block/gluster.c | 41 ++++++++++++++++++++++++++---------------
+ 1 file changed, 26 insertions(+), 15 deletions(-)
+
+diff --git a/block/gluster.c b/block/gluster.c
+index b251b62..9cbb338 100644
+--- a/block/gluster.c
++++ b/block/gluster.c
+@@ -50,11 +50,13 @@ typedef struct GlusterConf {
+ 
+ static void qemu_gluster_gconf_free(GlusterConf *gconf)
+ {
+-    g_free(gconf->server);
+-    g_free(gconf->volname);
+-    g_free(gconf->image);
+-    g_free(gconf->transport);
+-    g_free(gconf);
++    if (gconf) {
++        g_free(gconf->server);
++        g_free(gconf->volname);
++        g_free(gconf->image);
++        g_free(gconf->transport);
++        g_free(gconf);
++    }
+ }
+ 
+ static int parse_volume_options(GlusterConf *gconf, char *path)
+@@ -282,11 +284,28 @@ static int qemu_gluster_aio_flush_cb(void *opaque)
+     return (s->qemu_aio_count > 0);
+ }
+ 
++static void qemu_gluster_parse_flags(int bdrv_flags, int *open_flags)
++{
++    assert(open_flags != NULL);
++
++    *open_flags |= O_BINARY;
++
++    if (bdrv_flags & BDRV_O_RDWR) {
++        *open_flags |= O_RDWR;
++    } else {
++        *open_flags |= O_RDONLY;
++    }
++
++    if ((bdrv_flags & BDRV_O_NOCACHE)) {
++        *open_flags |= O_DIRECT;
++    }
++}
++
+ static int qemu_gluster_open(BlockDriverState *bs, const char *filename,
+     int bdrv_flags)
+ {
+     BDRVGlusterState *s = bs->opaque;
+-    int open_flags = O_BINARY;
++    int open_flags = 0;
+     int ret = 0;
+     GlusterConf *gconf = g_malloc0(sizeof(GlusterConf));
+ 
+@@ -296,15 +315,7 @@ static int qemu_gluster_open(BlockDriverState *bs, const char *filename,
+         goto out;
+     }
+ 
+-    if (bdrv_flags & BDRV_O_RDWR) {
+-        open_flags |= O_RDWR;
+-    } else {
+-        open_flags |= O_RDONLY;
+-    }
+-
+-    if ((bdrv_flags & BDRV_O_NOCACHE)) {
+-        open_flags |= O_DIRECT;
+-    }
++    qemu_gluster_parse_flags(bdrv_flags, &open_flags);
+ 
+     if (!(bdrv_flags & BDRV_O_CACHE_WB)) {
+         open_flags |= O_DSYNC;
+-- 
+1.9.3
+

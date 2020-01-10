@@ -1,0 +1,337 @@
+From 6ddf7b34f3c5625e4cca12c000127492fd1ffe92 Mon Sep 17 00:00:00 2001
+Message-Id: <6ddf7b34f3c5625e4cca12c000127492fd1ffe92.1427148003.git.jen@redhat.com>
+In-Reply-To: <b8c4fd0ae93c624609d61e4789afa7daaf50a8f1.1427148003.git.jen@redhat.com>
+References: <b8c4fd0ae93c624609d61e4789afa7daaf50a8f1.1427148003.git.jen@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Wed, 11 Mar 2015 15:10:56 -0500
+Subject: [CHANGE 2/9] vga: make vram size configurable
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1426086663-17937-3-git-send-email-kraxel@redhat.com>
+Patchwork-id: 64285
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v4 2/9] vga: make vram size configurable
+Bugzilla: 1053039
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Zap the global VGA_RAM_SIZE #define, make the vga ram size configurable
+for standard vga and vmware vga.  cirrus and qxl are left with a fixed
+size (and private VGA_RAM_SIZE #define) for now.
+
+qxl needs some non-trivial adjustments in the mode list handling deal
+with a runtime-configurable size, which calls for a separate qxl patch.
+
+cirrus emulates cards which have 2 MB (isa) and 4 MB (pci), so I guess
+it would make sense to use these sizes.  That change would break
+migration though, so I left it fixed at 8 MB size.  Making it
+configurabls is pretty pointless for cirrus as we have to match real
+hardware.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 4a1e244eb65c646bdd938d9d137ace42d76c95a7)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	hw/cirrus_vga.c
+	hw/qxl.c
+	hw/vga-isa-mm.c
+	hw/vga-isa.c
+	hw/vga-pci.c
+	hw/vga.c
+	hw/vga_int.h
+	hw/vmware_vga.c
+
+[ rhel6: adapt to pre-memory-api codebase ]
+[ rhel6: qemu-kvm has 16 not 8 mb vgamem ]
+---
+ hw/cirrus_vga.c |  8 ++++++--
+ hw/qxl.c        |  5 ++++-
+ hw/vga-isa-mm.c |  5 ++++-
+ hw/vga-isa.c    |  5 ++++-
+ hw/vga-pci.c    |  5 +++--
+ hw/vga.c        | 15 +++++++++++----
+ hw/vga_int.h    |  4 ++--
+ hw/vmware_vga.c | 15 ++++++++++-----
+ 8 files changed, 44 insertions(+), 18 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/cirrus_vga.c |  8 ++++++--
+ hw/qxl.c        |  5 ++++-
+ hw/vga-isa-mm.c |  5 ++++-
+ hw/vga-isa.c    |  5 ++++-
+ hw/vga-pci.c    |  5 +++--
+ hw/vga.c        | 15 +++++++++++----
+ hw/vga_int.h    |  4 ++--
+ hw/vmware_vga.c | 15 ++++++++++-----
+ 8 files changed, 44 insertions(+), 18 deletions(-)
+
+diff --git a/hw/cirrus_vga.c b/hw/cirrus_vga.c
+index 7b24472..4962c0f 100644
+--- a/hw/cirrus_vga.c
++++ b/hw/cirrus_vga.c
+@@ -45,6 +45,8 @@
+ //#define DEBUG_CIRRUS
+ //#define DEBUG_BITBLT
+ 
++#define VGA_RAM_SIZE (16 * 1024 * 1024)
++
+ /***************************************
+  *
+  *  definitions
+@@ -3135,7 +3137,8 @@ void isa_cirrus_vga_init(void)
+ 
+     s = qemu_mallocz(sizeof(CirrusVGAState));
+ 
+-    vga_common_init(&s->vga, VGA_RAM_SIZE);
++    s->vga.vram_size_mb = VGA_RAM_SIZE >> 20;
++    vga_common_init(&s->vga);
+     cirrus_init_common(s, CIRRUS_ID_CLGD5430, 0);
+     s->vga.ds = graphic_console_init(s->vga.update, s->vga.invalidate,
+                                      s->vga.screen_dump, s->vga.text_update,
+@@ -3207,7 +3210,8 @@ static int pci_cirrus_vga_initfn(PCIDevice *dev)
+      int device_id = CIRRUS_ID_CLGD5446;
+ 
+      /* setup VGA */
+-     vga_common_init(&s->vga, VGA_RAM_SIZE);
++     s->vga.vram_size_mb = VGA_RAM_SIZE >> 20;
++     vga_common_init(&s->vga);
+      cirrus_init_common(s, device_id, 1);
+      s->vga.ds = graphic_console_init(s->vga.update, s->vga.invalidate,
+                                       s->vga.screen_dump, s->vga.text_update,
+diff --git a/hw/qxl.c b/hw/qxl.c
+index 1d1c213..b37b21b 100644
+--- a/hw/qxl.c
++++ b/hw/qxl.c
+@@ -35,6 +35,8 @@
+ #define QXL_IO_MONITORS_CONFIG_ASYNC (QXL_IO_FLUSH_RELEASE + 1)
+ #endif
+ 
++#define VGA_RAM_SIZE (16 * 1024 * 1024)
++
+ /*
+  * NOTE: SPICE_RING_PROD_ITEM accesses memory on the pci bar and as
+  * such can be changed by the guest, so to avoid a guest trigerrable
+@@ -2046,7 +2048,8 @@ static int qxl_init_primary(PCIDevice *dev)
+     if (ram_size < 32 * 1024 * 1024) {
+         ram_size = 32 * 1024 * 1024;
+     }
+-    vga_common_init(vga, ram_size);
++    vga->vram_size_mb = qxl->vga.vram_size >> 20;
++    vga_common_init(vga);
+     vga_init(vga);
+     register_ioport_write(0x3c0, 16, 1, qxl_vga_ioport_write, vga);
+     register_ioport_write(0x3b4,  2, 1, qxl_vga_ioport_write, vga);
+diff --git a/hw/vga-isa-mm.c b/hw/vga-isa-mm.c
+index b4ff23c..ea523d3 100644
+--- a/hw/vga-isa-mm.c
++++ b/hw/vga-isa-mm.c
+@@ -28,6 +28,8 @@
+ #include "pixel_ops.h"
+ #include "qemu-timer.h"
+ 
++#define VGA_RAM_SIZE (8192 * 1024)
++
+ typedef struct ISAVGAMMState {
+     VGACommonState vga;
+     int it_shift;
+@@ -115,7 +117,8 @@ int isa_vga_mm_init(target_phys_addr_t vram_base,
+ 
+     s = qemu_mallocz(sizeof(*s));
+ 
+-    vga_common_init(&s->vga, VGA_RAM_SIZE);
++    s->vga.vram_size_mb = VGA_RAM_SIZE >> 20;
++    vga_common_init(&s->vga);
+     vga_mm_init(s, vram_base, ctrl_base, it_shift);
+ 
+     s->vga.ds = graphic_console_init(s->vga.update, s->vga.invalidate,
+diff --git a/hw/vga-isa.c b/hw/vga-isa.c
+index 3046054..78ff613 100644
+--- a/hw/vga-isa.c
++++ b/hw/vga-isa.c
+@@ -29,13 +29,16 @@
+ #include "qemu-timer.h"
+ #include "loader.h"
+ 
++#define VGA_RAM_SIZE (16 * 1024 * 1024)
++
+ int isa_vga_init(void)
+ {
+     VGACommonState *s;
+ 
+     s = qemu_mallocz(sizeof(*s));
+ 
+-    vga_common_init(s, VGA_RAM_SIZE);
++    s->vram_size_mb = VGA_RAM_SIZE >> 20;
++    vga_common_init(s);
+     vga_init(s);
+     vmstate_register(NULL, 0, &vmstate_vga_common, s);
+ 
+diff --git a/hw/vga-pci.c b/hw/vga-pci.c
+index 7569aed..5f0058c 100644
+--- a/hw/vga-pci.c
++++ b/hw/vga-pci.c
+@@ -82,7 +82,7 @@ static int pci_vga_initfn(PCIDevice *dev)
+      uint8_t *pci_conf = d->dev.config;
+ 
+      // vga + console init
+-     vga_common_init(s, VGA_RAM_SIZE);
++     vga_common_init(s);
+      vga_init(s);
+ 
+      s->ds = graphic_console_init(s->update, s->invalidate,
+@@ -94,7 +94,7 @@ static int pci_vga_initfn(PCIDevice *dev)
+      pci_config_set_class(pci_conf, PCI_CLASS_DISPLAY_VGA);
+ 
+      /* XXX: VGA_RAM_SIZE must be a power of two */
+-     pci_register_bar(&d->dev, 0, VGA_RAM_SIZE,
++     pci_register_bar(&d->dev, 0, s->vram_size,
+                       PCI_BASE_ADDRESS_MEM_PREFETCH, vga_map);
+ 
+      if (s->bios_size) {
+@@ -141,6 +141,7 @@ static PCIDeviceInfo vga_info = {
+     .qdev.props   = (Property[]) {
+         DEFINE_PROP_HEX32("bios-offset", PCIVGAState, vga.bios_offset, 0),
+         DEFINE_PROP_HEX32("bios-size",   PCIVGAState, vga.bios_size,   0),
++        DEFINE_PROP_UINT32("vgamem_mb", PCIVGAState, vga.vram_size_mb, 16),
+         DEFINE_PROP_END_OF_LIST(),
+     }
+ };
+diff --git a/hw/vga.c b/hw/vga.c
+index 930a77c..1b5425c 100644
+--- a/hw/vga.c
++++ b/hw/vga.c
+@@ -2263,7 +2263,7 @@ const VMStateDescription vmstate_vga_common = {
+     }
+ };
+ 
+-void vga_common_init(VGACommonState *s, int vga_ram_size)
++void vga_common_init(VGACommonState *s)
+ {
+     int i, j, v, b;
+ 
+@@ -2290,14 +2290,21 @@ void vga_common_init(VGACommonState *s, int vga_ram_size)
+         expand4to8[i] = v;
+     }
+ 
++    /* valid range: 1 MB -> 256 MB */
++    s->vram_size = 1024 * 1024;
++    while (s->vram_size < (s->vram_size_mb << 20) &&
++           s->vram_size < (256 << 20)) {
++        s->vram_size <<= 1;
++    }
++    s->vram_size_mb = s->vram_size >> 20;
++
+ #ifdef CONFIG_BOCHS_VBE
+     s->is_vbe_vmstate = 1;
+ #else
+     s->is_vbe_vmstate = 0;
+ #endif
+-    s->vram_offset = qemu_ram_alloc(NULL, "vga.vram", vga_ram_size);
++    s->vram_offset = qemu_ram_alloc(NULL, "vga.vram", s->vram_size);
+     s->vram_ptr = qemu_get_ram_ptr(s->vram_offset);
+-    s->vram_size = vga_ram_size;
+     s->get_bpp = vga_get_bpp;
+     s->get_offsets = vga_get_offsets;
+     s->get_resolution = vga_get_resolution;
+@@ -2364,7 +2371,7 @@ void vga_init_vbe(VGACommonState *s)
+ #ifdef CONFIG_BOCHS_VBE
+     /* XXX: use optimized standard vga accesses */
+     cpu_register_physical_memory(VBE_DISPI_LFB_PHYSICAL_ADDRESS,
+-                                 VGA_RAM_SIZE, s->vram_offset);
++                                 s->vram_size, s->vram_offset);
+     s->vbe_mapped = 1;
+ #endif 
+ }
+diff --git a/hw/vga_int.h b/hw/vga_int.h
+index 1eb5fa7..1618650 100644
+--- a/hw/vga_int.h
++++ b/hw/vga_int.h
+@@ -107,6 +107,7 @@ typedef struct VGACommonState {
+     uint8_t *vram_ptr;
+     ram_addr_t vram_offset;
+     uint32_t vram_size;
++    uint32_t vram_size_mb; /* property */
+     uint32_t lfb_addr;
+     uint32_t lfb_end;
+     uint32_t map_addr;
+@@ -191,7 +192,7 @@ static inline int c6_to_8(int v)
+     return (v << 2) | (b << 1) | b;
+ }
+ 
+-void vga_common_init(VGACommonState *s, int vga_ram_size);
++void vga_common_init(VGACommonState *s);
+ void vga_init(VGACommonState *s);
+ void vga_common_reset(VGACommonState *s);
+ 
+@@ -226,7 +227,6 @@ void vga_init_vbe(VGACommonState *s);
+ extern const uint8_t sr_mask[8];
+ extern const uint8_t gr_mask[16];
+ 
+-#define VGA_RAM_SIZE (16 * 1024 * 1024)
+ #define VGABIOS_FILENAME "vgabios.bin"
+ #define VGABIOS_CIRRUS_FILENAME "vgabios-cirrus.bin"
+ 
+diff --git a/hw/vmware_vga.c b/hw/vmware_vga.c
+index ea13101..9ccf7c5 100644
+--- a/hw/vmware_vga.c
++++ b/hw/vmware_vga.c
+@@ -1150,7 +1150,7 @@ static const VMStateDescription vmstate_vmware_vga = {
+     }
+ };
+ 
+-static void vmsvga_init(struct vmsvga_state_s *s, int vga_ram_size)
++static void vmsvga_init(struct vmsvga_state_s *s)
+ {
+     s->scratch_size = SVGA_SCRATCH_SIZE;
+     s->scratch = qemu_malloc(s->scratch_size * 4);
+@@ -1165,7 +1165,7 @@ static void vmsvga_init(struct vmsvga_state_s *s, int vga_ram_size)
+     s->fifo_offset = qemu_ram_alloc(NULL, "vmsvga.fifo", s->fifo_size);
+     s->fifo_ptr = qemu_get_ram_ptr(s->fifo_offset);
+ 
+-    vga_common_init(&s->vga, vga_ram_size);
++    vga_common_init(&s->vga);
+     vga_init(&s->vga);
+     vmstate_register(NULL, 0, &vmstate_vga_common, &s->vga);
+ 
+@@ -1244,16 +1244,16 @@ static int pci_vmsvga_initfn(PCIDevice *dev)
+     s->card.config[0x2f]		= SVGA_PCI_DEVICE_ID >> 8;
+     s->card.config[0x3c]		= 0xff;		/* End */
+ 
++    vmsvga_init(&s->chip);
++
+     pci_register_bar(&s->card, 0, 0x10,
+                     PCI_BASE_ADDRESS_SPACE_IO, pci_vmsvga_map_ioport);
+-    pci_register_bar(&s->card, 1, VGA_RAM_SIZE,
++    pci_register_bar(&s->card, 1, s->chip.vga.vram_size,
+                     PCI_BASE_ADDRESS_MEM_PREFETCH, pci_vmsvga_map_mem);
+ 
+     pci_register_bar(&s->card, 2, SVGA_FIFO_SIZE,
+ 		     PCI_BASE_ADDRESS_MEM_PREFETCH, pci_vmsvga_map_fifo);
+ 
+-    vmsvga_init(&s->chip, VGA_RAM_SIZE);
+-
+     if (!dev->rom_bar) {
+         /* compatibility with pc-0.13 and older */
+         vga_init_vbe(&s->chip.vga);
+@@ -1274,6 +1274,11 @@ static PCIDeviceInfo vmsvga_info = {
+     .no_hotplug   = 1,
+     .init         = pci_vmsvga_initfn,
+     .romfile      = "vgabios-vmware.bin",
++    .qdev.props = (Property[]) {
++        DEFINE_PROP_UINT32("vgamem_mb", struct pci_vmsvga_state_s,
++                           chip.vga.vram_size_mb, 16),
++        DEFINE_PROP_END_OF_LIST(),
++    },
+ };
+ 
+ static void vmsvga_register(void)
+-- 
+2.1.0
+

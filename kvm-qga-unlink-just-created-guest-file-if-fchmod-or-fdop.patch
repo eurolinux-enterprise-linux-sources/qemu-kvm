@@ -1,0 +1,52 @@
+From 7583408bc049ca0e63c25e1b1fcb502c40f497c1 Mon Sep 17 00:00:00 2001
+Message-Id: <7583408bc049ca0e63c25e1b1fcb502c40f497c1.1369221838.git.minovotn@redhat.com>
+In-Reply-To: <44d9306ede26ea2881e6c1f104b901be647022a8.1369221838.git.minovotn@redhat.com>
+References: <44d9306ede26ea2881e6c1f104b901be647022a8.1369221838.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Fri, 17 May 2013 22:31:27 +0200
+Subject: [PATCH 8/8] qga: unlink just created guest-file if fchmod() or
+ fdopen() fails on it
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1368829887-15218-4-git-send-email-lersek@redhat.com>
+Patchwork-id: 51425
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 3/3] qga: unlink just created guest-file if fchmod() or fdopen() fails on it
+Bugzilla: 953932
+RH-Acked-by: Eric Blake <eblake@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+We shouldn't allow guest filesystem pollution on error paths.
+
+Suggested-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Luiz Capitulino <lcapitulino@redhat.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit 2b720018060179b394f8ce736983373ab80dd37c)
+---
+ qga/commands-posix.c |    3 +++
+ 1 files changed, 3 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/commands-posix.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index e2a3c43..87f596d 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -356,6 +356,9 @@ safe_open_or_create(const char *path, const char *mode, Error **err)
+             }
+ 
+             close(fd);
++            if (oflag & O_CREAT) {
++                unlink(path);
++            }
+         }
+     }
+ 
+-- 
+1.7.11.7
+

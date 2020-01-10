@@ -1,0 +1,63 @@
+From 3e7269c98c18f212d05c28943a73c29f4578cce0 Mon Sep 17 00:00:00 2001
+Message-Id: <3e7269c98c18f212d05c28943a73c29f4578cce0.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:37 -0500
+Subject: [CHANGE 17/29] gluster: Drop gluster_aiocb_info.cancel
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-18-git-send-email-famz@redhat.com>
+Patchwork-id: 64918
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 17/28] gluster: Drop gluster_aiocb_info.cancel
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Downstream only.
+
+gluster in upstream was converted to coroutines (commit 15744b0b8)
+before the conversion of async cancel. Let's just remove the cancel code
+and let the block layer handle it.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/gluster.c | 12 ------------
+ 1 file changed, 12 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/gluster.c | 12 ------------
+ 1 file changed, 12 deletions(-)
+
+diff --git a/block/gluster.c b/block/gluster.c
+index dc1c1eb..d2a7648 100644
+--- a/block/gluster.c
++++ b/block/gluster.c
+@@ -482,20 +482,8 @@ out:
+     return ret;
+ }
+ 
+-static void qemu_gluster_aio_cancel(BlockDriverAIOCB *blockacb)
+-{
+-    GlusterAIOCB *acb = (GlusterAIOCB *)blockacb;
+-    bool finished = false;
+-
+-    acb->finished = &finished;
+-    while (!finished) {
+-        qemu_aio_wait();
+-    }
+-}
+-
+ static const AIOCBInfo gluster_aiocb_info = {
+     .aiocb_size = sizeof(GlusterAIOCB),
+-    .cancel = qemu_gluster_aio_cancel,
+ };
+ 
+ static void gluster_finish_aiocb(struct glfs_fd *fd, ssize_t ret, void *arg)
+-- 
+2.1.0
+

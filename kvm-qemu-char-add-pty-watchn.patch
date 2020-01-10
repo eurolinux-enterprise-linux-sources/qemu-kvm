@@ -1,0 +1,65 @@
+From df79d86f372b006106f1d0115a2d69fb685c3a16 Mon Sep 17 00:00:00 2001
+Message-Id: <df79d86f372b006106f1d0115a2d69fb685c3a16.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:13 +0200
+Subject: [PATCH 39/65] qemu-char: add pty watch
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <047ee170f9fd8dab1c03efc9f03be3e0f2ee62d6.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50817
+O-Subject: [RHEL6.5 qemu-kvm PATCH 39/65] qemu-char: add pty watch
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+This lets ptys support adding front end watchs.
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Message-id: 23380f37b22d407ba0b9e080f6ea0d66b279f2d2.1362505276.git.amit.shah@redhat.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit e6a87ed837b52aea903c25693b1e3703824b9ef7)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ qemu-char.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 56d2881..9c34483 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -998,6 +998,12 @@ static int pty_chr_write(CharDriverState *chr, const uint8_t *buf, int len)
+     return io_channel_send_all(s->fd, buf, len);
+ }
+ 
++static GSource *pty_chr_add_watch(CharDriverState *chr, GIOCondition cond)
++{
++    PtyCharDriver *s = chr->opaque;
++    return g_io_create_watch(s->fd, cond);
++}
++
+ static int pty_chr_read_poll(void *opaque)
+ {
+     CharDriverState *chr = opaque;
+@@ -1144,6 +1150,7 @@ static CharDriverState *qemu_chr_open_pty(QemuOpts *opts)
+     chr->chr_write = pty_chr_write;
+     chr->chr_update_read_handler = pty_chr_update_read_handler;
+     chr->chr_close = pty_chr_close;
++    chr->chr_add_watch = pty_chr_add_watch;
+ 
+     s->fd = io_channel_from_fd(master_fd);
+     s->timer = qemu_new_timer(rt_clock, pty_chr_timer, chr);
+-- 
+1.7.11.7
+

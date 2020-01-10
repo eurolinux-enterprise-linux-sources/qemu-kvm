@@ -1,0 +1,276 @@
+From d3a78a02f2e87ef86eb6117969a5df52157391df Mon Sep 17 00:00:00 2001
+Message-Id: <d3a78a02f2e87ef86eb6117969a5df52157391df.1366117835.git.minovotn@redhat.com>
+In-Reply-To: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+References: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 7 Mar 2013 15:29:14 +0100
+Subject: [PATCH 06/19] qemu-img check -r for repairing images
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1362670164-15796-3-git-send-email-kwolf@redhat.com>
+Patchwork-id: 49304
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 02/12] qemu-img check -r for repairing images
+Bugzilla: 888008
+RH-Acked-by: Eric Blake <eblake@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+The QED block driver already provides the functionality to not only
+detect inconsistencies in images, but also fix them. However, this
+functionality cannot be manually invoked with qemu-img, but the
+check happens only automatically during bdrv_open().
+
+This adds a -r switch to qemu-img check that allows manual invocation
+of an image repair.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 4534ff5426afeeae5238ba10a696cafa9a0168ee)
+
+Conflicts:
+	block/qed.c
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block.c          |  4 ++--
+ block.h          |  7 ++++++-
+ block/qcow2.c    |  7 ++++++-
+ block/qed.c      |  5 +++--
+ block/vdi.c      |  7 ++++++-
+ block_int.h      |  3 ++-
+ qemu-img-cmds.hx |  4 ++--
+ qemu-img.c       | 25 ++++++++++++++++++++++---
+ qemu-img.texi    |  7 ++++++-
+ 9 files changed, 55 insertions(+), 14 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.c          |  4 ++--
+ block.h          |  7 ++++++-
+ block/qcow2.c    |  7 ++++++-
+ block/qed.c      |  5 +++--
+ block/vdi.c      |  7 ++++++-
+ block_int.h      |  3 ++-
+ qemu-img-cmds.hx |  4 ++--
+ qemu-img.c       | 25 ++++++++++++++++++++++---
+ qemu-img.texi    |  7 ++++++-
+ 9 files changed, 55 insertions(+), 14 deletions(-)
+
+diff --git a/block.c b/block.c
+index 1f75c37..a037192 100644
+--- a/block.c
++++ b/block.c
+@@ -1291,14 +1291,14 @@ bool bdrv_dev_is_medium_locked(BlockDriverState *bs)
+  * free of errors) or -errno when an internal error occured. The results of the
+  * check are stored in res.
+  */
+-int bdrv_check(BlockDriverState *bs, BdrvCheckResult *res)
++int bdrv_check(BlockDriverState *bs, BdrvCheckResult *res, BdrvCheckMode fix)
+ {
+     if (bs->drv->bdrv_check == NULL) {
+         return -ENOTSUP;
+     }
+ 
+     memset(res, 0, sizeof(*res));
+-    return bs->drv->bdrv_check(bs, res);
++    return bs->drv->bdrv_check(bs, res, fix);
+ }
+ 
+ #define COMMIT_BUF_SECTORS 2048
+diff --git a/block.h b/block.h
+index 33c135c..1ef82b6 100644
+--- a/block.h
++++ b/block.h
+@@ -214,7 +214,12 @@ typedef struct BdrvCheckResult {
+     BlockFragInfo bfi;
+ } BdrvCheckResult;
+ 
+-int bdrv_check(BlockDriverState *bs, BdrvCheckResult *res);
++typedef enum {
++    BDRV_FIX_LEAKS    = 1,
++    BDRV_FIX_ERRORS   = 2,
++} BdrvCheckMode;
++
++int bdrv_check(BlockDriverState *bs, BdrvCheckResult *res, BdrvCheckMode fix);
+ 
+ /* async block I/O */
+ typedef struct BlockDriverAIOCB BlockDriverAIOCB;
+diff --git a/block/qcow2.c b/block/qcow2.c
+index cd44d98..90faa5e 100644
+--- a/block/qcow2.c
++++ b/block/qcow2.c
+@@ -1348,8 +1348,13 @@ static int qcow2_get_info(BlockDriverState *bs, BlockDriverInfo *bdi)
+ }
+ 
+ 
+-static int qcow2_check(BlockDriverState *bs, BdrvCheckResult *result)
++static int qcow2_check(BlockDriverState *bs, BdrvCheckResult *result,
++                       BdrvCheckMode fix)
+ {
++    if (fix) {
++        return -ENOTSUP;
++    }
++
+     return qcow2_check_refcounts(bs, result);
+ }
+ 
+diff --git a/block/qed.c b/block/qed.c
+index 3d372a9..040d88e 100644
+--- a/block/qed.c
++++ b/block/qed.c
+@@ -1533,11 +1533,12 @@ static int bdrv_qed_change_backing_file(BlockDriverState *bs,
+     return ret;
+ }
+ 
+-static int bdrv_qed_check(BlockDriverState *bs, BdrvCheckResult *result)
++static int bdrv_qed_check(BlockDriverState *bs, BdrvCheckResult *result,
++                          BdrvCheckMode fix)
+ {
+     BDRVQEDState *s = bs->opaque;
+ 
+-    return qed_check(s, result, false);
++    return qed_check(s, result, !!fix);
+ }
+ 
+ static QEMUOptionParameter qed_create_options[] = {
+diff --git a/block/vdi.c b/block/vdi.c
+index 3450a2d..d4abfd3 100644
+--- a/block/vdi.c
++++ b/block/vdi.c
+@@ -291,7 +291,8 @@ static void vdi_header_print(VdiHeader *header)
+ }
+ #endif
+ 
+-static int vdi_check(BlockDriverState *bs, BdrvCheckResult *res)
++static int vdi_check(BlockDriverState *bs, BdrvCheckResult *res,
++                     BdrvCheckMode fix)
+ {
+     /* TODO: additional checks possible. */
+     BDRVVdiState *s = (BDRVVdiState *)bs->opaque;
+@@ -300,6 +301,10 @@ static int vdi_check(BlockDriverState *bs, BdrvCheckResult *res)
+     uint32_t *bmap;
+     logout("\n");
+ 
++    if (fix) {
++        return -ENOTSUP;
++    }
++
+     bmap = g_malloc(s->header.blocks_in_image * sizeof(uint32_t));
+     memset(bmap, 0xff, s->header.blocks_in_image * sizeof(uint32_t));
+ 
+diff --git a/block_int.h b/block_int.h
+index 3489a54..fb2a19f 100644
+--- a/block_int.h
++++ b/block_int.h
+@@ -205,7 +205,8 @@ struct BlockDriver {
+      * Returns 0 for completed check, -errno for internal errors.
+      * The check results are stored in result.
+      */
+-    int (*bdrv_check)(BlockDriverState* bs, BdrvCheckResult *result);
++    int (*bdrv_check)(BlockDriverState* bs, BdrvCheckResult *result,
++        BdrvCheckMode fix);
+ 
+     void (*bdrv_debug_event)(BlockDriverState *bs, BlkDebugEvent event);
+ 
+diff --git a/qemu-img-cmds.hx b/qemu-img-cmds.hx
+index 432777f..304d081 100644
+--- a/qemu-img-cmds.hx
++++ b/qemu-img-cmds.hx
+@@ -10,9 +10,9 @@ STEXI
+ STEXI
+ 
+ DEF("check", img_check,
+-    "check [-f fmt] filename")
++    "check [-f fmt] [-r [leaks | all]] filename")
+ STEXI
+-@item check [-f @var{fmt}] @var{filename}
++@item check [-f @var{fmt}] [-r [leaks | all]] @var{filename}
+ ETEXI
+ 
+ DEF("create", img_create,
+diff --git a/qemu-img.c b/qemu-img.c
+index c36a0ce..40afeff 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -91,6 +91,12 @@ static void help(void)
+            "  '-S' indicates the consecutive number of bytes that must contain only zeros\n"
+            "       for qemu-img to create a sparse image during conversion\n"
+            "\n"
++           "Parameters to check subcommand:\n"
++           "  '-r' tries to repair any inconsistencies that are found during the check.\n"
++           "       '-r leaks' repairs only cluster leaks, whereas '-r all' fixes all\n"
++           "       kinds of errors, with a higher risk of choosing the wrong fix or\n"
++           "       hiding corruption that has already occurred.\n"
++           "\n"
+            "Parameters to snapshot subcommand:\n"
+            "  'snapshot' is the name of the snapshot to create, apply or delete\n"
+            "  '-a' applies a snapshot (revert disk to saved state)\n"
+@@ -395,10 +401,12 @@ static int img_check(int argc, char **argv)
+     const char *filename, *fmt;
+     BlockDriverState *bs;
+     BdrvCheckResult result;
++    int fix = 0;
++    int flags = BDRV_O_FLAGS;
+ 
+     fmt = NULL;
+     for(;;) {
+-        c = getopt(argc, argv, "f:h");
++        c = getopt(argc, argv, "f:hr:");
+         if (c == -1) {
+             break;
+         }
+@@ -410,6 +418,17 @@ static int img_check(int argc, char **argv)
+         case 'f':
+             fmt = optarg;
+             break;
++        case 'r':
++            flags |= BDRV_O_RDWR;
++
++            if (!strcmp(optarg, "leaks")) {
++                fix = BDRV_FIX_LEAKS;
++            } else if (!strcmp(optarg, "all")) {
++                fix = BDRV_FIX_LEAKS | BDRV_FIX_ERRORS;
++            } else {
++                help();
++            }
++            break;
+         }
+     }
+     if (optind >= argc) {
+@@ -417,11 +436,11 @@ static int img_check(int argc, char **argv)
+     }
+     filename = argv[optind++];
+ 
+-    bs = bdrv_new_open(filename, fmt, BDRV_O_FLAGS);
++    bs = bdrv_new_open(filename, fmt, flags);
+     if (!bs) {
+         return 1;
+     }
+-    ret = bdrv_check(bs, &result);
++    ret = bdrv_check(bs, &result, fix);
+ 
+     if (ret == -ENOTSUP) {
+         bdrv_delete(bs);
+diff --git a/qemu-img.texi b/qemu-img.texi
+index 02ffdd0..20ac0eb 100644
+--- a/qemu-img.texi
++++ b/qemu-img.texi
+@@ -70,10 +70,15 @@ lists all snapshots in the given image
+ Command description:
+ 
+ @table @option
+-@item check [-f @var{fmt}] @var{filename}
++@item check [-f @var{fmt}] [-r [leaks | all]] @var{filename}
+ 
+ Perform a consistency check on the disk image @var{filename}.
+ 
++If @code{-r} is specified, qemu-img tries to repair any inconsistencies found
++during the check. @code{-r leaks} repairs only cluster leaks, whereas
++@code{-r all} fixes all kinds of errors, with a higher risk of choosing the
++wrong fix or hiding corruption that has already occured.
++
+ Only the formats @code{qcow2}, @code{qed} and @code{vdi} support
+ consistency checks.
+ 
+-- 
+1.7.11.7
+

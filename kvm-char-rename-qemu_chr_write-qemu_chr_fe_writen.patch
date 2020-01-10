@@ -1,0 +1,422 @@
+From 3c9004d652a52280d1b8cc65fa4d48fb3672168a Mon Sep 17 00:00:00 2001
+Message-Id: <3c9004d652a52280d1b8cc65fa4d48fb3672168a.1368111913.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:17:48 +0200
+Subject: [PATCH 14/65] char: rename qemu_chr_write() -> qemu_chr_fe_write()
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <7c5741f976c193a18aac27921161777f97b49931.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50792
+O-Subject: [RHEL6.5 qemu-kvm PATCH 14/65] char: rename qemu_chr_write() -> qemu_chr_fe_write()
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 2cc6e0a14210d2e80173ec6b4611e7e3c50c2cce)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	hw/etraxfs_ser.c
+	hw/grlib_apbuart.c
+	hw/lm32_juart.c
+	hw/lm32_uart.c
+	hw/milkymist-uart.c
+	hw/spapr_vty.c
+	hw/strongarm.c
+	hw/usb-serial.c
+	hw/virtio-console.c
+	qemu-char.h
+	usb-redir.c
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ gdbstub.c               | 2 +-
+ hw/ccid-card-passthru.c | 4 ++--
+ hw/debugcon.c           | 2 +-
+ hw/escc.c               | 2 +-
+ hw/etraxfs_ser.c        | 2 +-
+ hw/mcf_uart.c           | 2 +-
+ hw/omap2.c              | 6 +++---
+ hw/parallel.c           | 2 +-
+ hw/pl011.c              | 2 +-
+ hw/pxa2xx.c             | 2 +-
+ hw/serial.c             | 2 +-
+ hw/sh_serial.c          | 2 +-
+ hw/syborg_serial.c      | 4 ++--
+ hw/testdev.c            | 2 +-
+ hw/usb-serial.c         | 2 +-
+ hw/virtio-console.c     | 2 +-
+ hw/xen_console.c        | 2 +-
+ hw/xilinx_uartlite.c    | 2 +-
+ monitor.c               | 2 +-
+ qemu-char.c             | 4 ++--
+ qemu-char.h             | 2 +-
+ slirp/slirp.c           | 2 +-
+ usb-redir.c             | 2 +-
+ 23 files changed, 28 insertions(+), 28 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ gdbstub.c               | 2 +-
+ hw/ccid-card-passthru.c | 4 ++--
+ hw/debugcon.c           | 2 +-
+ hw/escc.c               | 2 +-
+ hw/etraxfs_ser.c        | 2 +-
+ hw/mcf_uart.c           | 2 +-
+ hw/omap2.c              | 6 +++---
+ hw/parallel.c           | 2 +-
+ hw/pl011.c              | 2 +-
+ hw/pxa2xx.c             | 2 +-
+ hw/serial.c             | 2 +-
+ hw/sh_serial.c          | 2 +-
+ hw/syborg_serial.c      | 4 ++--
+ hw/testdev.c            | 2 +-
+ hw/usb-serial.c         | 2 +-
+ hw/virtio-console.c     | 2 +-
+ hw/xen_console.c        | 2 +-
+ hw/xilinx_uartlite.c    | 2 +-
+ monitor.c               | 2 +-
+ qemu-char.c             | 4 ++--
+ qemu-char.h             | 2 +-
+ slirp/slirp.c           | 2 +-
+ usb-redir.c             | 2 +-
+ 23 files changed, 28 insertions(+), 28 deletions(-)
+
+diff --git a/gdbstub.c b/gdbstub.c
+index 68c08d7..b36777e 100644
+--- a/gdbstub.c
++++ b/gdbstub.c
+@@ -377,7 +377,7 @@ static void put_buffer(GDBState *s, const uint8_t *buf, int len)
+         }
+     }
+ #else
+-    qemu_chr_write(s->chr, buf, len);
++    qemu_chr_fe_write(s->chr, buf, len);
+ #endif
+ }
+ 
+diff --git a/hw/ccid-card-passthru.c b/hw/ccid-card-passthru.c
+index 5bf75d2..77d2027 100644
+--- a/hw/ccid-card-passthru.c
++++ b/hw/ccid-card-passthru.c
+@@ -72,8 +72,8 @@ static void ccid_card_vscard_send_msg(PassthruState *s,
+     scr_msg_header.type = htonl(type);
+     scr_msg_header.reader_id = htonl(reader_id);
+     scr_msg_header.length = htonl(length);
+-    qemu_chr_write(s->cs, (uint8_t *)&scr_msg_header, sizeof(VSCMsgHeader));
+-    qemu_chr_write(s->cs, payload, length);
++    qemu_chr_fe_write(s->cs, (uint8_t *)&scr_msg_header, sizeof(VSCMsgHeader));
++    qemu_chr_fe_write(s->cs, payload, length);
+ }
+ 
+ static void ccid_card_vscard_send_apdu(PassthruState *s,
+diff --git a/hw/debugcon.c b/hw/debugcon.c
+index 5ee6821..c9ee6d9 100644
+--- a/hw/debugcon.c
++++ b/hw/debugcon.c
+@@ -51,7 +51,7 @@ static void debugcon_ioport_write(void *opaque, uint32_t addr, uint32_t val)
+     printf("debugcon: write addr=0x%04x val=0x%02x\n", addr, val);
+ #endif
+ 
+-    qemu_chr_write(s->chr, &ch, 1);
++    qemu_chr_fe_write(s->chr, &ch, 1);
+ }
+ 
+ 
+diff --git a/hw/escc.c b/hw/escc.c
+index 0b20aea..bab1fe9 100644
+--- a/hw/escc.c
++++ b/hw/escc.c
+@@ -570,7 +570,7 @@ static void escc_mem_writeb(void *opaque, target_phys_addr_t addr, uint32_t val)
+         s->tx = val;
+         if (s->wregs[W_TXCTRL2] & TXCTRL2_TXEN) { // tx enabled
+             if (s->chr)
+-                qemu_chr_write(s->chr, &s->tx, 1);
++                qemu_chr_fe_write(s->chr, &s->tx, 1);
+             else if (s->type == kbd && !s->disabled) {
+                 handle_kbd_command(s, val);
+             }
+diff --git a/hw/etraxfs_ser.c b/hw/etraxfs_ser.c
+index e1f9615..4687148 100644
+--- a/hw/etraxfs_ser.c
++++ b/hw/etraxfs_ser.c
+@@ -102,7 +102,7 @@ ser_writel (void *opaque, target_phys_addr_t addr, uint32_t value)
+     switch (addr)
+     {
+         case RW_DOUT:
+-            qemu_chr_write(s->chr, &ch, 1);
++            qemu_chr_fe_write(s->chr, &ch, 1);
+             s->regs[R_INTR] |= 1;
+             s->pending_tx = 1;
+             s->regs[addr] = value;
+diff --git a/hw/mcf_uart.c b/hw/mcf_uart.c
+index d16bac7..57b28c8 100644
+--- a/hw/mcf_uart.c
++++ b/hw/mcf_uart.c
+@@ -110,7 +110,7 @@ static void mcf_uart_do_tx(mcf_uart_state *s)
+ {
+     if (s->tx_enabled && (s->sr & MCF_UART_TxEMP) == 0) {
+         if (s->chr)
+-            qemu_chr_write(s->chr, (unsigned char *)&s->tb, 1);
++            qemu_chr_fe_write(s->chr, (unsigned char *)&s->tb, 1);
+         s->sr |= MCF_UART_TxEMP;
+     }
+     if (s->tx_enabled) {
+diff --git a/hw/omap2.c b/hw/omap2.c
+index f26fb9f..7965765 100644
+--- a/hw/omap2.c
++++ b/hw/omap2.c
+@@ -2125,14 +2125,14 @@ static void omap_sti_fifo_write(void *opaque, target_phys_addr_t addr,
+ 
+     if (ch == STI_TRACE_CONTROL_CHANNEL) {
+         /* Flush channel <i>value</i>.  */
+-        qemu_chr_write(s->chr, (const uint8_t *) "\r", 1);
++        qemu_chr_fe_write(s->chr, (const uint8_t *) "\r", 1);
+     } else if (ch == STI_TRACE_CONSOLE_CHANNEL || 1) {
+         if (value == 0xc0 || value == 0xc3) {
+             /* Open channel <i>ch</i>.  */
+         } else if (value == 0x00)
+-            qemu_chr_write(s->chr, (const uint8_t *) "\n", 1);
++            qemu_chr_fe_write(s->chr, (const uint8_t *) "\n", 1);
+         else
+-            qemu_chr_write(s->chr, &byte, 1);
++            qemu_chr_fe_write(s->chr, &byte, 1);
+     }
+ }
+ 
+diff --git a/hw/parallel.c b/hw/parallel.c
+index 6270b53..198fef1 100644
+--- a/hw/parallel.c
++++ b/hw/parallel.c
+@@ -120,7 +120,7 @@ parallel_ioport_write_sw(void *opaque, uint32_t addr, uint32_t val)
+             if (val & PARA_CTR_STROBE) {
+                 s->status &= ~PARA_STS_BUSY;
+                 if ((s->control & PARA_CTR_STROBE) == 0)
+-                    qemu_chr_write(s->chr, &s->dataw, 1);
++                    qemu_chr_fe_write(s->chr, &s->dataw, 1);
+             } else {
+                 if (s->control & PARA_CTR_INTEN) {
+                     s->irq_pending = 1;
+diff --git a/hw/pl011.c b/hw/pl011.c
+index 02cf84a..31f7905 100644
+--- a/hw/pl011.c
++++ b/hw/pl011.c
+@@ -133,7 +133,7 @@ static void pl011_write(void *opaque, target_phys_addr_t offset,
+         /* ??? Check if transmitter is enabled.  */
+         ch = value;
+         if (s->chr)
+-            qemu_chr_write(s->chr, &ch, 1);
++            qemu_chr_fe_write(s->chr, &ch, 1);
+         s->int_level |= PL011_INT_TX;
+         pl011_update(s);
+         break;
+diff --git a/hw/pxa2xx.c b/hw/pxa2xx.c
+index 8be207a..78b5e25 100644
+--- a/hw/pxa2xx.c
++++ b/hw/pxa2xx.c
+@@ -1896,7 +1896,7 @@ static void pxa2xx_fir_write(void *opaque, target_phys_addr_t addr,
+         else
+             ch = ~value;
+         if (s->chr && s->enable && (s->control[0] & (1 << 3)))	/* TXE */
+-            qemu_chr_write(s->chr, &ch, 1);
++            qemu_chr_fe_write(s->chr, &ch, 1);
+         break;
+     case ICSR0:
+         s->status[0] &= ~(value & 0x66);
+diff --git a/hw/serial.c b/hw/serial.c
+index 3edd6fa..f490819 100644
+--- a/hw/serial.c
++++ b/hw/serial.c
+@@ -320,7 +320,7 @@ static void serial_xmit(void *opaque)
+     if (s->mcr & UART_MCR_LOOP) {
+         /* in loopback mode, say that we just received a char */
+         serial_receive1(s, &s->tsr, 1);
+-    } else if (qemu_chr_write(s->chr, &s->tsr, 1) != 1) {
++    } else if (qemu_chr_fe_write(s->chr, &s->tsr, 1) != 1) {
+         if ((s->tsr_retry > 0) && (s->tsr_retry <= MAX_XMIT_RETRY)) {
+             s->tsr_retry++;
+             qemu_mod_timer(s->transmit_timer,  new_xmit_ts + s->char_transmit_time);
+diff --git a/hw/sh_serial.c b/hw/sh_serial.c
+index 2447b91..ae4b75c 100644
+--- a/hw/sh_serial.c
++++ b/hw/sh_serial.c
+@@ -105,7 +105,7 @@ static void sh_serial_ioport_write(void *opaque, uint32_t offs, uint32_t val)
+     case 0x0c: /* FTDR / TDR */
+         if (s->chr) {
+             ch = val;
+-            qemu_chr_write(s->chr, &ch, 1);
++            qemu_chr_fe_write(s->chr, &ch, 1);
+ 	}
+ 	s->dr = val;
+ 	s->flags &= ~SH_SERIAL_FLAG_TDE;
+diff --git a/hw/syborg_serial.c b/hw/syborg_serial.c
+index 8c42956..36359f6 100644
+--- a/hw/syborg_serial.c
++++ b/hw/syborg_serial.c
+@@ -119,7 +119,7 @@ static void do_dma_tx(SyborgSerialState *s, uint32_t count)
+         /* optimize later. Now, 1 byte per iteration */
+         while (count--) {
+             cpu_physical_memory_read(s->dma_tx_ptr, &ch, 1);
+-            qemu_chr_write(s->chr, &ch, 1);
++            qemu_chr_fe_write(s->chr, &ch, 1);
+             s->dma_tx_ptr++;
+         }
+     } else {
+@@ -203,7 +203,7 @@ static void syborg_serial_write(void *opaque, target_phys_addr_t offset,
+     case SERIAL_DATA:
+         ch = value;
+         if (s->chr)
+-            qemu_chr_write(s->chr, &ch, 1);
++            qemu_chr_fe_write(s->chr, &ch, 1);
+         break;
+     case SERIAL_INT_ENABLE:
+         s->int_enable = value;
+diff --git a/hw/testdev.c b/hw/testdev.c
+index ac5b9cd..55e4e36 100644
+--- a/hw/testdev.c
++++ b/hw/testdev.c
+@@ -13,7 +13,7 @@ static void test_device_serial_write(void *opaque, uint32_t addr, uint32_t data)
+     uint8_t buf[1] = { data };
+ 
+     if (dev->chr) {
+-        qemu_chr_write(dev->chr, buf, 1);
++        qemu_chr_fe_write(dev->chr, buf, 1);
+     }
+ }
+ 
+diff --git a/hw/usb-serial.c b/hw/usb-serial.c
+index 2979c9d..2a30ee3 100644
+--- a/hw/usb-serial.c
++++ b/hw/usb-serial.c
+@@ -369,7 +369,7 @@ static int usb_serial_handle_data(USBDevice *dev, USBPacket *p)
+     case USB_TOKEN_OUT:
+         if (devep != 2)
+             goto fail;
+-        qemu_chr_write(s->cs, data, len);
++        qemu_chr_fe_write(s->cs, data, len);
+         break;
+ 
+     case USB_TOKEN_IN:
+diff --git a/hw/virtio-console.c b/hw/virtio-console.c
+index b0f5c07..08e8f09 100644
+--- a/hw/virtio-console.c
++++ b/hw/virtio-console.c
+@@ -30,7 +30,7 @@ static ssize_t flush_buf(VirtIOSerialPort *port, const uint8_t *buf, size_t len)
+         /* If there's no backend, we can just say we consumed all data. */
+         return len;
+     }
+-    ret = qemu_chr_write(vcon->chr, buf, len);
++    ret = qemu_chr_fe_write(vcon->chr, buf, len);
+     if (ret < 0 && ret != -EAGAIN) {
+         /*
+          * Ideally we'd get a better error code than just -1, but
+diff --git a/hw/xen_console.c b/hw/xen_console.c
+index d2261f4..c91a7c6 100644
+--- a/hw/xen_console.c
++++ b/hw/xen_console.c
+@@ -157,7 +157,7 @@ static void xencons_send(struct XenConsole *con)
+ 
+     size = con->buffer.size - con->buffer.consumed;
+     if (con->chr)
+-        len = qemu_chr_write(con->chr, con->buffer.data + con->buffer.consumed,
++        len = qemu_chr_fe_write(con->chr, con->buffer.data + con->buffer.consumed,
+                              size);
+     else
+         len = size;
+diff --git a/hw/xilinx_uartlite.c b/hw/xilinx_uartlite.c
+index adab759..3f69e72 100644
+--- a/hw/xilinx_uartlite.c
++++ b/hw/xilinx_uartlite.c
+@@ -129,7 +129,7 @@ uart_writel (void *opaque, target_phys_addr_t addr, uint32_t value)
+ 
+         case R_TX:
+             if (s->chr)
+-                qemu_chr_write(s->chr, &ch, 1);
++                qemu_chr_fe_write(s->chr, &ch, 1);
+ 
+             s->regs[addr] = value;
+ 
+diff --git a/monitor.c b/monitor.c
+index d9204e4..6625a46 100644
+--- a/monitor.c
++++ b/monitor.c
+@@ -267,7 +267,7 @@ static int monitor_read_password(Monitor *mon, ReadLineFunc *readline_func,
+ void monitor_flush(Monitor *mon)
+ {
+     if (mon && mon->outbuf_index != 0 && !mon->mux_out) {
+-        qemu_chr_write(mon->chr, mon->outbuf, mon->outbuf_index);
++        qemu_chr_fe_write(mon->chr, mon->outbuf, mon->outbuf_index);
+         mon->outbuf_index = 0;
+     }
+ }
+diff --git a/qemu-char.c b/qemu-char.c
+index c19ad8b..8e8befa 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -140,7 +140,7 @@ void qemu_chr_generic_open(CharDriverState *s)
+     }
+ }
+ 
+-int qemu_chr_write(CharDriverState *s, const uint8_t *buf, int len)
++int qemu_chr_fe_write(CharDriverState *s, const uint8_t *buf, int len)
+ {
+     return s->chr_write(s, buf, len);
+ }
+@@ -181,7 +181,7 @@ void qemu_chr_printf(CharDriverState *s, const char *fmt, ...)
+     va_list ap;
+     va_start(ap, fmt);
+     vsnprintf(buf, sizeof(buf), fmt, ap);
+-    qemu_chr_write(s, (uint8_t *)buf, strlen(buf));
++    qemu_chr_fe_write(s, (uint8_t *)buf, strlen(buf));
+     va_end(ap);
+ }
+ 
+diff --git a/qemu-char.h b/qemu-char.h
+index 71222c7..e0eb08a 100644
+--- a/qemu-char.h
++++ b/qemu-char.h
+@@ -85,7 +85,7 @@ void qemu_chr_guest_close(struct CharDriverState *chr);
+ void qemu_chr_set_echo(struct CharDriverState *chr, bool echo);
+ void qemu_chr_close(CharDriverState *chr);
+ void qemu_chr_printf(CharDriverState *s, const char *fmt, ...);
+-int qemu_chr_write(CharDriverState *s, const uint8_t *buf, int len);
++int qemu_chr_fe_write(CharDriverState *s, const uint8_t *buf, int len);
+ void qemu_chr_send_event(CharDriverState *s, int event);
+ void qemu_chr_add_handlers(CharDriverState *s,
+                            IOCanRWHandler *fd_can_read,
+diff --git a/slirp/slirp.c b/slirp/slirp.c
+index 0b1eb7b..06eda06 100644
+--- a/slirp/slirp.c
++++ b/slirp/slirp.c
+@@ -800,7 +800,7 @@ int slirp_add_exec(Slirp *slirp, int do_pty, const void *args,
+ ssize_t slirp_send(struct socket *so, const void *buf, size_t len, int flags)
+ {
+ 	if (so->s == -1 && so->extra) {
+-		qemu_chr_write(so->extra, buf, len);
++		qemu_chr_fe_write(so->extra, buf, len);
+ 		return len;
+ 	}
+ 
+diff --git a/usb-redir.c b/usb-redir.c
+index 93c0f19..3d028d8 100644
+--- a/usb-redir.c
++++ b/usb-redir.c
+@@ -252,7 +252,7 @@ static int usbredir_write(void *priv, uint8_t *data, int count)
+     if (!runstate_check(RUN_STATE_RUNNING)) {
+         return 0;
+     }
+-    return qemu_chr_write(dev->cs, data, count);
++    return qemu_chr_fe_write(dev->cs, data, count);
+ }
+ 
+ /*
+-- 
+1.7.11.7
+

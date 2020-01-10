@@ -1,0 +1,54 @@
+From 3ce85e10bb1d33be6c077108e66c30632993c685 Mon Sep 17 00:00:00 2001
+Message-Id: <3ce85e10bb1d33be6c077108e66c30632993c685.1380723420.git.minovotn@redhat.com>
+In-Reply-To: <68de4f1434a46df7d1b6e59cb348f11c92dbf17c.1380723420.git.minovotn@redhat.com>
+References: <68de4f1434a46df7d1b6e59cb348f11c92dbf17c.1380723420.git.minovotn@redhat.com>
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Tue, 1 Oct 2013 12:27:08 +0200
+Subject: [PATCH 12/13] block/get_block_status: set *pnum = 0 on error
+
+RH-Author: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: <1380630429-29077-8-git-send-email-pbonzini@redhat.com>
+Patchwork-id: 54622
+O-Subject: [RHEL 6.5 qemu-kvm PATCH 7/8] block/get_block_status: set *pnum = 0 on error
+Bugzilla: 1010610
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Eduardo Habkost <ehabkost@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: Peter Lieven <pl@kamp.de>
+
+if the call is invoked through bdrv_is_allocated the caller might
+expect *pnum = 0 on error. however, a new implementation of
+bdrv_get_block_status might only return a negative exit value on
+error while keeping *pnum untouched.
+
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Peter Lieven <pl@kamp.de>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 1f9db2243c1b987c834fe559a8e73b3178f50c2b)
+---
+ block.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/block.c b/block.c
+index 660cb44..992cc50 100644
+--- a/block.c
++++ b/block.c
+@@ -2783,6 +2783,7 @@ static int64_t coroutine_fn bdrv_co_get_block_status(BlockDriverState *bs,
+ 
+     ret = bs->drv->bdrv_co_get_block_status(bs, sector_num, nb_sectors, pnum);
+     if (ret < 0) {
++        *pnum = 0;
+         return ret;
+     }
+ 
+-- 
+1.7.11.7
+

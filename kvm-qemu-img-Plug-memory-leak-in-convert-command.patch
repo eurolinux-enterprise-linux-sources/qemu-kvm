@@ -1,0 +1,48 @@
+From 7558debc4ca497de15246ffa72ea143b0b23a52d Mon Sep 17 00:00:00 2001
+Message-Id: <7558debc4ca497de15246ffa72ea143b0b23a52d.1425657843.git.jen@redhat.com>
+In-Reply-To: <f6cf12f0d166001c7958ddc904eff181f03da5e4.1425657843.git.jen@redhat.com>
+References: <f6cf12f0d166001c7958ddc904eff181f03da5e4.1425657843.git.jen@redhat.com>
+From: Markus Armbruster <armbru@redhat.com>
+Date: Wed, 28 May 2014 11:17:07 +0200
+Subject: [CHANGE 05/11] qemu-img: Plug memory leak in convert command
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+Introduced in commit 661a0f7.  Spotted by Coverity.
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Benoit Canet <benoit@irqsave.net>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit bb9cd2ee99f6537c072d5f4bac441717d3cd2bed)
+
+Conflicts:
+	qemu-img.c
+
+RHEL 6: Conflicts because RHEL commit aef3ffd1 contained a bad
+errror_report() conversion for previously backported code. While
+touching this, remove the downstream-only '\n'.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ qemu-img.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/qemu-img.c b/qemu-img.c
+index c12cedb..168cd3e 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -1290,8 +1290,8 @@ static int img_convert(int argc, char **argv)
+     flags = BDRV_O_RDWR;
+     ret = bdrv_parse_cache_flags(cache, &flags);
+     if (ret < 0) {
+-        error_report("Invalid cache option: %s\n", cache);
+-        return -1;
++        error_report("Invalid cache option: %s", cache);
++        goto out;
+     }
+ 
+     out_bs = bdrv_new_open(out_filename, out_fmt, flags, true);
+-- 
+2.1.0
+

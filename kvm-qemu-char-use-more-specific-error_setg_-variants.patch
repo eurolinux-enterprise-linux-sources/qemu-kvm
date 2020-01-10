@@ -1,0 +1,74 @@
+From 8755b8f251eeb190353f95a06bd22aae753ca5c4 Mon Sep 17 00:00:00 2001
+Message-Id: <8755b8f251eeb190353f95a06bd22aae753ca5c4.1376408877.git.minovotn@redhat.com>
+In-Reply-To: <823d94e906b2aeecd2c60bc9f19ca8948a756f27.1376408877.git.minovotn@redhat.com>
+References: <823d94e906b2aeecd2c60bc9f19ca8948a756f27.1376408877.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 30 Jul 2013 11:35:22 +0200
+Subject: [PATCH 04/18] qemu-char: use more specific error_setg_* variants
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1375184130-11076-5-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52783
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 04/12] qemu-char: use more specific error_setg_* variants
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Michael Tokarev <mjt@tls.msk.ru>
+(cherry picked from commit 20c397607cb54905f452921259b4baa9c8a1d008)
+
+[ rhel6: add error_setg_file_open ]
+---
+ error.h     |    4 ++++
+ qemu-char.c |    4 ++--
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ error.h     | 4 ++++
+ qemu-char.c | 4 ++--
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/error.h b/error.h
+index 29fe535..2b0d3d8 100644
+--- a/error.h
++++ b/error.h
+@@ -36,6 +36,10 @@ void error_setg_errno(Error **errp, int os_errno, const char *fmt, ...)
+     __attribute__((format(printf, 3, 4)));
+ void error_setg(Error **errp, const char *fmt, ...)
+     __attribute__((format(printf, 2, 3)));
++static inline void error_setg_file_open(Error **errp, int os_errno, const char *filename)
++{
++    error_setg_errno(errp, os_errno, "Could not open '%s'", filename);
++}
+ 
+ /**
+  * Returns true if an indirect pointer to an error is pointing to a valid
+diff --git a/qemu-char.c b/qemu-char.c
+index bd814fd..d3470bb 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -2430,7 +2430,7 @@ static CharDriverState *qemu_chr_open_socket_fd(int fd, bool do_nodelay,
+ 
+     memset(&ss, 0, ss_len);
+     if (getsockname(fd, (struct sockaddr *) &ss, &ss_len) != 0) {
+-        error_setg(errp, "getsockname: %s", strerror(errno));
++        error_setg_errno(errp, errno, "getsockname");
+         return NULL;
+     }
+ 
+@@ -3122,7 +3122,7 @@ static int qmp_chardev_open_file_source(char *src, int flags,
+ 
+     TFR(fd = qemu_open(src, flags, 0666));
+     if (fd == -1) {
+-        error_setg(errp, "open %s: %s", src, strerror(errno));
++        error_setg_file_open(errp, errno, src);
+     }
+     return fd;
+ }
+-- 
+1.7.11.7
+

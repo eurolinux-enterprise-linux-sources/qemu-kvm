@@ -1,0 +1,83 @@
+From 39e6c7158e4fc340742753a0538c0b0cbf95564c Mon Sep 17 00:00:00 2001
+Message-Id: <39e6c7158e4fc340742753a0538c0b0cbf95564c.1368098699.git.minovotn@redhat.com>
+In-Reply-To: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+References: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+From: Alex Williamson <alex.williamson@redhat.com>
+Date: Fri, 19 Apr 2013 22:16:39 +0200
+Subject: [PATCH 15/24] pci-assign: Allow to disable MSI perference for host
+ IRQ
+
+RH-Author: Alex Williamson <alex.williamson@redhat.com>
+Message-id: <20130419221639.15531.36622.stgit@bling.home>
+Patchwork-id: 50708
+O-Subject: [RHEL6.5 qemu-kvm PATCH 2/2] pci-assign: Allow to disable MSI perference for host IRQ
+Bugzilla: 925170
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Don Dutile <ddutile@redhat.com>
+
+From: Jan Kiszka <jan.kiszka@siemens.com>
+
+Bugzilla: 925170
+
+Some devices (e.g. the ath9k) claim to support MSI but actually do not
+work when this is enabled. We must not blindly switch such devices to
+MSI but rather provide the user a way to pass control back to the
+guest driver. This can be done by turning the new property "prefer_msi"
+off (default remains on).
+
+Signed-off-by: Jan Kiszka <jan.kiszka@siemens.com>
+Signed-off-by: Marcelo Tosatti <mtosatti@redhat.com>
+(cherry picked from commit 2e04af7e37d7d03890c0fcb01802792d37d8bc5e)
+---
+ hw/device-assignment.c |    5 ++++-
+ hw/device-assignment.h |    2 ++
+ 2 files changed, 6 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/device-assignment.c | 5 ++++-
+ hw/device-assignment.h | 2 ++
+ 2 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/hw/device-assignment.c b/hw/device-assignment.c
+index 09505d4..9d8d39e 100644
+--- a/hw/device-assignment.c
++++ b/hw/device-assignment.c
+@@ -990,7 +990,8 @@ static int assign_irq(AssignedDevice *dev)
+     }
+ 
+     assigned_irq_data.flags = KVM_DEV_IRQ_GUEST_INTX;
+-    if (dev->cap.available & ASSIGNED_DEVICE_CAP_MSI)
++    if (dev->features & ASSIGNED_DEVICE_PREFER_MSI_MASK &&
++        dev->cap.available & ASSIGNED_DEVICE_CAP_MSI)
+         assigned_irq_data.flags |= KVM_DEV_IRQ_HOST_MSI;
+     else
+         assigned_irq_data.flags |= KVM_DEV_IRQ_HOST_INTX;
+@@ -2023,6 +2024,8 @@ static PCIDeviceInfo assign_info = {
+         DEFINE_PROP("host", AssignedDevice, host, qdev_prop_hostaddr, PCIHostDevice),
+         DEFINE_PROP_BIT("iommu", AssignedDevice, features,
+                         ASSIGNED_DEVICE_USE_IOMMU_BIT, true),
++        DEFINE_PROP_BIT("prefer_msi", AssignedDevice, features,
++                        ASSIGNED_DEVICE_PREFER_MSI_BIT, true),
+         DEFINE_PROP_INT32("bootindex", AssignedDevice, bootindex, -1),
+         DEFINE_PROP_STRING("configfd", AssignedDevice, configfd_name),
+         DEFINE_PROP_END_OF_LIST(),
+diff --git a/hw/device-assignment.h b/hw/device-assignment.h
+index 92318c8..cf67673 100644
+--- a/hw/device-assignment.h
++++ b/hw/device-assignment.h
+@@ -82,8 +82,10 @@ typedef struct {
+ } MSIXTableEntry;
+ 
+ #define ASSIGNED_DEVICE_USE_IOMMU_BIT	0
++#define ASSIGNED_DEVICE_PREFER_MSI_BIT	1
+ 
+ #define ASSIGNED_DEVICE_USE_IOMMU_MASK	(1 << ASSIGNED_DEVICE_USE_IOMMU_BIT)
++#define ASSIGNED_DEVICE_PREFER_MSI_MASK	(1 << ASSIGNED_DEVICE_PREFER_MSI_BIT)
+ 
+ typedef struct AssignedDevice {
+     PCIDevice dev;
+-- 
+1.7.11.7
+

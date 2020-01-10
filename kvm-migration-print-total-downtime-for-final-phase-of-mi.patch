@@ -1,0 +1,113 @@
+From b9ea3367ce6fdb6751aaae7beb49c686f6691f60 Mon Sep 17 00:00:00 2001
+Message-Id: <b9ea3367ce6fdb6751aaae7beb49c686f6691f60.1376317668.git.minovotn@redhat.com>
+In-Reply-To: <5877c7fdc54ad8b9608982a08ce5015eb646708a.1376317668.git.minovotn@redhat.com>
+References: <5877c7fdc54ad8b9608982a08ce5015eb646708a.1376317668.git.minovotn@redhat.com>
+From: Orit Wasserman <owasserm@redhat.com>
+Date: Thu, 8 Aug 2013 17:12:30 +0200
+Subject: [PATCH 2/4] migration: print total downtime for final phase of
+ migration
+
+RH-Author: Orit Wasserman <owasserm@redhat.com>
+Message-id: <1375981950-18632-3-git-send-email-owasserm@redhat.com>
+Patchwork-id: 53112
+O-Subject: [RHEL6.5 qemu-kvm PATCH v3 2/2] migration: print total downtime for final phase of migration
+Bugzilla: 981235
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+upstream: manual backport of 9c5a9fcf5399450a873e7460b397a89447c7ef11
+
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+Signed-off-by: Orit Wasserman <owasserm@redhat.com>
+---
+ migration.c     | 10 ++++++++++
+ migration.h     |  1 +
+ qemu-monitor.hx |  3 +++
+ 3 files changed, 14 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ migration.c     | 10 ++++++++++
+ migration.h     |  1 +
+ qemu-monitor.hx |  3 +++
+ 3 files changed, 14 insertions(+)
+
+diff --git a/migration.c b/migration.c
+index bbb877b..0d7fa00 100644
+--- a/migration.c
++++ b/migration.c
+@@ -235,6 +235,11 @@ void do_info_migrate_print(Monitor *mon, const QObject *data)
+                        qdict_get_int(qdict, "total-time"));
+     }
+ 
++    if (qdict_haskey(qdict, "downtime")) {
++        monitor_printf(mon, "downtime: %" PRIu64 " milliseconds\n",
++                       qdict_get_int(qdict, "downtime"));
++    }
++
+     if (qdict_haskey(qdict, "ram")) {
+         migrate_print_status(mon, "ram", qdict);
+     }
+@@ -288,6 +293,9 @@ void do_info_migrate(Monitor *mon, QObject **ret_data)
+             qdict_put(qdict, "total-time",
+                       qint_from_int(s->total_time));
+ 
++            qdict_put(qdict, "downtime",
++                      qint_from_int(s->downtime));
++
+             migrate_put_status(qdict, "ram", ram_bytes_transferred(),
+                                ram_bytes_remaining(),
+                                ram_bytes_total());
+@@ -427,6 +435,7 @@ void migrate_fd_put_ready(void *opaque)
+         migrate_fd_error(s);
+     } else if (ret == 1) {
+         int old_vm_running = runstate_is_running();
++        int64_t start_time = qemu_get_clock(rt_clock);
+ 
+         DPRINTF("done iterating\n");
+         qemu_system_wakeup_request(QEMU_WAKEUP_REASON_OTHER);
+@@ -455,6 +464,7 @@ void migrate_fd_put_ready(void *opaque)
+             s->state = MIG_STATE_COMPLETED;
+             runstate_set(RUN_STATE_POSTMIGRATE);
+             s->mig_state.total_time = end_time - s->mig_state.total_time;
++            s->mig_state.downtime = end_time - start_time;
+         }
+         notifier_list_notify(&migration_state_notifiers, NULL);
+     }
+diff --git a/migration.h b/migration.h
+index 582717b..c6e1ca7 100644
+--- a/migration.h
++++ b/migration.h
+@@ -36,6 +36,7 @@ struct MigrationState
+     int shared;
+ 
+     int64_t total_time;
++    int64_t downtime;
+ };
+ 
+ typedef struct FdMigrationState FdMigrationState;
+diff --git a/qemu-monitor.hx b/qemu-monitor.hx
+index 029f057..8e974b1 100644
+--- a/qemu-monitor.hx
++++ b/qemu-monitor.hx
+@@ -3209,6 +3209,8 @@ The main json-object contains the following:
+ - "total-time": total amount of ms since migration started.  If
+                 migration has ended, it returns the total migration
+                 time (json-int)
++- "downtime": only present when migration has finished correctly
++              total amount in ms for downtime that happened (json-int)
+ - "ram": only present if "status" is "active" or "complete", it is a
+          json-object with the following RAM information (in bytes):
+          - "transferred": amount transferred (json-int)
+@@ -3234,6 +3236,7 @@ Examples:
+       "return":{
+          "status": "completed",
+          "total-time": 1215,
++         "downtime":22,
+          "ram":{
+             "transferred":123,
+             "remaining":123,
+-- 
+1.7.11.7
+

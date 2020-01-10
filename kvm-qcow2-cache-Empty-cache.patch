@@ -1,0 +1,85 @@
+From dec299d22f9df4e4eb494c2fad14520dd9c93930 Mon Sep 17 00:00:00 2001
+Message-Id: <dec299d22f9df4e4eb494c2fad14520dd9c93930.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:21:51 -0500
+Subject: [CHANGE 08/42] qcow2-cache: Empty cache
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-9-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64471
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 08/39] qcow2-cache: Empty cache
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1129892
+
+Add a function for emptying a cache, i.e., flushing it and marking all
+elements invalid.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit e7108feaace8e02b3a4bf010448fc2744f753381)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-cache.c | 18 ++++++++++++++++++
+ block/qcow2.h       |  2 ++
+ 2 files changed, 20 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-cache.c | 18 ++++++++++++++++++
+ block/qcow2.h       |  2 ++
+ 2 files changed, 20 insertions(+)
+
+diff --git a/block/qcow2-cache.c b/block/qcow2-cache.c
+index 4a0bf00..b07b970 100644
+--- a/block/qcow2-cache.c
++++ b/block/qcow2-cache.c
+@@ -196,6 +196,24 @@ void qcow2_cache_depends_on_flush(Qcow2Cache *c)
+     c->depends_on_flush = true;
+ }
+ 
++int qcow2_cache_empty(BlockDriverState *bs, Qcow2Cache *c)
++{
++    int ret, i;
++
++    ret = qcow2_cache_flush(bs, c);
++    if (ret < 0) {
++        return ret;
++    }
++
++    for (i = 0; i < c->size; i++) {
++        assert(c->entries[i].ref == 0);
++        c->entries[i].offset = 0;
++        c->entries[i].cache_hits = 0;
++    }
++
++    return 0;
++}
++
+ static int qcow2_cache_find_entry_to_replace(Qcow2Cache *c)
+ {
+     int i;
+diff --git a/block/qcow2.h b/block/qcow2.h
+index 2a71768..10b9c0a 100644
+--- a/block/qcow2.h
++++ b/block/qcow2.h
+@@ -365,6 +365,8 @@ int qcow2_cache_set_dependency(BlockDriverState *bs, Qcow2Cache *c,
+     Qcow2Cache *dependency);
+ void qcow2_cache_depends_on_flush(Qcow2Cache *c);
+ 
++int qcow2_cache_empty(BlockDriverState *bs, Qcow2Cache *c);
++
+ int qcow2_cache_get(BlockDriverState *bs, Qcow2Cache *c, uint64_t offset,
+     void **table);
+ int qcow2_cache_get_empty(BlockDriverState *bs, Qcow2Cache *c, uint64_t offset,
+-- 
+2.1.0
+

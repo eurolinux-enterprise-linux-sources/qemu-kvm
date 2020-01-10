@@ -1,0 +1,55 @@
+From a927a0098f9536f9a4ce3cd0574ec25f3c1a9cf5 Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Wed, 19 Mar 2014 19:24:03 -0500
+Subject: [PATCH 03/20] dump-guest-memory.py: ram_blocks is a QLIST, not a QTAILQ in RHEL-6
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1395257047-25109-4-git-send-email-lersek@redhat.com>
+Patchwork-id: 58147
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 3/7] dump-guest-memory.py: ram_blocks is a QLIST, not a QTAILQ in RHEL-6
+Bugzilla: 826266
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Vitaly Kuznetsov <vkuznets@redhat.com>
+RH-Acked-by: Jeff Nelson <jenelson@redhat.com>
+
+Adapt code that uses "ram_blocks".
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ scripts/dump-guest-memory.py | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ scripts/dump-guest-memory.py |    8 ++++----
+ 1 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/scripts/dump-guest-memory.py b/scripts/dump-guest-memory.py
+index df479c2..e074ea5 100644
+--- a/scripts/dump-guest-memory.py
++++ b/scripts/dump-guest-memory.py
+@@ -109,16 +109,16 @@ shape and this command should mostly work."""
+         self.elf64_ehdr_le = struct.Struct("<%s" % self.ELF64_EHDR)
+         self.elf64_phdr_le = struct.Struct("<%s" % self.ELF64_PHDR)
+ 
+-    def qtailq_foreach(self, head, field_str):
+-        var_p = head["tqh_first"]
++    def qlist_foreach(self, head, field_str):
++        var_p = head["lh_first"]
+         while (var_p != 0):
+             var = var_p.dereference()
+             yield var
+-            var_p = var[field_str]["tqe_next"]
++            var_p = var[field_str]["le_next"]
+ 
+     def qemu_get_ram_block(self, ram_addr):
+         ram_blocks = gdb.parse_and_eval("ram_list.blocks")
+-        for block in self.qtailq_foreach(ram_blocks, "next"):
++        for block in self.qlist_foreach(ram_blocks, "next"):
+             if (ram_addr - block["offset"] < block["length"]):
+                 return block
+         raise gdb.GdbError("Bad ram offset %x" % ram_addr)
+-- 
+1.7.1
+

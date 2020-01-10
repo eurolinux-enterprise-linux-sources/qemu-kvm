@@ -1,0 +1,294 @@
+From ced0c4017f64906bb7808cf3130a955cc8cbe331 Mon Sep 17 00:00:00 2001
+Message-Id: <ced0c4017f64906bb7808cf3130a955cc8cbe331.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:27:49 +0200
+Subject: [PATCH 084/114] qemu-ga: execute hook to quiesce the guest on
+ fsfreeze-freeze/thaw
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-27-git-send-email-lersek@redhat.com>
+Patchwork-id: 51125
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 26/56] qemu-ga: execute hook to quiesce the guest on fsfreeze-freeze/thaw
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+To use the online disk snapshot for online-backup, application-level
+consistency of the snapshot image is required. However, currently the
+guest agent can provide only filesystem-level consistency, and the
+snapshot may contain dirty data, for example, incomplete transactions.
+This patch provides the opportunity to quiesce applications before
+snapshot is taken.
+
+If --fsfreeze-hook option is specified, the hook is executed with
+"freeze" argument before the filesystem is frozen by fsfreeze-freeze
+command. As for fsfreeze-thaw command, the hook is executed with "thaw"
+argument after the filesystem is thawed.
+
+This patch depends on patchset to improve error reporting by Luiz Capitulino:
+  http://lists.gnu.org/archive/html/qemu-devel/2012-11/msg03016.html
+
+Signed-off-by: Tomoki Sekiyama <tomoki.sekiyama.qu@hitachi.com>
+Reviewed-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+*clarified usage in help output
+
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit ec0f694c11e8e0958d727e40e0759ab99e5908d6)
+
+Conflicts:
+
+	qga/main.c
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=911569
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qga/guest-agent-core.h |    1 +
+ qemu-ga.c              |   48 ++++++++++++++++++++++++++++++++-
+ qga/commands-posix.c   |   69 ++++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 117 insertions(+), 1 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-ga.c              | 48 ++++++++++++++++++++++++++++++++++-
+ qga/commands-posix.c   | 69 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ qga/guest-agent-core.h |  1 +
+ 3 files changed, 117 insertions(+), 1 deletion(-)
+
+diff --git a/qemu-ga.c b/qemu-ga.c
+index 7402415..79c8d21 100644
+--- a/qemu-ga.c
++++ b/qemu-ga.c
+@@ -34,6 +34,12 @@
+ #include "qga/service-win32.h"
+ #include <windows.h>
+ #endif
++#ifdef __linux__
++#include <linux/fs.h>
++#ifdef FIFREEZE
++#define CONFIG_FSFREEZE
++#endif
++#endif
+ 
+ #ifndef _WIN32
+ #define QGA_VIRTIO_PATH_DEFAULT "/dev/virtio-ports/org.qemu.guest_agent.0"
+@@ -42,6 +48,9 @@
+ #endif
+ #define QGA_STATEDIR_DEFAULT CONFIG_QEMU_LOCALSTATEDIR "/run"
+ #define QGA_PIDFILE_DEFAULT QGA_STATEDIR_DEFAULT "/qemu-ga.pid"
++#ifdef CONFIG_FSFREEZE
++#define QGA_FSFREEZE_HOOK_DEFAULT CONFIG_QEMU_CONFDIR "/fsfreeze-hook"
++#endif
+ #define QGA_SENTINEL_BYTE 0xFF
+ 
+ struct GAState {
+@@ -64,6 +73,9 @@ struct GAState {
+         const char *log_filepath;
+         const char *pid_filepath;
+     } deferred_options;
++#ifdef CONFIG_FSFREEZE
++    const char *fsfreeze_hook;
++#endif
+ };
+ 
+ struct GAState *ga_state;
+@@ -153,6 +165,16 @@ static void usage(const char *cmd)
+ "                    %s)\n"
+ "  -l, --logfile     set logfile path, logs to stderr by default\n"
+ "  -f, --pidfile     specify pidfile (default is %s)\n"
++#ifdef CONFIG_FSFREEZE
++"  -F, --fsfreeze-hook\n"
++"                    enable fsfreeze hook. Accepts an optional argument that\n"
++"                    specifies script to run on freeze/thaw. Script will be\n"
++"                    called with 'freeze'/'thaw' arguments accordingly.\n"
++"                    (default is %s)\n"
++"                    If using -F with an argument, do not follow -F with a\n"
++"                    space.\n"
++"                    (for example: -F/var/run/fsfreezehook.sh)\n"
++#endif
+ "  -t, --statedir    specify dir to store state information (absolute paths\n"
+ "                    only, default is %s)\n"
+ "  -v, --verbose     log extra debugging information\n"
+@@ -167,6 +189,9 @@ static void usage(const char *cmd)
+ "\n"
+ "Report bugs to <mdroth@linux.vnet.ibm.com>\n"
+     , cmd, QEMU_VERSION, QGA_VIRTIO_PATH_DEFAULT, QGA_PIDFILE_DEFAULT,
++#ifdef CONFIG_FSFREEZE
++    QGA_FSFREEZE_HOOK_DEFAULT,
++#endif
+     QGA_STATEDIR_DEFAULT);
+ }
+ 
+@@ -401,6 +426,13 @@ void ga_unset_frozen(GAState *s)
+     }
+ }
+ 
++#ifdef CONFIG_FSFREEZE
++const char *ga_fsfreeze_hook(GAState *s)
++{
++    return s->fsfreeze_hook;
++}
++#endif
++
+ static void become_daemon(const char *pidfile)
+ {
+ #ifndef _WIN32
+@@ -678,10 +710,13 @@ VOID WINAPI service_main(DWORD argc, TCHAR *argv[])
+ 
+ int main(int argc, char **argv)
+ {
+-    const char *sopt = "hVvdm:p:l:f:b:s:t:";
++    const char *sopt = "hVvdm:p:l:f:F::b:s:t:";
+     const char *method = NULL, *path = NULL;
+     const char *log_filepath = NULL;
+     const char *pid_filepath = QGA_PIDFILE_DEFAULT;
++#ifdef CONFIG_FSFREEZE
++    const char *fsfreeze_hook = NULL;
++#endif
+     const char *state_dir = QGA_STATEDIR_DEFAULT;
+ #ifdef _WIN32
+     const char *service = NULL;
+@@ -691,6 +726,9 @@ int main(int argc, char **argv)
+         { "version", 0, NULL, 'V' },
+         { "logfile", 1, NULL, 'l' },
+         { "pidfile", 1, NULL, 'f' },
++#ifdef CONFIG_FSFREEZE
++        { "fsfreeze-hook", 2, NULL, 'F' },
++#endif
+         { "verbose", 0, NULL, 'v' },
+         { "method", 1, NULL, 'm' },
+         { "path", 1, NULL, 'p' },
+@@ -723,6 +761,11 @@ int main(int argc, char **argv)
+         case 'f':
+             pid_filepath = optarg;
+             break;
++#ifdef CONFIG_FSFREEZE
++        case 'F':
++            fsfreeze_hook = optarg ? optarg : QGA_FSFREEZE_HOOK_DEFAULT;
++            break;
++#endif
+         case 't':
+              state_dir = optarg;
+              break;
+@@ -786,6 +829,9 @@ int main(int argc, char **argv)
+     s = g_malloc0(sizeof(GAState));
+     s->log_level = log_level;
+     s->log_file = stderr;
++#ifdef CONFIG_FSFREEZE
++    s->fsfreeze_hook = fsfreeze_hook;
++#endif
+     g_log_set_default_handler(ga_log, s);
+     g_log_set_fatal_mask(NULL, G_LOG_LEVEL_ERROR);
+     ga_enable_logging(s);
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index ab60e42..d042f07 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -411,6 +411,66 @@ static void build_fs_mount_list(FsMountList *mounts, Error **err)
+ 
+ #if defined(CONFIG_FSFREEZE)
+ 
++typedef enum {
++    FSFREEZE_HOOK_THAW = 0,
++    FSFREEZE_HOOK_FREEZE,
++} FsfreezeHookArg;
++
++const char *fsfreeze_hook_arg_string[] = {
++    "thaw",
++    "freeze",
++};
++
++static void execute_fsfreeze_hook(FsfreezeHookArg arg, Error **err)
++{
++    int status;
++    pid_t pid;
++    const char *hook;
++    const char *arg_str = fsfreeze_hook_arg_string[arg];
++    Error *local_err = NULL;
++
++    hook = ga_fsfreeze_hook(ga_state);
++    if (!hook) {
++        return;
++    }
++    if (access(hook, X_OK) != 0) {
++        error_setg_errno(err, errno, "can't access fsfreeze hook '%s'", hook);
++        return;
++    }
++
++    slog("executing fsfreeze hook with arg '%s'", arg_str);
++    pid = fork();
++    if (pid == 0) {
++        setsid();
++        reopen_fd_to_null(0);
++        reopen_fd_to_null(1);
++        reopen_fd_to_null(2);
++
++        execle(hook, hook, arg_str, NULL, environ);
++        _exit(EXIT_FAILURE);
++    } else if (pid < 0) {
++        error_setg_errno(err, errno, "failed to create child process");
++        return;
++    }
++
++    ga_wait_child(pid, &status, &local_err);
++    if (error_is_set(&local_err)) {
++        error_propagate(err, local_err);
++        return;
++    }
++
++    if (!WIFEXITED(status)) {
++        error_setg(err, "fsfreeze hook has terminated abnormally");
++        return;
++    }
++
++    status = WEXITSTATUS(status);
++    if (status) {
++        error_setg(err, "fsfreeze hook has failed with status %d", status);
++        return;
++    }
++}
++
+ /*
+  * Return status of freeze/thaw
+  */
+@@ -437,6 +497,12 @@ int64_t qmp_guest_fsfreeze_freeze(Error **err)
+ 
+     slog("guest-fsfreeze called");
+ 
++    execute_fsfreeze_hook(FSFREEZE_HOOK_FREEZE, &local_err);
++    if (error_is_set(&local_err)) {
++        error_propagate(err, local_err);
++        return -1;
++    }
++
+     QTAILQ_INIT(&mounts);
+     build_fs_mount_list(&mounts, &local_err);
+     if (error_is_set(&local_err)) {
+@@ -538,6 +604,9 @@ int64_t qmp_guest_fsfreeze_thaw(Error **err)
+ 
+     ga_unset_frozen(ga_state);
+     free_fs_mount_list(&mounts);
++
++    execute_fsfreeze_hook(FSFREEZE_HOOK_THAW, err);
++
+     return i;
+ }
+ 
+diff --git a/qga/guest-agent-core.h b/qga/guest-agent-core.h
+index 49a7abe..c6e8de0 100644
+--- a/qga/guest-agent-core.h
++++ b/qga/guest-agent-core.h
+@@ -34,6 +34,7 @@ void ga_set_response_delimited(GAState *s);
+ bool ga_is_frozen(GAState *s);
+ void ga_set_frozen(GAState *s);
+ void ga_unset_frozen(GAState *s);
++const char *ga_fsfreeze_hook(GAState *s);
+ 
+ #ifndef _WIN32
+ void reopen_fd_to_null(int fd);
+-- 
+1.7.11.7
+

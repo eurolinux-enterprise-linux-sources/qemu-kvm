@@ -1,0 +1,1048 @@
+From d52f6cd9fee9abc8d94aa6629816c28c1226390e Mon Sep 17 00:00:00 2001
+From: Marcel Apfelbaum <marcel.a@redhat.com>
+Date: Thu, 5 Jun 2014 07:09:16 +0200
+Subject: [PATCH 7/9] qapi: Convert query-pci
+
+RH-Author: Marcel Apfelbaum <marcel.a@redhat.com>
+Message-id: <1401952158-29608-6-git-send-email-marcel.a@redhat.com>
+Patchwork-id: 59151
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v5 5/7] qapi: Convert query-pci
+Bugzilla: 813748
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+This also fixes a bug with the old version: QMP would invert device id
+and vendor id. This would look ok on HMP because it was printing
+"device:vendor" instead of "vendor:device".
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 79627472db3629de66fe81019560aa9cb6900268)
+
+Conflicts:
+    hmp.c
+    hmp.h
+    hw/pci-stub.c
+    hw/pci.c
+    hw/pci.h
+    monitor.c
+    qapi-schema.json
+    qmp-commands.hx
+
+RHEL6 Notes:
+ - conflicts:
+   - hmp.c, hmp.h, hw/pci.c, hw/pci.h, qapi-schema.json:
+     a lot of functionality missing (big gap)
+   - hw/pci-stub.c: discarded because is missing from RHEL6
+   - monitor.h: qmp_cmds[] functionality missing
+   - qmp-commands.hx: not existing -> moved code to qemu-monitor.hx
+
+Signed-off-by: Marcel Apfelbaum <marcel.a@redhat.com>
+---
+ hmp.c            | 101 +++++++++++++++
+ hmp.h            |   1 +
+ hw/pci.c         | 379 ++++++++++++++++++-------------------------------------
+ hw/pci.h         |   2 -
+ monitor.c        |   3 +-
+ qapi-schema.json | 128 +++++++++++++++++++
+ qemu-monitor.hx  | 221 ++++++++++++++++++++++++++++++++
+ 7 files changed, 573 insertions(+), 262 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hmp.c            |  101 ++++++++++++++
+ hmp.h            |    1 +
+ hw/pci.c         |  381 +++++++++++++++++------------------------------------
+ hw/pci.h         |    2 -
+ monitor.c        |    3 +-
+ qapi-schema.json |  128 ++++++++++++++++++
+ qemu-monitor.hx  |  221 +++++++++++++++++++++++++++++++
+ 7 files changed, 574 insertions(+), 263 deletions(-)
+
+diff --git a/hmp.c b/hmp.c
+index cf16861..1c0337c 100644
+--- a/hmp.c
++++ b/hmp.c
+@@ -113,3 +113,104 @@ void hmp_dump_guest_memory(Monitor *mon, const QDict *qdict)
+     hmp_handle_error(mon, &errp);
+     g_free(prot);
+ }
++
++static void hmp_info_pci_device(Monitor *mon, const PciDeviceInfo *dev)
++{
++    PciMemoryRegionList *region;
++
++    monitor_printf(mon, "  Bus %2" PRId64 ", ", dev->bus);
++    monitor_printf(mon, "device %3" PRId64 ", function %" PRId64 ":\n",
++                   dev->slot, dev->function);
++    monitor_printf(mon, "    ");
++
++    if (dev->class_info.has_desc) {
++        monitor_printf(mon, "%s", dev->class_info.desc);
++    } else {
++        monitor_printf(mon, "Class %04" PRId64, dev->class_info.class);
++    }
++
++    monitor_printf(mon, ": PCI device %04" PRIx64 ":%04" PRIx64 "\n",
++                   dev->id.vendor, dev->id.device);
++
++    if (dev->has_irq) {
++        monitor_printf(mon, "      IRQ %" PRId64 ".\n", dev->irq);
++    }
++
++    if (dev->has_pci_bridge) {
++        monitor_printf(mon, "      BUS %" PRId64 ".\n",
++                       dev->pci_bridge->bus.number);
++        monitor_printf(mon, "      secondary bus %" PRId64 ".\n",
++                       dev->pci_bridge->bus.secondary);
++        monitor_printf(mon, "      subordinate bus %" PRId64 ".\n",
++                       dev->pci_bridge->bus.subordinate);
++
++        monitor_printf(mon, "      IO range [0x%04"PRIx64", 0x%04"PRIx64"]\n",
++                       dev->pci_bridge->bus.io_range->base,
++                       dev->pci_bridge->bus.io_range->limit);
++
++        monitor_printf(mon,
++                       "      memory range [0x%08"PRIx64", 0x%08"PRIx64"]\n",
++                       dev->pci_bridge->bus.memory_range->base,
++                       dev->pci_bridge->bus.memory_range->limit);
++
++        monitor_printf(mon, "      prefetchable memory range "
++                       "[0x%08"PRIx64", 0x%08"PRIx64"]\n",
++                       dev->pci_bridge->bus.prefetchable_range->base,
++                       dev->pci_bridge->bus.prefetchable_range->limit);
++    }
++
++    for (region = dev->regions; region; region = region->next) {
++        uint64_t addr, size;
++
++        addr = region->value->address;
++        size = region->value->size;
++
++        monitor_printf(mon, "      BAR%" PRId64 ": ", region->value->bar);
++
++        if (!strcmp(region->value->type, "io")) {
++            monitor_printf(mon, "I/O at 0x%04" PRIx64
++                                " [0x%04" PRIx64 "].\n",
++                           addr, addr + size - 1);
++        } else {
++            monitor_printf(mon, "%d bit%s memory at 0x%08" PRIx64
++                               " [0x%08" PRIx64 "].\n",
++                           region->value->mem_type_64 ? 64 : 32,
++                           region->value->prefetch ? " prefetchable" : "",
++                           addr, addr + size - 1);
++        }
++    }
++
++    monitor_printf(mon, "      id \"%s\"\n", dev->qdev_id);
++
++    if (dev->has_pci_bridge) {
++        if (dev->pci_bridge->has_devices) {
++            PciDeviceInfoList *cdev;
++            for (cdev = dev->pci_bridge->devices; cdev; cdev = cdev->next) {
++                hmp_info_pci_device(mon, cdev->value);
++            }
++        }
++    }
++}
++
++void hmp_info_pci(Monitor *mon)
++{
++    PciInfoList *info;
++    Error *err = NULL;
++
++    info = qmp_query_pci(&err);
++    if (err) {
++        monitor_printf(mon, "PCI devices not supported\n");
++        error_free(err);
++        return;
++    }
++
++    for (; info; info = info->next) {
++        PciDeviceInfoList *dev;
++
++        for (dev = info->value->devices; dev; dev = dev->next) {
++            hmp_info_pci_device(mon, dev->value);
++        }
++    }
++
++    qapi_free_PciInfoList(info);
++}
+diff --git a/hmp.h b/hmp.h
+index 9088d4f..36054df 100644
+--- a/hmp.h
++++ b/hmp.h
+@@ -25,6 +25,7 @@ void hmp_drive_mirror(Monitor *mon, const QDict *qdict);
+ void hmp_drive_reopen(Monitor *mon, const QDict *qdict);
+ #endif
+ 
++void hmp_info_pci(Monitor *mon);
+ void hmp_dump_guest_memory(Monitor *mon, const QDict *qdict);
+ 
+ #endif
+diff --git a/hw/pci.c b/hw/pci.c
+index 3d856d8..5e5b31b 100644
+--- a/hw/pci.c
++++ b/hw/pci.c
+@@ -27,7 +27,7 @@
+ #include "net.h"
+ #include "sysemu.h"
+ #include "loader.h"
+-#include "qemu-objects.h"
++#include "qmp-commands.h"
+ #include "qemu-kvm.h"
+ #include "hw/pc.h"
+ #include "device-assignment.h"
+@@ -1250,333 +1250,196 @@ void pci_for_each_device(PCIBus *bus, int bus_num,
+     }
+ }
+ 
+-static void pci_device_print(Monitor *mon, QDict *device)
++static const pci_class_desc *get_class_desc(int class)
+ {
+-    QDict *qdict;
+-    QListEntry *entry;
+-    uint64_t addr, size;
+-
+-    monitor_printf(mon, "  Bus %2" PRId64 ", ", qdict_get_int(device, "bus"));
+-    monitor_printf(mon, "device %3" PRId64 ", function %" PRId64 ":\n",
+-                        qdict_get_int(device, "slot"),
+-                        qdict_get_int(device, "function"));
+-    monitor_printf(mon, "    ");
+-
+-    qdict = qdict_get_qdict(device, "class_info");
+-    if (qdict_haskey(qdict, "desc")) {
+-        monitor_printf(mon, "%s", qdict_get_str(qdict, "desc"));
+-    } else {
+-        monitor_printf(mon, "Class %04" PRId64, qdict_get_int(qdict, "class"));
+-    }
+-
+-    qdict = qdict_get_qdict(device, "id");
+-    monitor_printf(mon, ": PCI device %04" PRIx64 ":%04" PRIx64 "\n",
+-                        qdict_get_int(qdict, "device"),
+-                        qdict_get_int(qdict, "vendor"));
++    const pci_class_desc *desc;
+ 
+-    if (qdict_haskey(device, "irq")) {
+-        monitor_printf(mon, "      IRQ %" PRId64 ".\n",
+-                            qdict_get_int(device, "irq"));
++    desc = pci_class_descriptions;
++    while (desc->desc && class != desc->class) {
++        desc++;
+     }
+ 
+-    if (qdict_haskey(device, "pci_bridge")) {
+-        QDict *info;
+-
+-        qdict = qdict_get_qdict(device, "pci_bridge");
+-
+-        info = qdict_get_qdict(qdict, "bus");
+-        monitor_printf(mon, "      BUS %" PRId64 ".\n",
+-                            qdict_get_int(info, "number"));
+-        monitor_printf(mon, "      secondary bus %" PRId64 ".\n",
+-                            qdict_get_int(info, "secondary"));
+-        monitor_printf(mon, "      subordinate bus %" PRId64 ".\n",
+-                            qdict_get_int(info, "subordinate"));
++    return desc;
++}
+ 
+-        info = qdict_get_qdict(qdict, "io_range");
+-        monitor_printf(mon, "      IO range [0x%04"PRIx64", 0x%04"PRIx64"]\n",
+-                       qdict_get_int(info, "base"),
+-                       qdict_get_int(info, "limit"));
++static PciDeviceInfoList *qmp_query_pci_devices(PCIBus *bus, int bus_num);
+ 
+-        info = qdict_get_qdict(qdict, "memory_range");
+-        monitor_printf(mon,
+-                       "      memory range [0x%08"PRIx64", 0x%08"PRIx64"]\n",
+-                       qdict_get_int(info, "base"),
+-                       qdict_get_int(info, "limit"));
++static PciMemoryRegionList *qmp_query_pci_regions(const PCIDevice *dev)
++{
++    PciMemoryRegionList *head = NULL, *cur_item = NULL;
++    int i;
+ 
+-        info = qdict_get_qdict(qdict, "prefetchable_range");
+-        monitor_printf(mon, "      prefetchable memory range "
+-                       "[0x%08"PRIx64", 0x%08"PRIx64"]\n",
+-                       qdict_get_int(info, "base"),
+-        qdict_get_int(info, "limit"));
+-    }
++    for (i = 0; i < PCI_NUM_REGIONS; i++) {
++        const PCIIORegion *r = &dev->io_regions[i];
++        PciMemoryRegionList *region;
+ 
+-    QLIST_FOREACH_ENTRY(qdict_get_qlist(device, "regions"), entry) {
+-        qdict = qobject_to_qdict(qlist_entry_obj(entry));
+-        monitor_printf(mon, "      BAR%d: ", (int) qdict_get_int(qdict, "bar"));
++        if (!r->size) {
++            continue;
++        }
+ 
+-        addr = qdict_get_int(qdict, "address");
+-        size = qdict_get_int(qdict, "size");
++        region = g_malloc0(sizeof(*region));
++        region->value = g_malloc0(sizeof(*region->value));
+ 
+-        if (!strcmp(qdict_get_str(qdict, "type"), "io")) {
+-            monitor_printf(mon, "I/O at 0x%04"FMT_PCIBUS
+-                                " [0x%04"FMT_PCIBUS"].\n",
+-                                addr, addr + size - 1);
++        if (r->type & PCI_BASE_ADDRESS_SPACE_IO) {
++            region->value->type = g_strdup("io");
+         } else {
+-            monitor_printf(mon, "%d bit%s memory at 0x%08"FMT_PCIBUS
+-                               " [0x%08"FMT_PCIBUS"].\n",
+-                                qdict_get_bool(qdict, "mem_type_64") ? 64 : 32,
+-                                qdict_get_bool(qdict, "prefetch") ?
+-                                " prefetchable" : "", addr, addr + size - 1);
++            region->value->type = g_strdup("memory");
++            region->value->has_prefetch = true;
++            region->value->prefetch = !!(r->type & PCI_BASE_ADDRESS_MEM_PREFETCH);
++            region->value->has_mem_type_64 = true;
++            region->value->mem_type_64 = !!(r->type & PCI_BASE_ADDRESS_MEM_TYPE_64);
+         }
+-    }
+ 
+-    monitor_printf(mon, "      id \"%s\"\n", qdict_get_str(device, "qdev_id"));
++        region->value->bar = i;
++        region->value->address = r->addr;
++        region->value->size = r->size;
+ 
+-    if (qdict_haskey(device, "pci_bridge")) {
+-        qdict = qdict_get_qdict(device, "pci_bridge");
+-        if (qdict_haskey(qdict, "devices")) {
+-            QListEntry *dev;
+-            QLIST_FOREACH_ENTRY(qdict_get_qlist(qdict, "devices"), dev) {
+-                pci_device_print(mon, qobject_to_qdict(qlist_entry_obj(dev)));
+-            }
++        /* XXX: waiting for the qapi to support GSList */
++        if (!cur_item) {
++            head = cur_item = region;
++        } else {
++            cur_item->next = region;
++            cur_item = region;
+         }
+     }
+-}
+-
+-void do_pci_info_print(Monitor *mon, const QObject *data)
+-{
+-    QListEntry *bus, *dev;
+ 
+-    QLIST_FOREACH_ENTRY(qobject_to_qlist(data), bus) {
+-        QDict *qdict = qobject_to_qdict(qlist_entry_obj(bus));
+-        QLIST_FOREACH_ENTRY(qdict_get_qlist(qdict, "devices"), dev) {
+-            pci_device_print(mon, qobject_to_qdict(qlist_entry_obj(dev)));
+-        }
+-    }
++    return head;
+ }
+ 
+-static QObject *pci_get_dev_class(const PCIDevice *dev)
++static PciBridgeInfo *qmp_query_pci_bridge(PCIDevice *dev, PCIBus *bus,
++                                           int bus_num)
+ {
+-    int class;
+-    const pci_class_desc *desc;
++    PciBridgeInfo *info;
+ 
+-    class = pci_get_word(dev->config + PCI_CLASS_DEVICE);
+-    desc = pci_class_descriptions;
+-    while (desc->desc && class != desc->class)
+-        desc++;
++    info = g_malloc0(sizeof(*info));
+ 
+-    if (desc->desc) {
+-        return qobject_from_jsonf("{ 'desc': %s, 'class': %d }",
+-                                  desc->desc, class);
+-    } else {
+-        return qobject_from_jsonf("{ 'class': %d }", class);
+-    }
+-}
++    info->bus.number = dev->config[PCI_PRIMARY_BUS];
++    info->bus.secondary = dev->config[PCI_SECONDARY_BUS];
++    info->bus.subordinate = dev->config[PCI_SUBORDINATE_BUS];
+ 
+-static QObject *pci_get_dev_id(const PCIDevice *dev)
+-{
+-    return qobject_from_jsonf("{ 'device': %d, 'vendor': %d }",
+-                              pci_get_word(dev->config + PCI_VENDOR_ID),
+-                              pci_get_word(dev->config + PCI_DEVICE_ID));
+-}
++    info->bus.io_range = g_malloc0(sizeof(*info->bus.io_range));
++    info->bus.io_range->base = pci_bridge_get_base(dev, PCI_BASE_ADDRESS_SPACE_IO);
++    info->bus.io_range->limit = pci_bridge_get_limit(dev, PCI_BASE_ADDRESS_SPACE_IO);
+ 
+-static QObject *pci_get_regions_list(const PCIDevice *dev)
+-{
+-    int i;
+-    QList *regions_list;
++    info->bus.memory_range = g_malloc0(sizeof(*info->bus.memory_range));
++    info->bus.memory_range->base = pci_bridge_get_base(dev, PCI_BASE_ADDRESS_SPACE_MEMORY);
++    info->bus.memory_range->limit = pci_bridge_get_limit(dev, PCI_BASE_ADDRESS_SPACE_MEMORY);
+ 
+-    regions_list = qlist_new();
++    info->bus.prefetchable_range = g_malloc0(sizeof(*info->bus.prefetchable_range));
++    info->bus.prefetchable_range->base = pci_bridge_get_base(dev, PCI_BASE_ADDRESS_MEM_PREFETCH);
++    info->bus.prefetchable_range->limit = pci_bridge_get_limit(dev, PCI_BASE_ADDRESS_MEM_PREFETCH);
+ 
+-    for (i = 0; i < PCI_NUM_REGIONS; i++) {
+-        QObject *obj;
+-        const PCIIORegion *r = &dev->io_regions[i];
+-
+-        if (!r->size) {
+-            continue;
++    if (dev->config[PCI_SECONDARY_BUS] != 0) {
++        PCIBus *child_bus = pci_find_bus(bus, dev->config[PCI_SECONDARY_BUS]);
++        if (child_bus) {
++            info->has_devices = true;
++            info->devices = qmp_query_pci_devices(child_bus, dev->config[PCI_SECONDARY_BUS]);
+         }
+-
+-        if (r->type & PCI_BASE_ADDRESS_SPACE_IO) {
+-            obj = qobject_from_jsonf("{ 'bar': %d, 'type': 'io', "
+-                                     "'address': %" PRId64 ", "
+-                                     "'size': %" PRId64 " }",
+-                                     i, r->addr, r->size);
+-        } else {
+-            int mem_type_64 = r->type & PCI_BASE_ADDRESS_MEM_TYPE_64;
+-
+-            obj = qobject_from_jsonf("{ 'bar': %d, 'type': 'memory', "
+-                                     "'mem_type_64': %i, 'prefetch': %i, "
+-                                     "'address': %" PRId64 ", "
+-                                     "'size': %" PRId64 " }",
+-                                     i, mem_type_64,
+-                                     r->type & PCI_BASE_ADDRESS_MEM_PREFETCH,
+-                                     r->addr, r->size);
+-        }
+-
+-        qlist_append_obj(regions_list, obj);
+     }
+ 
+-    return QOBJECT(regions_list);
++    return info;
+ }
+ 
+-static QObject *pci_get_devices_list(PCIBus *bus, int bus_num);
+-
+-static QObject *pci_get_dev_dict(PCIDevice *dev, PCIBus *bus, int bus_num)
++static PciDeviceInfo *qmp_query_pci_device(PCIDevice *dev, PCIBus *bus,
++                                           int bus_num)
+ {
++    const pci_class_desc *desc;
++    PciDeviceInfo *info;
+     uint8_t type;
+-    QObject *obj;
+ 
+-    obj = qobject_from_jsonf("{ 'bus': %d, 'slot': %d, 'function': %d,"                                       "'class_info': %p, 'id': %p, 'regions': %p,"
+-                              " 'qdev_id': %s }",
+-                              bus_num,
+-                              PCI_SLOT(dev->devfn), PCI_FUNC(dev->devfn),
+-                              pci_get_dev_class(dev), pci_get_dev_id(dev),
+-                              pci_get_regions_list(dev),
+-                              dev->qdev.id ? dev->qdev.id : "");
++    int class;
++
++    info = g_malloc0(sizeof(*info));
++    info->bus = bus_num;
++    info->slot = PCI_SLOT(dev->devfn);
++    info->function = PCI_FUNC(dev->devfn);
++
++    class = pci_get_word(dev->config + PCI_CLASS_DEVICE);
++    info->class_info.class = class;
++    desc = get_class_desc(class);
++    if (desc->desc) {
++        info->class_info.has_desc = true;
++        info->class_info.desc = g_strdup(desc->desc);
++    }
++
++    info->id.vendor = pci_get_word(dev->config + PCI_VENDOR_ID);
++    info->id.device = pci_get_word(dev->config + PCI_DEVICE_ID);
++    info->regions = qmp_query_pci_regions(dev);
++    info->qdev_id = g_strdup(dev->qdev.id ? dev->qdev.id : "");
+ 
+     if (dev->config[PCI_INTERRUPT_PIN] != 0) {
+-        QDict *qdict = qobject_to_qdict(obj);
+-        qdict_put(qdict, "irq", qint_from_int(dev->config[PCI_INTERRUPT_LINE]));
++        info->has_irq = true;
++        info->irq = dev->config[PCI_INTERRUPT_LINE];
+     }
+ 
+     type = dev->config[PCI_HEADER_TYPE] & ~PCI_HEADER_TYPE_MULTI_FUNCTION;
+     if (type == PCI_HEADER_TYPE_BRIDGE) {
+-        QDict *qdict;
+-        QObject *pci_bridge;
+-
+-        pci_bridge = qobject_from_jsonf("{ 'bus': "
+-        "{ 'number': %d, 'secondary': %d, 'subordinate': %d }, "
+-        "'io_range': { 'base': %" PRId64 ", 'limit': %" PRId64 "}, "
+-        "'memory_range': { 'base': %" PRId64 ", 'limit': %" PRId64 "}, "
+-        "'prefetchable_range': { 'base': %" PRId64 ", 'limit': %" PRId64 "} }",
+-        dev->config[0x19], dev->config[PCI_SECONDARY_BUS],
+-        dev->config[PCI_SUBORDINATE_BUS],
+-        pci_bridge_get_base(dev, PCI_BASE_ADDRESS_SPACE_IO),
+-        pci_bridge_get_limit(dev, PCI_BASE_ADDRESS_SPACE_IO),
+-        pci_bridge_get_base(dev, PCI_BASE_ADDRESS_SPACE_MEMORY),
+-        pci_bridge_get_limit(dev, PCI_BASE_ADDRESS_SPACE_MEMORY),
+-        pci_bridge_get_base(dev, PCI_BASE_ADDRESS_SPACE_MEMORY |
+-                               PCI_BASE_ADDRESS_MEM_PREFETCH),
+-        pci_bridge_get_limit(dev, PCI_BASE_ADDRESS_SPACE_MEMORY |
+-                                PCI_BASE_ADDRESS_MEM_PREFETCH));
+-
+-        if (dev->config[0x19] != 0) {
+-            qdict = qobject_to_qdict(pci_bridge);
+-            qdict_put_obj(qdict, "devices",
+-                          pci_get_devices_list(bus, dev->config[0x19]));
+-        }
+-
+-        qdict = qobject_to_qdict(obj);
+-        qdict_put_obj(qdict, "pci_bridge", pci_bridge);
++        info->has_pci_bridge = true;
++        info->pci_bridge = qmp_query_pci_bridge(dev, bus, bus_num);
+     }
+ 
+-    return obj;
++    return info;
+ }
+ 
+-static QObject *pci_get_devices_list(PCIBus *bus, int bus_num)
++static PciDeviceInfoList *qmp_query_pci_devices(PCIBus *bus, int bus_num)
+ {
+-    int devfn;
++    PciDeviceInfoList *info, *head = NULL, *cur_item = NULL;
+     PCIDevice *dev;
+-    QList *dev_list;
+-
+-    dev_list = qlist_new();
++    int devfn;
+ 
+     for (devfn = 0; devfn < ARRAY_SIZE(bus->devices); devfn++) {
+         dev = bus->devices[devfn];
+         if (dev) {
+-            qlist_append_obj(dev_list, pci_get_dev_dict(dev, bus, bus_num));
++            info = g_malloc0(sizeof(*info));
++            info->value = qmp_query_pci_device(dev, bus, bus_num);
++
++            /* XXX: waiting for the qapi to support GSList */
++            if (!cur_item) {
++                head = cur_item = info;
++            } else {
++                cur_item->next = info;
++                cur_item = info;
++            }
+         }
+     }
+ 
+-    return QOBJECT(dev_list);
++    return head;
+ }
+ 
+-static QObject *pci_get_bus_dict(PCIBus *bus, int bus_num)
++static PciInfo *qmp_query_pci_bus(PCIBus *bus, int bus_num)
+ {
++    PciInfo *info = NULL;
++
+     bus = pci_find_bus(bus, bus_num);
+     if (bus) {
+-        return qobject_from_jsonf("{ 'bus': %d, 'devices': %p }",
+-                                  bus_num, pci_get_devices_list(bus, bus_num));
++        info = g_malloc0(sizeof(*info));
++        info->bus = bus_num;
++        info->devices = qmp_query_pci_devices(bus, bus_num);
+     }
+ 
+-    return NULL;
++    return info;
+ }
+ 
+-/**
+- * do_pci_info(): PCI buses and devices information
+- *
+- * The returned QObject is a QList of all buses. Each bus is
+- * represented by a QDict, which has a key with a QList of all
+- * PCI devices attached to it. Each device is represented by
+- * a QDict.
+- *
+- * The bus QDict contains the following:
+- *
+- * - "bus": bus number
+- * - "devices": a QList of QDicts, each QDict represents a PCI
+- *   device
+- *
+- * The PCI device QDict contains the following:
+- *
+- * - "bus": identical to the parent's bus number
+- * - "slot": slot number
+- * - "function": function number
+- * - "class_info": a QDict containing:
+- *      - "desc": device class description (optional)
+- *      - "class": device class number
+- * - "id": a QDict containing:
+- *      - "device": device ID
+- *      - "vendor": vendor ID
+- * - "irq": device's IRQ if assigned (optional)
+- * - "qdev_id": qdev id string
+- * - "pci_bridge": It's a QDict, only present if this device is a
+- *   PCI bridge, contains:
+- *      - "bus": bus number
+- *      - "secondary": secondary bus number
+- *      - "subordinate": subordinate bus number
+- *      - "io_range": a QDict with memory range information
+- *      - "memory_range": a QDict with memory range information
+- *      - "prefetchable_range": a QDict with memory range information
+- *      - "devices": a QList of PCI devices if there's any attached (optional)
+- * - "regions": a QList of QDicts, each QDict represents a
+- *   memory region of this device
+- *
+- * The memory range QDict contains the following:
+- *
+- * - "base": base memory address
+- * - "limit": limit value
+- *
+- * The region QDict can be an I/O region or a memory region,
+- * an I/O region QDict contains the following:
+- *
+- * - "type": "io"
+- * - "bar": BAR number
+- * - "address": memory address
+- * - "size": memory size
+- *
+- * A memory region QDict contains the following:
+- *
+- * - "type": "memory"
+- * - "bar": BAR number
+- * - "address": memory address
+- * - "size": memory size
+- * - "mem_type_64": true or false
+- * - "prefetch": true or false
+- */
+-void do_pci_info(Monitor *mon, QObject **ret_data)
++PciInfoList *qmp_query_pci(Error **errp)
+ {
+-    QList *bus_list;
++    PciInfoList *info, *head = NULL, *cur_item = NULL;
+     struct PCIHostBus *host;
+ 
+-    bus_list = qlist_new();
+ 
+     QLIST_FOREACH(host, &host_buses, next) {
+-        QObject *obj = pci_get_bus_dict(host->bus, 0);
+-        if (obj) {
+-            qlist_append_obj(bus_list, obj);
++        info = g_malloc0(sizeof(*info));
++        info->value = qmp_query_pci_bus(host->bus, 0);
++
++        /* XXX: waiting for the qapi to support GSList */
++        if (!cur_item) {
++            head = cur_item = info;
++        } else {
++            cur_item->next = info;
++            cur_item = info;
+         }
+     }
+ 
+-    *ret_data = QOBJECT(bus_list);
++    return head;
+ }
+ 
+ static const char * const pci_nic_models[] = {
+diff --git a/hw/pci.h b/hw/pci.h
+index 90a55d6..92ad08f 100644
+--- a/hw/pci.h
++++ b/hw/pci.h
+@@ -269,8 +269,6 @@ int pci_read_devaddr(Monitor *mon, const char *addr, int *domp, int *busp,
+ int pci_parse_host_devaddr(const char *addr, int *segp, int *busp,
+                            int *slotp, int *funcp);
+ 
+-void do_pci_info_print(Monitor *mon, const QObject *data);
+-void do_pci_info(Monitor *mon, QObject **ret_data);
+ PCIBus *pci_bridge_init(PCIBus *bus, int devfn, bool multifunction,
+                         uint16_t vid, uint16_t did,
+                         pci_map_irq_fn map_irq, const char *name);
+diff --git a/monitor.c b/monitor.c
+index 5adc5cb..6a947b9 100644
+--- a/monitor.c
++++ b/monitor.c
+@@ -2987,8 +2987,7 @@ static const mon_cmd_t info_cmds[] = {
+         .args_type  = "",
+         .params     = "",
+         .help       = "show PCI info",
+-        .user_print = do_pci_info_print,
+-        .mhandler.info_new = do_pci_info,
++        .mhandler.info = hmp_info_pci,
+     },
+ #if defined(TARGET_I386) || defined(TARGET_SH4)
+     {
+diff --git a/qapi-schema.json b/qapi-schema.json
+index 93b5a9b..7e76a99 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -775,3 +775,131 @@
+ { 'command': 'human-monitor-command',
+   'data': {'command-line': 'str', '*cpu-index': 'int'},
+   'returns': 'str' }
++
++##
++# @PciMemoryRange:
++#
++# A PCI device memory region
++#
++# @base: the starting address (guest physical)
++#
++# @limit: the ending address (guest physical)
++#
++# Since: 0.14.0
++##
++{ 'type': 'PciMemoryRange', 'data': {'base': 'int', 'limit': 'int'} }
++
++##
++# @PciMemoryRegion
++#
++# Information about a PCI device I/O region.
++#
++# @bar: the index of the Base Address Register for this region
++#
++# @type: 'io' if the region is a PIO region
++#        'memory' if the region is a MMIO region
++#
++# @prefetch: #optional if @type is 'memory', true if the memory is prefetchable
++#
++# @mem_type_64: #optional if @type is 'memory', true if the BAR is 64-bit
++#
++# Since: 0.14.0
++##
++{ 'type': 'PciMemoryRegion',
++  'data': {'bar': 'int', 'type': 'str', 'address': 'int', 'size': 'int',
++           '*prefetch': 'bool', '*mem_type_64': 'bool' } }
++
++##
++# @PciBridgeInfo:
++#
++# Information about a PCI Bridge device
++#
++# @bus.number: primary bus interface number.  This should be the number of the
++#              bus the device resides on.
++#
++# @bus.secondary: secondary bus interface number.  This is the number of the
++#                 main bus for the bridge
++#
++# @bus.subordinate: This is the highest number bus that resides below the
++#                   bridge.
++#
++# @bus.io_range: The PIO range for all devices on this bridge
++#
++# @bus.memory_range: The MMIO range for all devices on this bridge
++#
++# @bus.prefetchable_range: The range of prefetchable MMIO for all devices on
++#                          this bridge
++#
++# @devices: a list of @PciDeviceInfo for each device on this bridge
++#
++# Since: 0.14.0
++##
++{ 'type': 'PciBridgeInfo',
++  'data': {'bus': { 'number': 'int', 'secondary': 'int', 'subordinate': 'int',
++                    'io_range': 'PciMemoryRange',
++                    'memory_range': 'PciMemoryRange',
++                    'prefetchable_range': 'PciMemoryRange' },
++           '*devices': ['PciDeviceInfo']} }
++
++##
++# @PciDeviceInfo:
++#
++# Information about a PCI device
++#
++# @bus: the bus number of the device
++#
++# @slot: the slot the device is located in
++#
++# @function: the function of the slot used by the device
++#
++# @class_info.desc: #optional a string description of the device's class
++#
++# @class_info.class: the class code of the device
++#
++# @id.device: the PCI device id
++#
++# @id.vendor: the PCI vendor id
++#
++# @irq: #optional if an IRQ is assigned to the device, the IRQ number
++#
++# @qdev_id: the device name of the PCI device
++#
++# @pci_bridge: if the device is a PCI bridge, the bridge information
++#
++# @regions: a list of the PCI I/O regions associated with the device
++#
++# Notes: the contents of @class_info.desc are not stable and should only be
++#        treated as informational.
++#
++# Since: 0.14.0
++##
++{ 'type': 'PciDeviceInfo',
++  'data': {'bus': 'int', 'slot': 'int', 'function': 'int',
++           'class_info': {'*desc': 'str', 'class': 'int'},
++           'id': {'device': 'int', 'vendor': 'int'},
++           '*irq': 'int', 'qdev_id': 'str', '*pci_bridge': 'PciBridgeInfo',
++           'regions': ['PciMemoryRegion']} }
++
++##
++# @PciInfo:
++#
++# Information about a PCI bus
++#
++# @bus: the bus index
++#
++# @devices: a list of devices on this bus
++#
++# Since: 0.14.0
++##
++{ 'type': 'PciInfo', 'data': {'bus': 'int', 'devices': ['PciDeviceInfo']} }
++
++##
++# @query-pci:
++#
++# Return information about the PCI bus topology of the guest.
++#
++# Returns: a list of @PciInfo for each PCI bus
++#
++# Since: 0.14.0
++##
++{ 'command': 'query-pci', 'returns': ['PciInfo'] }
+diff --git a/qemu-monitor.hx b/qemu-monitor.hx
+index ca34245..c6ac10c 100644
+--- a/qemu-monitor.hx
++++ b/qemu-monitor.hx
+@@ -2907,6 +2907,227 @@ ETEXI
+ STEXI
+ @item info pci
+ show emulated PCI device info
++ETEXI
++SQMP
++query-pci
++---------
++
++PCI buses and devices information.
++
++The returned value is a json-array of all buses. Each bus is represented by
++a json-object, which has a key with a json-array of all PCI devices attached
++to it. Each device is represented by a json-object.
++
++The bus json-object contains the following:
++
++- "bus": bus number (json-int)
++- "devices": a json-array of json-objects, each json-object represents a
++             PCI device
++
++The PCI device json-object contains the following:
++
++- "bus": identical to the parent's bus number (json-int)
++- "slot": slot number (json-int)
++- "function": function number (json-int)
++- "class_info": a json-object containing:
++     - "desc": device class description (json-string, optional)
++     - "class": device class number (json-int)
++- "id": a json-object containing:
++     - "device": device ID (json-int)
++     - "vendor": vendor ID (json-int)
++- "irq": device's IRQ if assigned (json-int, optional)
++- "qdev_id": qdev id string (json-string)
++- "pci_bridge": It's a json-object, only present if this device is a
++                PCI bridge, contains:
++     - "bus": bus number (json-int)
++     - "secondary": secondary bus number (json-int)
++     - "subordinate": subordinate bus number (json-int)
++     - "io_range": I/O memory range information, a json-object with the
++                   following members:
++                 - "base": base address, in bytes (json-int)
++                 - "limit": limit address, in bytes (json-int)
++     - "memory_range": memory range information, a json-object with the
++                       following members:
++                 - "base": base address, in bytes (json-int)
++                 - "limit": limit address, in bytes (json-int)
++     - "prefetchable_range": Prefetchable memory range information, a
++                             json-object with the following members:
++                 - "base": base address, in bytes (json-int)
++                 - "limit": limit address, in bytes (json-int)
++     - "devices": a json-array of PCI devices if there's any attached, each
++                  each element is represented by a json-object, which contains
++                  the same members of the 'PCI device json-object' described
++                  above (optional)
++- "regions": a json-array of json-objects, each json-object represents a
++             memory region of this device
++
++The memory range json-object contains the following:
++
++- "base": base memory address (json-int)
++- "limit": limit value (json-int)
++
++The region json-object can be an I/O region or a memory region, an I/O region
++json-object contains the following:
++
++- "type": "io" (json-string, fixed)
++- "bar": BAR number (json-int)
++- "address": memory address (json-int)
++- "size": memory size (json-int)
++
++A memory region json-object contains the following:
++
++- "type": "memory" (json-string, fixed)
++- "bar": BAR number (json-int)
++- "address": memory address (json-int)
++- "size": memory size (json-int)
++- "mem_type_64": true or false (json-bool)
++- "prefetch": true or false (json-bool)
++
++Example:
++
++-> { "execute": "query-pci" }
++<- {
++      "return":[
++         {
++            "bus":0,
++            "devices":[
++               {
++                  "bus":0,
++                  "qdev_id":"",
++                  "slot":0,
++                  "class_info":{
++                     "class":1536,
++                     "desc":"Host bridge"
++                  },
++                  "id":{
++                     "device":32902,
++                     "vendor":4663
++                  },
++                  "function":0,
++                  "regions":[
++
++                  ]
++               },
++               {
++                  "bus":0,
++                  "qdev_id":"",
++                  "slot":1,
++                  "class_info":{
++                     "class":1537,
++                     "desc":"ISA bridge"
++                  },
++                  "id":{
++                     "device":32902,
++                     "vendor":28672
++                  },
++                  "function":0,
++                  "regions":[
++
++                  ]
++               },
++               {
++                  "bus":0,
++                  "qdev_id":"",
++                  "slot":1,
++                  "class_info":{
++                     "class":257,
++                     "desc":"IDE controller"
++                  },
++                  "id":{
++                     "device":32902,
++                     "vendor":28688
++                  },
++                  "function":1,
++                  "regions":[
++                     {
++                        "bar":4,
++                        "size":16,
++                        "address":49152,
++                        "type":"io"
++                     }
++                  ]
++               },
++               {
++                  "bus":0,
++                  "qdev_id":"",
++                  "slot":2,
++                  "class_info":{
++                     "class":768,
++                     "desc":"VGA controller"
++                  },
++                  "id":{
++                     "device":4115,
++                     "vendor":184
++                  },
++                  "function":0,
++                  "regions":[
++                     {
++                        "prefetch":true,
++                        "mem_type_64":false,
++                        "bar":0,
++                        "size":33554432,
++                        "address":4026531840,
++                        "type":"memory"
++                     },
++                     {
++                        "prefetch":false,
++                        "mem_type_64":false,
++                        "bar":1,
++                        "size":4096,
++                        "address":4060086272,
++                        "type":"memory"
++                     },
++                     {
++                        "prefetch":false,
++                        "mem_type_64":false,
++                        "bar":6,
++                        "size":65536,
++                        "address":-1,
++                        "type":"memory"
++                     }
++                  ]
++               },
++               {
++                  "bus":0,
++                  "qdev_id":"",
++                  "irq":11,
++                  "slot":4,
++                  "class_info":{
++                     "class":1280,
++                     "desc":"RAM controller"
++                  },
++                  "id":{
++                     "device":6900,
++                     "vendor":4098
++                  },
++                  "function":0,
++                  "regions":[
++                     {
++                        "bar":0,
++                        "size":32,
++                        "address":49280,
++                        "type":"io"
++                     }
++                  ]
++               }
++            ]
++         }
++      ]
++   }
++
++Note: This example has been shortened as the real response is too long.
++
++EQMP
++
++    {
++        .name       = "query-pci",
++        .args_type  = "",
++        .user_print = monitor_user_noop,
++        .mhandler.cmd_new = qmp_marshal_input_query_pci,
++        .flags = MONITOR_CMD_QMP_ONLY
++    },
++
++STEXI
+ @item info tlb
+ show virtual to physical memory mappings (i386 only)
+ @item info mem
+-- 
+1.7.1
+

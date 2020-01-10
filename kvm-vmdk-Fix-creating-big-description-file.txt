@@ -1,0 +1,197 @@
+From a3b4311170a952513df9aa13571917f6235fd214 Mon Sep 17 00:00:00 2001
+From: Fam Zheng <famz@redhat.com>
+Date: Tue, 15 Jul 2014 12:27:21 -0500
+Subject: [CHANGE 03/17] vmdk: Fix creating big description file
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1405427243-28134-4-git-send-email-famz@redhat.com>
+Patchwork-id: 59902
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 3/5] vmdk: Fix creating big description file
+Bugzilla: 1088788
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+The buffer for description file was 4096 which only covers a few
+hundred of extents. This changes the buffer to dynamic allocated with
+g_strdup_printf in order to support bigger cases.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit af057fe74092df2e7a576448ddbdc0daac1370bf)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	block/vmdk.c
+Error reporting code is different, and fd close is different.
+	tests/qemu-iotests/059
+	tests/qemu-iotests/059.out
+qemu-iotests not present in RHEL 6.
+---
+ block/vmdk.c | 61 ++++++++++++++++++++++++++++++++++++------------------------
+ 1 file changed, 37 insertions(+), 24 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ block/vmdk.c | 61 ++++++++++++++++++++++++++++++++++++------------------------
+ 1 file changed, 37 insertions(+), 24 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 587355a..d369d0e 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -1565,7 +1565,7 @@ static int filename_decompose(const char *filename, char *path, char *prefix,
+ static int vmdk_create(const char *filename, QEMUOptionParameter *options)
+ {
+     int fd, idx = 0;
+-    char desc[BUF_SIZE];
++    char *desc = NULL;
+     int64_t total_size = 0, filesize;
+     const char *adapter_type = NULL;
+     const char *backing_file = NULL;
+@@ -1573,7 +1573,7 @@ static int vmdk_create(const char *filename, QEMUOptionParameter *options)
+     int flags = 0;
+     int ret = 0;
+     bool flat, split, compress;
+-    char ext_desc_lines[BUF_SIZE] = "";
++    GString *ext_desc_lines;
+     char path[PATH_MAX], prefix[PATH_MAX], postfix[PATH_MAX];
+     const int64_t split_size = 0x80000000;  /* VMDK has constant split size */
+     const char *desc_extent_line;
+@@ -1601,8 +1601,10 @@ static int vmdk_create(const char *filename, QEMUOptionParameter *options)
+         "ddb.geometry.sectors = \"63\"\n"
+         "ddb.adapterType = \"%s\"\n";
+ 
++    ext_desc_lines = g_string_new(NULL);
+     if (filename_decompose(filename, path, prefix, postfix, PATH_MAX)) {
+-        return -EINVAL;
++        ret = -EINVAL;
++        goto exit;
+     }
+     /* Read out options */
+     while (options && options->name) {
+@@ -1628,7 +1630,8 @@ static int vmdk_create(const char *filename, QEMUOptionParameter *options)
+                strcmp(adapter_type, "lsilogic") &&
+                strcmp(adapter_type, "legacyESX")) {
+         fprintf(stderr, "VMDK: Unknown adapter type: '%s'.\n", adapter_type);
+-        return -EINVAL;
++        ret = -EINVAL;
++        goto exit;
+     }
+     if (strcmp(adapter_type, "ide") != 0) {
+         /* that's the number of heads with which vmware operates when
+@@ -1644,7 +1647,8 @@ static int vmdk_create(const char *filename, QEMUOptionParameter *options)
+                strcmp(fmt, "twoGbMaxExtentFlat") &&
+                strcmp(fmt, "streamOptimized")) {
+         fprintf(stderr, "VMDK: Unknown subformat: %s\n", fmt);
+-        return -EINVAL;
++        ret = -EINVAL;
++        goto exit;
+     }
+     split = !(strcmp(fmt, "twoGbMaxExtentFlat") &&
+               strcmp(fmt, "twoGbMaxExtentSparse"));
+@@ -1658,22 +1662,25 @@ static int vmdk_create(const char *filename, QEMUOptionParameter *options)
+     }
+     if (flat && backing_file) {
+         /* not supporting backing file for flat image */
+-        return -ENOTSUP;
++        ret = -ENOTSUP;
++        goto exit;
+     }
+     if (flat && zeroed_grain) {
+         fprintf(stderr, "Flat image can't enable zeroed grain\n");
+-        return -ENOTSUP;
++        ret = -ENOTSUP;
++        goto exit;
+     }
+     if (backing_file) {
+         BlockDriverState *bs = bdrv_new("");
+         ret = bdrv_open(bs, backing_file, 0, NULL);
+         if (ret != 0) {
+             bdrv_delete(bs);
+-            return ret;
++            goto exit;
+         }
+         if (strcmp(bs->drv->format_name, "vmdk")) {
+             bdrv_delete(bs);
+-            return -EINVAL;
++            ret = -EINVAL;
++            goto exit;
+         }
+         parent_cid = vmdk_read_cid(bs, 0);
+         bdrv_delete(bs);
+@@ -1707,25 +1714,27 @@ static int vmdk_create(const char *filename, QEMUOptionParameter *options)
+ 
+         if (vmdk_create_extent(ext_filename, size,
+                                flat, compress, zeroed_grain)) {
+-            return -EINVAL;
++            ret = -EINVAL;
++            goto exit;
+         }
+         filesize -= size;
+ 
+         /* Format description line */
+         snprintf(desc_line, sizeof(desc_line),
+                     desc_extent_line, size / 512, desc_filename);
+-        pstrcat(ext_desc_lines, sizeof(ext_desc_lines), desc_line);
++        g_string_append(ext_desc_lines, desc_line);
+     }
+     /* generate descriptor file */
+-    snprintf(desc, sizeof(desc), desc_template,
+-            (unsigned int)time(NULL),
+-            parent_cid,
+-            fmt,
+-            parent_desc_line,
+-            ext_desc_lines,
+-            (flags & BLOCK_FLAG_COMPAT6 ? 6 : 4),
+-            total_size / (int64_t)(63 * number_heads * 512), number_heads,
+-                adapter_type);
++    desc = g_strdup_printf(desc_template,
++                           (unsigned int)time(NULL),
++                           parent_cid,
++                           fmt,
++                           parent_desc_line,
++                           ext_desc_lines->str,
++                           (flags & BLOCK_FLAG_COMPAT6 ? 6 : 4),
++                           total_size / (int64_t)(63 * number_heads * 512),
++                           number_heads,
++                           adapter_type);
+     if (split || flat) {
+         fd = open(
+                 filename,
+@@ -1738,21 +1747,25 @@ static int vmdk_create(const char *filename, QEMUOptionParameter *options)
+                 0644);
+     }
+     if (fd < 0) {
+-        return -errno;
++        ret = -errno;
++        goto exit;
+     }
+     /* the descriptor offset = 0x200 */
+     if (!split && !flat && 0x200 != lseek(fd, 0x200, SEEK_SET)) {
+         ret = -errno;
+-        goto exit;
++        goto close_exit;
+     }
+     ret = qemu_write_full(fd, desc, strlen(desc));
+     if (ret != strlen(desc)) {
+         ret = -errno;
+-        goto exit;
++        goto close_exit;
+     }
+     ret = 0;
+-exit:
++close_exit:
+     close(fd);
++exit:
++    g_free(desc);
++    g_string_free(ext_desc_lines, true);
+     return ret;
+ }
+ 
+-- 
+1.9.3
+

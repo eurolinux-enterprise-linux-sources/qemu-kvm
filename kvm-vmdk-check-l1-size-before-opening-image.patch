@@ -1,0 +1,63 @@
+From e2ddf750544ceacef843260acfa29f2e4a5d1fca Mon Sep 17 00:00:00 2001
+Message-Id: <e2ddf750544ceacef843260acfa29f2e4a5d1fca.1376387172.git.minovotn@redhat.com>
+In-Reply-To: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+References: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Thu, 8 Aug 2013 06:09:38 +0200
+Subject: [PATCH 08/13] vmdk: check l1 size before opening image
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1375942181-5262-9-git-send-email-famz@redhat.com>
+Patchwork-id: 53073
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 08/11] vmdk: check l1 size before opening image
+Bugzilla: 994804
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+L1 table size is calculated from capacity, granularity and l2 table
+size. If capacity is too big or later two are too small, the L1 table
+will be too big to allocate in memory. Limit it to a reasonable range.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 2c43e43c8cec130fff95ef720a860e91efb36685)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+
+Conflicts:
+	tests/qemu-iotests/059
+	tests/qemu-iotests/059.out
+    Manually remove test script from commit.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 4bdc315..6aa6ad9 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -595,6 +595,14 @@ static int vmdk_open_vmdk4(BlockDriverState *bs,
+     }
+     l1_size = (le64_to_cpu(header.capacity) + l1_entry_sectors - 1)
+                 / l1_entry_sectors;
++    if (l1_size > 512 * 1024 * 1024) {
++        /* although with big capacity and small l1_entry_sectors, we can get a
++         * big l1_size, we don't want unbounded value to allocate the table.
++         * Limit it to 512M, which is 16PB for default cluster and L2 table
++         * size */
++        error_report("L1 size too big");
++        return -EFBIG;
++    }
+     if (le32_to_cpu(header.flags) & VMDK4_FLAG_RGD) {
+         l1_backup_offset = le64_to_cpu(header.rgd_offset) << 9;
+     }
+-- 
+1.7.11.7
+

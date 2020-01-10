@@ -1,0 +1,64 @@
+From a0308ac2c5e4658f994145b94cc5c51eae25bff8 Mon Sep 17 00:00:00 2001
+Message-Id: <a0308ac2c5e4658f994145b94cc5c51eae25bff8.1378124219.git.minovotn@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Thu, 22 Aug 2013 20:04:59 +0200
+Subject: [PATCH 1/3] block migration: propagate return value when
+ bdrv_write() returns < 0
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <ee0af5bfd24767fd6aa26dbfb48a75826939ecb4.1377200909.git.jcody@redhat.com>
+Patchwork-id: 53700
+O-Subject: [RHEL6.5 qemu-kvm PATCH 1/2] block migration: propagate return value when bdrv_write() returns < 0
+Bugzilla: 994813
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Michal Novotny <minovotn@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Yoshiaki Tamura <tamura.yoshiaki@lab.ntt.co.jp>
+
+Currently block_load() doesn't check return value of bdrv_write(), and
+even the destination weren't prepared to execute block migration, it
+proceeds and guest boots on the target.  This patch fix this issue.
+
+Signed-off-by: Yoshiaki Tamura <tamura.yoshiaki@lab.ntt.co.jp>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit b02bea3a85cc939f09aa674a3f1e4f36d418c007)
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ block-migration.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block-migration.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/block-migration.c b/block-migration.c
+index 37d039c..f09d210 100644
+--- a/block-migration.c
++++ b/block-migration.c
+@@ -498,6 +498,7 @@ static int block_load(QEMUFile *f, void *opaque, int version_id)
+         addr >>= BDRV_SECTOR_BITS;
+ 
+         if (flags & BLK_MIG_FLAG_DEVICE_BLOCK) {
++            int ret;
+             /* get device name */
+             len = qemu_get_byte(f);
+             qemu_get_buffer(f, (uint8_t *)device_name, len);
+@@ -513,9 +514,12 @@ static int block_load(QEMUFile *f, void *opaque, int version_id)
+             buf = qemu_malloc(BLOCK_SIZE);
+ 
+             qemu_get_buffer(f, buf, BLOCK_SIZE);
+-            bdrv_write(bs, addr, buf, BDRV_SECTORS_PER_DIRTY_CHUNK);
++            ret = bdrv_write(bs, addr, buf, BDRV_SECTORS_PER_DIRTY_CHUNK);
+ 
+             qemu_free(buf);
++            if (ret < 0) {
++                return ret;
++            }
+         } else if (flags & BLK_MIG_FLAG_PROGRESS) {
+             if (!banner_printed) {
+                 printf("Receiving block device images\n");
+-- 
+1.7.11.7
+

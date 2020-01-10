@@ -1,0 +1,68 @@
+From 0bae1b19dcd01f166c85c1f0eab40878647fc43b Mon Sep 17 00:00:00 2001
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Wed, 11 Jun 2014 16:17:17 +0200
+Subject: [PATCH 19/26] block: fix signed int overflow in qcow2_co_get_block_status
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <9d473235f5f7e2db63938828a6a90a9de71a095d.1402503113.git.jcody@redhat.com>
+Patchwork-id: 59200
+O-Subject: [RHEL-6.6 qemu-kvm PATCH] block: fix signed int overflow in qcow2_co_get_block_status
+Bugzilla: 1101430
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+This fixes a regression caused by downstream backport:
+
+commit 668be102: "qcow2: Ignore reserved bits in get_cluster_offset"
+
+In that commit, qcow2_co_get_block_status is using an 'int' for a status
+return, where an 'int64_t' should be used instead.
+
+The backport combined parts of upstream
+commit 4bc74be99: "block: return get_block_status data and flags for formats"
+
+with parts of
+commit 68d000a3: "qcow2: Ignore reserved bits in get_cluster_offset"
+
+This looks to have happened because downstream 9c398becb already
+backported 4bc74be99, which caused a conflict when backporting
+68d000a3.
+
+Downstream only; this moves qcow2_co_get_block_status() closer to
+matching upstream.
+
+There are scripts to reproduce and verify the fix, attached to BZs
+111430 and 1101445.
+
+BZ: 1101430
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7568091
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+
+RHEL6 Notes:
+
+ block/qcow2.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block/qcow2.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/block/qcow2.c b/block/qcow2.c
+index 1ea558d..1fe2e50 100644
+--- a/block/qcow2.c
++++ b/block/qcow2.c
+@@ -477,7 +477,7 @@ static int64_t coroutine_fn qcow2_co_get_block_status(BlockDriverState *bs,
+     BDRVQcowState *s = bs->opaque;
+     uint64_t cluster_offset;
+     int index_in_cluster, ret;
+-    int status = 0;
++    int64_t status = 0;
+ 
+     *pnum = nb_sectors;
+     qemu_co_mutex_lock(&s->lock);
+-- 
+1.7.1
+

@@ -1,0 +1,75 @@
+From 3ef564d36d72704c00ef64d56819293c2b5a63f9 Mon Sep 17 00:00:00 2001
+Message-Id: <3ef564d36d72704c00ef64d56819293c2b5a63f9.1411757522.git.jen@redhat.com>
+In-Reply-To: <c52ca58a7a8b9f87bde7ca1ab5b11a39d82854e5.1411757522.git.jen@redhat.com>
+References: <c52ca58a7a8b9f87bde7ca1ab5b11a39d82854e5.1411757522.git.jen@redhat.com>
+From: Jeff Nelson <jenelson@redhat.com>
+Date: Fri, 26 Sep 2014 16:39:44 -0400
+Subject: [CHANGE 2/7] Revert "migration: move bandwidth calculation to inside
+ stage 2"
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Jeff Nelson <jenelson@redhat.com>
+Message-id: <21bfd03fbe9a56befdb150556b533d1cf6714f34.1411747689.git.jen@redhat.com>
+Patchwork-id: 61459
+O-Subject: [RHEL-6.6.z qemu-kvm PATCH 2/7] Revert "migration: move bandwidth calculation to inside stage 2"
+Bugzilla: 970103
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+This reverts commit f871726d42ef8838b82c149401681df52ce03465.
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ vl.c | 17 +++++++----------
+ 1 file changed, 7 insertions(+), 10 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ vl.c | 17 +++++++----------
+ 1 file changed, 7 insertions(+), 10 deletions(-)
+
+diff --git a/vl.c b/vl.c
+index a078440..8ad11c6 100644
+--- a/vl.c
++++ b/vl.c
+@@ -2859,6 +2859,7 @@ static int ram_save_live(Monitor *mon, QEMUFile *f, int stage, void *opaque)
+     ram_addr_t addr;
+     uint64_t bytes_transferred_last;
+     uint64_t t0;
++    double bwidth = 0;
+     int i;
+     int ret;
+ 
+@@ -2930,6 +2931,12 @@ static int ram_save_live(Monitor *mon, QEMUFile *f, int stage, void *opaque)
+     }
+ 
+     t0 = get_clock() - t0;
++    bwidth = ((double)bytes_transferred - bytes_transferred_last) / t0;
++
++    /* if we haven't transferred anything this round, force expected_time to a
++     * a very high value, but without crashing */
++    if (bwidth == 0)
++        bwidth = 0.000001;
+ 
+     /* try transferring iterative blocks of memory */
+     if (stage == 3) {
+@@ -2946,16 +2953,6 @@ static int ram_save_live(Monitor *mon, QEMUFile *f, int stage, void *opaque)
+ 
+     if (stage == 2) {
+         uint64_t expected_time;
+-        double bwidth = 0;
+-
+-        bwidth = ((double)bytes_transferred - bytes_transferred_last) / t0;
+-
+-        /*
+-         * if we haven't transferred anything this round, force expected_time to a
+-         * a very high value, but without crashing
+-         */
+-        if (bwidth == 0)
+-            bwidth = 0.000001;
+ 
+         expected_time = ram_bytes_remaining() / bwidth;
+         return expected_time <= migrate_max_downtime();
+-- 
+1.9.3
+

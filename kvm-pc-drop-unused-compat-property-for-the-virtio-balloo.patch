@@ -1,0 +1,60 @@
+From 45e336fbbc62ea18ff85c8380988e4dbccbf643a Mon Sep 17 00:00:00 2001
+From: Luiz Capitulino <lcapitulino@redhat.com>
+Date: Thu, 21 Nov 2013 21:58:10 +0100
+Subject: [PATCH 33/39] pc: drop unused compat property for the virtio-balloon-pci driver
+
+RH-Author: Luiz Capitulino <lcapitulino@redhat.com>
+Message-id: <20131121165810.4ca61e6e@redhat.com>
+Patchwork-id: 55845
+O-Subject: [RHEL-6.6 qemu-kvm PATCH] pc: drop unused compat property for the virtio-balloon-pci driver
+Bugzilla: 1027561
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Igor Mammedov <imammedo@redhat.com>
+
+Bugzilla: 1027561
+Brew-build: https://brewweb.devel.redhat.com/taskinfo?taskID=6627685
+
+Commit 1b8edef923c858374905ca0c8c2b0617f6f0fa3c disabled the
+event idx virtio device property for machine types rhel6.0.0
+and rhel6.1.0. However, that commit misspelled the
+virtio-balloon-pci driver name, writing "virtio-balloon"
+instead of "virtio-balloon-pci". RHEL6 has no "virtio-balloon"
+alias.
+
+The end result is that the event idx property has never
+been disabled for the virtio-balloon-pci driver for the
+mentioned machine types.
+
+To avoid breaking migration between RHEL6 and RHEL7, we're
+going to completely drop that compat property from both. This
+commit does the RHEL6 part.
+
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+---
+ hw/pc.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ hw/pc.c |    4 ----
+ 1 files changed, 0 insertions(+), 4 deletions(-)
+
+diff --git a/hw/pc.c b/hw/pc.c
+index 98433dc..1ebcefa 100644
+--- a/hw/pc.c
++++ b/hw/pc.c
+@@ -1728,10 +1728,6 @@ static void rhel_common_init(const char *type1_version,
+             .driver   = "qxl",\
+             .property = "revision",\
+             .value    = stringify(2),\
+-        },{\
+-            .driver   = "virtio-balloon",\
+-            .property = "event_idx",\
+-            .value    = "off",\
+         }
+ 
+ #define PC_RHEL6_0_COMPAT \
+-- 
+1.7.1
+

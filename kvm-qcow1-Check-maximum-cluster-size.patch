@@ -1,0 +1,74 @@
+From 3739daaeaaf40254be9a12ecf239cfbca3abc3a9 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Tue, 3 Jun 2014 10:01:31 +0200
+Subject: [PATCH 12/26] qcow1: Check maximum cluster size
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1401789694-14289-4-git-send-email-kwolf@redhat.com>
+Patchwork-id: 59109
+O-Subject: [RHEL-6.6/6.5.z qemu-kvm PATCH 3/6] qcow1: Check maximum cluster size
+Bugzilla: 1097228
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1097228
+
+Huge values for header.cluster_bits cause unbounded allocations (e.g.
+for s->cluster_cache) and crash qemu this way. Less huge values may
+survive those allocations, but can cause integer overflows later on.
+
+The only cluster sizes that qemu can create are 4k (for standalone
+images) and 512 (for images with backing files), so we can limit it
+to 64k.
+
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Benoit Canet <benoit@irqsave.net>
+(cherry picked from commit 7159a45b2bf2dcb9f49f1e27d1d3d135a0247a2f)
+
+Conflicts:
+	block/qcow.c
+	tests/qemu-iotests/*
+
+Conflicts because error_setg() and friends don't exist on RHEL 6. Also
+removed the test case.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/qcow.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block/qcow.c |   11 ++++++++++-
+ 1 files changed, 10 insertions(+), 1 deletions(-)
+
+diff --git a/block/qcow.c b/block/qcow.c
+index 7f62b3f..5a2101e 100644
+--- a/block/qcow.c
++++ b/block/qcow.c
+@@ -123,10 +123,19 @@ static int qcow_open(BlockDriverState *bs, int flags)
+         goto fail;
+     }
+ 
+-    if (header.size <= 1 || header.cluster_bits < 9) {
++    if (header.size <= 1) {
++        qerror_report(QERR_GENERIC_ERROR,
++                      "Image size is too small (must be at least 2 bytes)");
+         ret = -EINVAL;
+         goto fail;
+     }
++    if (header.cluster_bits < 9 || header.cluster_bits > 16) {
++        qerror_report(QERR_GENERIC_ERROR,
++                      "Cluster size must be between 512 and 64k");
++        ret = -EINVAL;
++        goto fail;
++    }
++
+     if (header.crypt_method > QCOW_CRYPT_AES) {
+         ret = -EINVAL;
+         goto fail;
+-- 
+1.7.1
+

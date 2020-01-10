@@ -1,0 +1,52 @@
+From 47ffbe844578f6c64a1e8963966274c867c9751f Mon Sep 17 00:00:00 2001
+Message-Id: <47ffbe844578f6c64a1e8963966274c867c9751f.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:47 +0200
+Subject: [PATCH 32/47] Include zlib.h using #include <>
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-33-git-send-email-famz@redhat.com>
+Patchwork-id: 51468
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 32/47] Include zlib.h using #include <>
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Stefan Weil <sw@weilnetz.de>
+
+zlib.h is not a local include file, therefore it should be included
+using <> instead of "".
+
+Signed-off-by: Stefan Weil <sw@weilnetz.de>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 2923d34fdc5014a6219bfb3f9fab3795a8f4512f)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index ded8ccc..1935ff2 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -26,7 +26,7 @@
+ #include "qemu-common.h"
+ #include "block_int.h"
+ #include "module.h"
+-#include "zlib.h"
++#include <zlib.h>
+ 
+ #define VMDK3_MAGIC (('C' << 24) | ('O' << 16) | ('W' << 8) | 'D')
+ #define VMDK4_MAGIC (('K' << 24) | ('D' << 16) | ('M' << 8) | 'V')
+-- 
+1.7.11.7
+

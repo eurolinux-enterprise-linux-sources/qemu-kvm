@@ -1,0 +1,151 @@
+From 9e69a7b71ffa3174dc781a2fff4035b3862953fd Mon Sep 17 00:00:00 2001
+From: Luiz Capitulino <lcapitulino@redhat.com>
+Date: Thu, 11 Jul 2013 17:54:34 +0200
+Subject: [PATCH 20/21] qapi: untangle next_list
+
+RH-Author: Luiz Capitulino <lcapitulino@redhat.com>
+Message-id: <1373565275-8756-4-git-send-email-lcapitulino@redhat.com>
+Patchwork-id: 52445
+O-Subject: [RHEL6.5 qemu-kvm PATCH 3/4] qapi: untangle next_list
+Bugzilla: 983635
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Right now, the semantics of next_list are complicated.  The caller must:
+
+* call start_list
+
+* call next_list for each element *including the first*
+
+* on the first call to next_list, the second argument should point to
+NULL and the result is the head of the list.  On subsequent calls,
+the second argument should point to the last node (last result of
+next_list) and next_list itself tacks the element at the tail of the
+list.
+
+This works for both input and output visitor, but having the visitor
+write memory when it is only reading the list is ugly.  Plus, relying
+on *list to detect the first call is tricky and undocumented.
+
+We can initialize so->entry in next_list instead of start_list, leaving
+it NULL in start_list.  This way next_list sees clearly whether it is
+on the first call---as a bonus, it discriminates the cases based on
+internal state of the visitor rather than external state.  We can
+also pull the assignment of the list head from generated code up to
+next_list.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Reviewed-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 3a86a0fa76b5103a122b6e817b3827b2837f4956)
+
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+Conflicts:
+	qapi/qmp-input-visitor.c
+
+[RHEL6 NOTE: qemu_malloc/g_malloc conflict]
+---
+ docs/qapi-code-gen.txt   |  4 ++--
+ qapi/qmp-input-visitor.c | 22 +++++++++++++---------
+ scripts/qapi-visit.py    |  4 ++--
+ 3 files changed, 17 insertions(+), 13 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ docs/qapi-code-gen.txt   |    4 ++--
+ qapi/qmp-input-visitor.c |   22 +++++++++++++---------
+ scripts/qapi-visit.py    |    4 ++--
+ 3 files changed, 17 insertions(+), 13 deletions(-)
+
+diff --git a/docs/qapi-code-gen.txt b/docs/qapi-code-gen.txt
+index f345866..dccf598 100644
+--- a/docs/qapi-code-gen.txt
++++ b/docs/qapi-code-gen.txt
+@@ -194,11 +194,11 @@ Example:
+ 
+     void visit_type_UserDefOneList(Visitor *m, UserDefOneList ** obj, const char *name, Error **errp)
+     {
+-        GenericList *i;
++        GenericList *i, **prev = (GenericList **)obj;
+ 
+         visit_start_list(m, name, errp);
+ 
+-        for (i = visit_next_list(m, (GenericList **)obj, errp); i; i = visit_next_list(m, &i, errp)) {
++        for (; (i = visit_next_list(m, prev, errp)) != NULL; prev = &i) {
+             UserDefOneList *native_i = (UserDefOneList *)i;
+             visit_type_UserDefOne(m, &native_i->value, NULL, errp);
+         }
+diff --git a/qapi/qmp-input-visitor.c b/qapi/qmp-input-visitor.c
+index b52ac0c..903a91f 100644
+--- a/qapi/qmp-input-visitor.c
++++ b/qapi/qmp-input-visitor.c
+@@ -63,9 +63,7 @@ static const QObject *qmp_input_get_object(QmpInputVisitor *qiv,
+ static void qmp_input_push(QmpInputVisitor *qiv, const QObject *obj, Error **errp)
+ {
+     qiv->stack[qiv->nb_stack].obj = obj;
+-    if (qobject_type(obj) == QTYPE_QLIST) {
+-        qiv->stack[qiv->nb_stack].entry = qlist_first(qobject_to_qlist(obj));
+-    }
++    qiv->stack[qiv->nb_stack].entry = NULL;
+     qiv->nb_stack++;
+ 
+     if (qiv->nb_stack >= QIV_STACK_SIZE) {
+@@ -132,18 +130,24 @@ static GenericList *qmp_input_next_list(Visitor *v, GenericList **list,
+     QmpInputVisitor *qiv = to_qiv(v);
+     GenericList *entry;
+     StackObject *so = &qiv->stack[qiv->nb_stack - 1];
++    bool first;
++
++    if (so->entry == NULL) {
++        so->entry = qlist_first(qobject_to_qlist(so->obj));
++        first = true;
++    } else {
++        so->entry = qlist_next(so->entry);
++        first = false;
++    }
+ 
+     if (so->entry == NULL) {
+         return NULL;
+     }
+ 
+     entry = qemu_mallocz(sizeof(*entry));
+-    if (*list) {
+-        so->entry = qlist_next(so->entry);
+-        if (so->entry == NULL) {
+-            qemu_free(entry);
+-            return NULL;
+-        }
++    if (first) {
++        *list = entry;
++    } else {
+         (*list)->next = entry;
+     }
+ 
+diff --git a/scripts/qapi-visit.py b/scripts/qapi-visit.py
+index 31d50a6..8d4e94a 100644
+--- a/scripts/qapi-visit.py
++++ b/scripts/qapi-visit.py
+@@ -86,14 +86,14 @@ def generate_visit_list(name, members):
+ 
+ void visit_type_%(name)sList(Visitor *m, %(name)sList ** obj, const char *name, Error **errp)
+ {
+-    GenericList *i, **head = (GenericList **)obj;
++    GenericList *i, **prev = (GenericList **)obj;
+ 
+     if (error_is_set(errp)) {
+         return;
+     }
+     visit_start_list(m, name, errp);
+ 
+-    for (*head = i = visit_next_list(m, head, errp); i; i = visit_next_list(m, &i, errp)) {
++    for (; (i = visit_next_list(m, prev, errp)) != NULL; prev = &i) {
+         %(name)sList *native_i = (%(name)sList *)i;
+         visit_type_%(name)s(m, &native_i->value, NULL, errp);
+     }
+-- 
+1.7.1
+

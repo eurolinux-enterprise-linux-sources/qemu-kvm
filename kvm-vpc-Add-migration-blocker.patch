@@ -1,0 +1,86 @@
+From 7618674772c3a0cbfa00ec2e9df95e3d96777eeb Mon Sep 17 00:00:00 2001
+Message-Id: <7618674772c3a0cbfa00ec2e9df95e3d96777eeb.1378999677.git.minovotn@redhat.com>
+In-Reply-To: <c345e2832073940a34662a696abefc2c4b8bfa79.1378999677.git.minovotn@redhat.com>
+References: <c345e2832073940a34662a696abefc2c4b8bfa79.1378999677.git.minovotn@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Thu, 12 Sep 2013 03:10:47 +0200
+Subject: [PATCH 4/5] vpc: Add migration blocker
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <fe1845579417f32cd180228eb0b120558a82fe2b.1378954963.git.jcody@redhat.com>
+Patchwork-id: 54302
+O-Subject: [RHEL6.5 qemu-kvm PATCH 4/5] vpc: Add migration blocker
+Bugzilla: 999779
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Orit Wasserman <owasserm@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+vpc caches the BAT. For migration to work, it would have to be
+invalidated. Block migration for now.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 612ff3d8876a6df0484aa6ebb5cae4575f7514c5)
+
+Conflicts:
+	block/vpc.c
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ block/vpc.c | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vpc.c | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/block/vpc.c b/block/vpc.c
+index 9d3bbfc..1a01bae 100644
+--- a/block/vpc.c
++++ b/block/vpc.c
+@@ -28,6 +28,7 @@
+ #if defined(CONFIG_UUID)
+ #include <uuid/uuid.h>
+ #endif
++#include "migration.h"
+ 
+ /**************************************************************/
+ 
+@@ -131,6 +132,8 @@ typedef struct BDRVVPCState {
+ 
+     uint64_t last_bitmap;
+ #endif
++
++    Error *migration_blocker;
+ } BDRVVPCState;
+ 
+ static uint32_t vpc_checksum(uint8_t* buf, size_t size)
+@@ -267,6 +270,13 @@ static int vpc_open(BlockDriverState *bs, int flags)
+     }
+ 
+     qemu_co_mutex_init(&s->lock);
++
++    /* Disable migration when VHD images are used */
++    error_set(&s->migration_blocker,
++              QERR_BLOCK_FORMAT_FEATURE_NOT_SUPPORTED,
++              "vpc", bs->device_name, "live migration");
++    migrate_add_blocker(s->migration_blocker);
++
+     return 0;
+ 
+ fail:
+@@ -788,6 +798,9 @@ static void vpc_close(BlockDriverState *bs)
+ #ifdef CACHE
+     g_free(s->pageentry_u8);
+ #endif
++
++    migrate_del_blocker(s->migration_blocker);
++    error_free(s->migration_blocker);
+ }
+ 
+ static QEMUOptionParameter vpc_create_options[] = {
+-- 
+1.7.11.7
+

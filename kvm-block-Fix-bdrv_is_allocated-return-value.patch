@@ -1,0 +1,56 @@
+From 6952580851e387ad1a544ea1420d6b6723783cc5 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Wed, 16 Jul 2014 17:31:34 +0200
+Subject: [PATCH 44/44] block: Fix bdrv_is_allocated() return value
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1405531894-6801-3-git-send-email-kwolf@redhat.com>
+Patchwork-id: 59929
+O-Subject: [RHEL-6.6/6.5.z qemu-kvm PATCH 2/2] block: Fix bdrv_is_allocated() return value
+Bugzilla: 1092117
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+bdrv_is_allocated() should return either 0 or 1 in successful cases.
+We're lucky that currently, the callers that rely on this (e.g. because
+they check for ret == 1) don't seem to break badly. They just might skip
+some optimisation or in the case of qemu-io 'map' print separate lines
+where a single line would suffice. In theory, a wrong allocation status
+could lead to image corruption with certain operations, so let's fix
+this quickly.
+
+[ Downstream note: This is only a theoretical problem in upstream. In
+  the RHEL 6 codebase, we have a ret == 1 check in mirror.c that
+  determines whether to copy a sector or not. Returning anything > 1 is
+  a data corruptor in RHEL 6. ]
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+(cherry picked from commit 01fb2705bd19a6e9c1207446793064dbd141df5f)
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/block.c b/block.c
+index 3f67afd..6b9230d 100644
+--- a/block.c
++++ b/block.c
+@@ -2884,7 +2884,7 @@ int coroutine_fn bdrv_is_allocated(BlockDriverState *bs, int64_t sector_num,
+     if (ret < 0) {
+         return ret;
+     }
+-    return (ret & BDRV_BLOCK_ALLOCATED);
++    return !!(ret & BDRV_BLOCK_ALLOCATED);
+ }
+ 
+ /*
+-- 
+1.7.1
+

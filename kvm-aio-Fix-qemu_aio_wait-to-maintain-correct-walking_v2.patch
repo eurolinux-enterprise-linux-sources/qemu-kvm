@@ -1,0 +1,84 @@
+From cdd09a793a816ef08a32d66e02e7f095d7382fe1 Mon Sep 17 00:00:00 2001
+Message-Id: <cdd09a793a816ef08a32d66e02e7f095d7382fe1.1427300678.git.jen@redhat.com>
+In-Reply-To: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+References: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+From: Vlad Yasevich <vyasevic@redhat.com>
+Date: Thu, 12 Mar 2015 19:13:01 -0500
+Subject: [CHANGE 05/33] aio: Fix qemu_aio_wait() to maintain correct
+ walking_handlers count
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Vlad Yasevich <vyasevic@redhat.com>
+Message-id: <1426187601-21396-6-git-send-email-vyasevic@redhat.com>
+Patchwork-id: 64343
+O-Subject: [RHEL6.7 qemu-kvm PATCH v2 05/25] aio: Fix qemu_aio_wait() to maintain correct walking_handlers count
+Bugzilla: 1005016
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Fix qemu_aio_wait() to ensure that registered aio handlers don't get
+deleted when they are still active. This is ensured by maintaning the
+right count of walking_handlers.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Bharata B Rao <bharata@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 00f78533326c5ba2e62fafada16655aa558a5520)
+
+Signed-off-by: Vladislav Yasevich <vyasevic@redhat.com>
+---
+ aio.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ aio.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/aio.c b/aio.c
+index cbf0404..6fd7aa5 100644
+--- a/aio.c
++++ b/aio.c
+@@ -117,7 +117,7 @@ bool qemu_aio_wait(void)
+         return true;
+     }
+ 
+-    walking_handlers = 1;
++    walking_handlers++;
+ 
+     FD_ZERO(&rdfds);
+     FD_ZERO(&wrfds);
+@@ -145,7 +145,7 @@ bool qemu_aio_wait(void)
+         }
+     }
+ 
+-    walking_handlers = 0;
++    walking_handlers--;
+ 
+     /* No AIO operations?  Get us out of here */
+     if (!busy) {
+@@ -157,7 +157,7 @@ bool qemu_aio_wait(void)
+ 
+     /* if we have any readable fds, dispatch event */
+     if (ret > 0) {
+-        walking_handlers = 1;
++        walking_handlers++;
+ 
+         /* we have to walk very carefully in case
+          * qemu_aio_set_fd_handler is called while we're walking */
+@@ -185,7 +185,7 @@ bool qemu_aio_wait(void)
+             }
+         }
+ 
+-        walking_handlers = 0;
++        walking_handlers--;
+     }
+ 
+     return true;
+-- 
+2.1.0
+

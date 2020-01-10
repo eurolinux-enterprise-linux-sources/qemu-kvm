@@ -1,0 +1,68 @@
+From b580f484e1f92ab6866fdd48e320470e54d72e43 Mon Sep 17 00:00:00 2001
+Message-Id: <b580f484e1f92ab6866fdd48e320470e54d72e43.1481738366.git.ymankad@redhat.com>
+In-Reply-To: <be7cc66c94d4b6c77f9f1e674d4783c7d1c3efac.1481738366.git.ymankad@redhat.com>
+References: <be7cc66c94d4b6c77f9f1e674d4783c7d1c3efac.1481738366.git.ymankad@redhat.com>
+From: Ladi Prosek <lprosek@redhat.com>
+Date: Mon, 5 Dec 2016 13:57:47 -0500
+Subject: [CHANGE 06/10] virtio: zero vq->inuse in virtio_reset()
+To: ymankad@redhat.com
+
+RH-Author: Ladi Prosek <lprosek@redhat.com>
+Message-id: <1480946267-6514-7-git-send-email-lprosek@redhat.com>
+Patchwork-id: 72988
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 6/6] virtio: zero vq->inuse in virtio_reset()
+Bugzilla: 1392520
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Ladi Prosek <lprosek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@redhat.com>
+
+vq->inuse must be zeroed upon device reset like most other virtqueue
+fields.
+
+In theory, virtio_reset() just needs assert(vq->inuse == 0) since
+devices must clean up in-flight requests during reset (requests cannot
+not be leaked!).
+
+In practice, it is difficult to achieve vq->inuse == 0 across reset
+because balloon, blk, 9p, etc implement various different strategies for
+cleaning up requests.  Most devices call g_free(elem) directly without
+telling virtio.c that the VirtQueueElement is cleaned up.  Therefore
+vq->inuse is not decremented during reset.
+
+This patch zeroes vq->inuse and trusts that devices are not leaking
+VirtQueueElements across reset.
+
+I will send a follow-up series that refactors request life-cycle across
+all devices and converts vq->inuse = 0 into assert(vq->inuse == 0) but
+this more invasive approach is not appropriate for stable trees.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Cc: qemu-stable <qemu-stable@nongnu.org>
+Reviewed-by: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+Reviewed-by: Ladi Prosek <lprosek@redhat.com>
+(cherry picked from commit 4b7f91ed0270a371e1933efa21ba600b6da23ab9)
+Signed-off-by: Ladi Prosek <lprosek@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ hw/virtio.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/hw/virtio.c b/hw/virtio.c
+index eb527d0..7791b28 100644
+--- a/hw/virtio.c
++++ b/hw/virtio.c
+@@ -570,6 +570,7 @@ void virtio_reset(void *opaque)
+         vdev->vq[i].signalled_used = 0;
+         vdev->vq[i].signalled_used_valid = false;
+         vdev->vq[i].notification = true;
++        vdev->vq[i].inuse = 0;
+     }
+ }
+ 
+-- 
+2.7.4
+

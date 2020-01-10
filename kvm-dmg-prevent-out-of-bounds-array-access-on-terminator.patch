@@ -1,0 +1,47 @@
+From 052a6ae979f2d93b0382fb8b82be8e0c870a19ba Mon Sep 17 00:00:00 2001
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Tue, 25 Mar 2014 11:45:56 +0100
+Subject: [PATCH 38/48] dmg: prevent out-of-bounds array access on terminator
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1395744364-16049-38-git-send-email-kwolf@redhat.com>
+Patchwork-id: n/a
+O-Subject: [EMBARGOED RHEL-6.6/6.5.z qemu-kvm PATCH v2 37/45]
+           dmg: prevent out-of-bounds array access on terminator
+Bugzilla: 1079518
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1079518
+Upstream status: Series embargoed
+
+When a terminator is reached the base for offsets and sectors is stored.
+The following records that are processed will use this base value.
+
+If the first record we encounter is a terminator, then calculating the
+base values would result in out-of-bounds array accesses.  Don't do
+that.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/dmg.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/block/dmg.c b/block/dmg.c
+index 2710faf..0559bbc 100644
+--- a/block/dmg.c
++++ b/block/dmg.c
+@@ -174,7 +174,7 @@ static int dmg_open(BlockDriverState *bs, int flags)
+                 offset += 4;
+                 if (s->types[i] != 0x80000005 && s->types[i] != 1 &&
+                     s->types[i] != 2) {
+-                    if (s->types[i] == 0xffffffff) {
++                    if (s->types[i] == 0xffffffff && i > 0) {
+                         last_in_offset = s->offsets[i - 1] + s->lengths[i - 1];
+                         last_out_offset = s->sectors[i - 1] +
+                                           s->sectorcounts[i - 1];
+-- 
+1.7.1
+

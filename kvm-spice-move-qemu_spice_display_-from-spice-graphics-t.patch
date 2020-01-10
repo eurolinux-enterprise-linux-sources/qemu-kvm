@@ -1,0 +1,180 @@
+From 5ad7f3f13ab7bbd13f8235144bc040b64da1b725 Mon Sep 17 00:00:00 2001
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 15 Jul 2014 06:51:00 -0500
+Subject: [CHANGE 3/4] spice: move qemu_spice_display_*() from spice-graphics
+ to spice-core
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1405407061-27644-3-git-send-email-kraxel@redhat.com>
+Patchwork-id: 59894
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 2/3] spice: move qemu_spice_display_*() from spice-graphics to spice-core
+Bugzilla: 995931
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Levente Kurusa <lkurusa@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 7cc6a25fe94b430cb5a041bcb19d7d854b4e99a7)
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	ui/spice-core.c
+	ui/spice-display.c
+
+[ rhel6: conflicts due to out-of-order backporting ]
+[ rhel6: dropped some dead code for old spice versions,
+         see also upstream 67be6726b6459472103ee87ceaf2e8e97c154965 ]
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/qxl.c           |  1 -
+ ui/spice-core.c    | 16 ++++++++++++++++
+ ui/spice-display.c | 55 ------------------------------------------------------
+ ui/spice-display.h |  3 ---
+ 4 files changed, 16 insertions(+), 59 deletions(-)
+
+diff --git a/hw/qxl.c b/hw/qxl.c
+index 4970997..4c55551 100644
+--- a/hw/qxl.c
++++ b/hw/qxl.c
+@@ -1895,7 +1895,6 @@ static void qxl_vm_change_state_handler(void *opaque, int running,
+                                         RunState state)
+ {
+     PCIQXLDevice *qxl = opaque;
+-    qemu_spice_vm_change_state_handler(&qxl->ssd, running, state);
+ 
+     if (running) {
+         /*
+diff --git a/ui/spice-core.c b/ui/spice-core.c
+index fc24c19..55476dd 100644
+--- a/ui/spice-core.c
++++ b/ui/spice-core.c
+@@ -46,6 +46,7 @@ static const char *auth = "spice";
+ static char *auth_passwd;
+ static time_t auth_expires = TIME_MAX;
+ static int spice_migration_completed;
++static int spice_display_is_running;
+ int using_spice = 0;
+ 
+ static pthread_t me;
+@@ -872,6 +873,21 @@ int qemu_spice_set_pw_expire(time_t expires)
+     return qemu_spice_set_ticket(false, false);
+ }
+ 
++void qemu_spice_display_start(void)
++{
++    spice_display_is_running = true;
++}
++
++void qemu_spice_display_stop(void)
++{
++    spice_display_is_running = false;
++}
++
++int qemu_spice_display_is_running(SimpleSpiceDisplay *ssd)
++{
++    return spice_display_is_running;
++}
++
+ static void spice_initialize(void)
+ {
+     qemu_spice_init();
+diff --git a/ui/spice-display.c b/ui/spice-display.c
+index 29cdc9a..80149fc 100644
+--- a/ui/spice-display.c
++++ b/ui/spice-display.c
+@@ -129,44 +129,6 @@ void qemu_spice_wakeup(SimpleSpiceDisplay *ssd)
+     ssd->worker->wakeup(ssd->worker);
+ }
+ 
+-#if SPICE_SERVER_VERSION < 0x000b02 /* before 0.11.2 */
+-static void qemu_spice_start(SimpleSpiceDisplay *ssd)
+-{
+-    trace_qemu_spice_start(ssd->qxl.id);
+-    ssd->worker->start(ssd->worker);
+-}
+-
+-static void qemu_spice_stop(SimpleSpiceDisplay *ssd)
+-{
+-    trace_qemu_spice_stop(ssd->qxl.id);
+-    ssd->worker->stop(ssd->worker);
+-}
+-
+-#else
+-
+-static int spice_display_is_running;
+-
+-void qemu_spice_display_start(void)
+-{
+-    spice_display_is_running = true;
+-}
+-
+-void qemu_spice_display_stop(void)
+-{
+-    spice_display_is_running = false;
+-}
+-
+-#endif
+-
+-int qemu_spice_display_is_running(SimpleSpiceDisplay *ssd)
+-{
+-#if SPICE_SERVER_VERSION < 0x000b02 /* before 0.11.2 */
+-    return ssd->running;
+-#else
+-    return spice_display_is_running;
+-#endif
+-}
+-
+ static void qemu_spice_create_one_update(SimpleSpiceDisplay *ssd,
+                                          QXLRect *rect)
+ {
+@@ -360,22 +322,6 @@ void qemu_spice_destroy_host_primary(SimpleSpiceDisplay *ssd)
+     qemu_spice_destroy_primary_surface(ssd, 0, QXL_SYNC);
+ }
+ 
+-void qemu_spice_vm_change_state_handler(void *opaque, int running,
+-                                        RunState state)
+-{
+-#if SPICE_SERVER_VERSION < 0x000b02 /* before 0.11.2 */
+-    SimpleSpiceDisplay *ssd = opaque;
+-
+-    if (running) {
+-        ssd->running = true;
+-        qemu_spice_start(ssd);
+-    } else {
+-        qemu_spice_stop(ssd);
+-        ssd->running = false;
+-    }
+-#endif
+-}
+-
+ void qemu_spice_display_init_common(SimpleSpiceDisplay *ssd, DisplayState *ds)
+ {
+     ssd->ds = ds;
+@@ -651,7 +597,6 @@ void qemu_spice_display_init(DisplayState *ds)
+     qemu_spice_add_interface(&sdpy.qxl.base);
+     assert(sdpy.worker);
+ 
+-    qemu_add_vm_change_state_handler(qemu_spice_vm_change_state_handler, &sdpy);
+     qemu_spice_create_host_memslot(&sdpy);
+     qemu_spice_create_host_primary(&sdpy);
+ }
+diff --git a/ui/spice-display.h b/ui/spice-display.h
+index 4ffb624..8234502 100644
+--- a/ui/spice-display.h
++++ b/ui/spice-display.h
+@@ -84,9 +84,6 @@ struct SimpleSpiceDisplay {
+ 
+     QXLRect dirty;
+     int notify;
+-#if SPICE_SERVER_VERSION < 0x000b02 /* before 0.11.2 */
+-    int running;
+-#endif
+ 
+     /*
+      * All struct members below this comment can be accessed from
+-- 
+1.9.3
+

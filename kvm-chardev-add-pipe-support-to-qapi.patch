@@ -1,0 +1,131 @@
+From 98bad3bee4920b6f5e4f57724e748f91cd3a475a Mon Sep 17 00:00:00 2001
+Message-Id: <98bad3bee4920b6f5e4f57724e748f91cd3a475a.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:06:09 +0200
+Subject: [PATCH 58/65] chardev: add pipe support to qapi
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-59-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52137
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 58/65] chardev: add pipe support to qapi
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+This patch adds 'pipe' support to qapi and also switches over the
+pipe chardev initialization to the new qapi code path.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 548cbb36f415d6086f5252309ab5aa7634497ab5)
+---
+ qapi-schema.json |    3 ++-
+ qemu-char.c      |   31 ++++++++++++++++++++++---------
+ 2 files changed, 24 insertions(+), 10 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema.json |  3 ++-
+ qemu-char.c      | 31 ++++++++++++++++++++++---------
+ 2 files changed, 24 insertions(+), 10 deletions(-)
+
+diff --git a/qapi-schema.json b/qapi-schema.json
+index a797092..47cf69f 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -424,7 +424,7 @@
+ ##
+ # @ChardevHostdev:
+ #
+-# Configuration info for device chardevs.
++# Configuration info for device and pipe chardevs.
+ #
+ # @device: The name of the special file for the device,
+ #          i.e. /dev/ttyS0 on Unix or COM1: on Windows
+@@ -491,6 +491,7 @@
+ { 'union': 'ChardevBackend', 'data': { 'file'   : 'ChardevFile',
+                                        'serial' : 'ChardevHostdev',
+                                        'parallel': 'ChardevHostdev',
++                                       'pipe'   : 'ChardevHostdev',
+                                        'socket' : 'ChardevSocket',
+                                        'pty'    : 'ChardevDummy',
+                                        'null'   : 'ChardevDummy',
+diff --git a/qemu-char.c b/qemu-char.c
+index eeb35fa..1579058 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -869,11 +869,11 @@ static CharDriverState *qemu_chr_open_fd(int fd_in, int fd_out)
+     return chr;
+ }
+ 
+-static CharDriverState *qemu_chr_open_pipe(QemuOpts *opts)
++static CharDriverState *qemu_chr_open_pipe(ChardevHostdev *opts)
+ {
+     int fd_in, fd_out;
+     char filename_in[256], filename_out[256];
+-    const char *filename = qemu_opt_get(opts, "path");
++    const char *filename = opts->device;
+ 
+     if (filename == NULL) {
+         fprintf(stderr, "chardev: pipe: no filename given\n");
+@@ -1931,9 +1931,9 @@ static int win_chr_pipe_init(CharDriverState *chr, const char *filename)
+ }
+ 
+ 
+-static CharDriverState *qemu_chr_open_win_pipe(QemuOpts *opts)
++static CharDriverState *qemu_chr_open_pipe(ChardevHostdev *opts)
+ {
+-    const char *filename = qemu_opt_get(opts, "path");
++    const char *filename = opts->device;
+     CharDriverState *chr;
+     WinCharState *s;
+ 
+@@ -2804,6 +2804,19 @@ static void qemu_chr_parse_parallel(QemuOpts *opts, ChardevBackend *backend,
+     backend->parallel->device = g_strdup(device);
+ }
+ 
++static void qemu_chr_parse_pipe(QemuOpts *opts, ChardevBackend *backend,
++                                Error **errp)
++{
++    const char *device = qemu_opt_get(opts, "path");
++
++    if (device == NULL) {
++        error_setg(errp, "chardev: pipe: no device path given");
++        return;
++    }
++    backend->pipe = g_new0(ChardevHostdev, 1);
++    backend->pipe->device = g_strdup(device);
++}
++
+ typedef struct CharDriver {
+     const char *name;
+     /* old, pre qapi */
+@@ -3227,6 +3240,9 @@ ChardevReturn *qmp_chardev_add(const char *id, ChardevBackend *backend,
+     case CHARDEV_BACKEND_KIND_PARALLEL:
+         chr = qmp_chardev_open_parallel(backend->parallel, errp);
+         break;
++    case CHARDEV_BACKEND_KIND_PIPE:
++        chr = qemu_chr_open_pipe(backend->pipe);
++        break;
+     case CHARDEV_BACKEND_KIND_SOCKET:
+         chr = qmp_chardev_open_socket(backend->socket, errp);
+         break;
+@@ -3319,11 +3335,8 @@ static void register_types(void)
+                               qemu_chr_parse_parallel);
+     register_char_driver_qapi("pty", CHARDEV_BACKEND_KIND_PTY, NULL);
+     register_char_driver_qapi("console", CHARDEV_BACKEND_KIND_CONSOLE, NULL);
+-#ifdef _WIN32
+-    register_char_driver("pipe", qemu_chr_open_win_pipe);
+-#else
+-    register_char_driver("pipe", qemu_chr_open_pipe);
+-#endif
++    register_char_driver_qapi("pipe", CHARDEV_BACKEND_KIND_PIPE,
++                              qemu_chr_parse_pipe);
+ }
+ 
+ machine_init(register_types);
+-- 
+1.7.11.7
+

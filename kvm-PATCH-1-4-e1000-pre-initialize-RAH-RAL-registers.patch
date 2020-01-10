@@ -1,0 +1,73 @@
+From 7c6273c3354cd6f7086857a7d74311d61cc8840b Mon Sep 17 00:00:00 2001
+Message-Id: <7c6273c3354cd6f7086857a7d74311d61cc8840b.1481738366.git.ymankad@redhat.com>
+In-Reply-To: <be7cc66c94d4b6c77f9f1e674d4783c7d1c3efac.1481738366.git.ymankad@redhat.com>
+References: <be7cc66c94d4b6c77f9f1e674d4783c7d1c3efac.1481738366.git.ymankad@redhat.com>
+From: Vlad Yasevich <vyasevic@redhat.com>
+Date: Tue, 13 Dec 2016 03:04:46 -0500
+Subject: [CHANGE 07/10] PATCH 1/4] e1000: pre-initialize RAH/RAL registers
+To: ymankad@redhat.com
+
+RH-Author: Vlad Yasevich <vyasevic@redhat.com>
+Message-id: <1481598289-10330-2-git-send-email-vyasevic@redhat.com>
+Patchwork-id: 73040
+O-Subject: [RHEL-6.9 qemu-kvm ]PATCH 1/4] e1000: pre-initialize RAH/RAL registers
+Bugzilla: 1300626
+RH-Acked-by: Vlad Yasevich <vyasevic@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Xiao Wang <jasowang@redhat.com>
+RH-Acked-by: Laurent Vivier <lvivier@redhat.com>
+
+From: "Gabriel L. Somlo" <gsomlo@gmail.com>
+
+Some guest operating systems' drivers (Mac OS X in particular) fail to
+properly initialize the Receive Address registers (probably expecting
+them to be pre-initialized by an earlier component, such as a specific
+proprietary BIOS). This patch pre-initializes the RA registers, allowing
+OS X networking to function properly. Other guest operating systems are
+not affected, and free to (re)initialize these registers during boot.
+
+[According to the datasheet the Address Valid bits in the RA registers
+are cleared on PCI or software reset.  This patch adds the NIC's MAC
+address and sets Address Valid on reset.  So we diverge from real
+hardware behavior here. -- Stefan]
+
+Signed-off-by: Gabriel Somlo <somlo@cmu.edu>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 372254c6e5c078fb13b236bb648d2b9b2b0c70f1)
+Signed-off-by: Vladislav Yasevich <vyasevic@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ hw/e1000.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/hw/e1000.c b/hw/e1000.c
+index 25caef8..0f18590 100644
+--- a/hw/e1000.c
++++ b/hw/e1000.c
+@@ -284,6 +284,8 @@ rxbufsize(uint32_t v)
+ static void e1000_reset(void *opaque)
+ {
+     E1000State *d = opaque;
++    uint8_t *macaddr = d->conf.macaddr.a;
++    int i;
+ 
+     qemu_del_timer(d->autoneg_timer);
+     memset(d->phy_reg, 0, sizeof d->phy_reg);
+@@ -296,6 +298,14 @@ static void e1000_reset(void *opaque)
+     if (d->nic->nc.link_down) {
+         e1000_link_down(d);
+     }
++
++    /* Some guests expect pre-initialized RAH/RAL (AddrValid flag + MACaddr) */
++    d->mac_reg[RA] = 0;
++    d->mac_reg[RA + 1] = E1000_RAH_AV;
++    for (i = 0; i < 4; i++) {
++        d->mac_reg[RA] |= macaddr[i] << (8 * i);
++        d->mac_reg[RA + 1] |= (i < 2) ? macaddr[i + 4] << (8 * i) : 0;
++    }
+ }
+ 
+ static void
+-- 
+2.7.4
+

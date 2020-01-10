@@ -1,0 +1,52 @@
+From 91fcc081fe94c761d9e33d85581b17c3e905ab00 Mon Sep 17 00:00:00 2001
+From: Max Reitz <mreitz@redhat.com>
+Date: Fri, 2 May 2014 16:58:54 -0500
+Subject: [PATCH 22/26] qcow2-refcount: Sanitize refcount table entry
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1399049936-13496-23-git-send-email-mreitz@redhat.com>
+Patchwork-id: 58668
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 22/24] qcow2-refcount: Sanitize refcount table entry
+Bugzilla: 1004420
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1004420
+
+When reading the refcount table entry in get_refcount(), only bits which
+are actually significant for the refcount block offset should be taken
+into account.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 26d49c46750aff62c8c6e7a8b14c79d4114a8e53)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-refcount.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-refcount.c |    3 ++-
+ 1 files changed, 2 insertions(+), 1 deletions(-)
+
+diff --git a/block/qcow2-refcount.c b/block/qcow2-refcount.c
+index 9e93131..1b4042e 100644
+--- a/block/qcow2-refcount.c
++++ b/block/qcow2-refcount.c
+@@ -99,7 +99,8 @@ static int get_refcount(BlockDriverState *bs, int64_t cluster_index)
+     refcount_table_index = cluster_index >> (s->cluster_bits - REFCOUNT_SHIFT);
+     if (refcount_table_index >= s->refcount_table_size)
+         return 0;
+-    refcount_block_offset = s->refcount_table[refcount_table_index];
++    refcount_block_offset =
++        s->refcount_table[refcount_table_index] & REFT_OFFSET_MASK;
+     if (!refcount_block_offset)
+         return 0;
+ 
+-- 
+1.7.1
+

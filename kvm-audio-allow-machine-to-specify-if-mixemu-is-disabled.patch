@@ -1,0 +1,116 @@
+From 7a9e056764e2c702a377a472af387af3ca33ee29 Mon Sep 17 00:00:00 2001
+Message-Id: <7a9e056764e2c702a377a472af387af3ca33ee29.1369841886.git.minovotn@redhat.com>
+In-Reply-To: <9db4fbc10d733a88102ef99acaf6eb5d54153495.1369841886.git.minovotn@redhat.com>
+References: <9db4fbc10d733a88102ef99acaf6eb5d54153495.1369841886.git.minovotn@redhat.com>
+From: Marc-Andr Lureau <marcandre.lureau@redhat.com>
+Date: Wed, 29 May 2013 14:34:51 +0200
+Subject: [PATCH 03/14] audio: allow machine to specify if mixemu is disabled
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Marc-André Lureau <marcandre.lureau@redhat.com>
+Message-id: <1369838102-26064-3-git-send-email-marcandre.lureau@redhat.com>
+Patchwork-id: 51673
+O-Subject: [RHEL-6.5 qemu-kvm PATCHv3 02/13] audio: allow machine to specify if mixemu is disabled
+Bugzilla: 884253
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Add a config field to specify if mixemu is enabled with a particular
+machine.
+
+Sadly, we can't call disable_mixemu() in pc_rhel6*_compat() because
+machine->init() is called after device module initialization.
+---
+ audio/audio.c |   15 +++++++++++++++
+ audio/audio.h |    6 ++++++
+ hw/boards.h   |    3 ++-
+ vl.c          |    3 +++
+ 4 files changed, 26 insertions(+), 1 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ audio/audio.c | 15 +++++++++++++++
+ audio/audio.h |  6 ++++++
+ hw/boards.h   |  3 ++-
+ vl.c          |  3 +++
+ 4 files changed, 26 insertions(+), 1 deletion(-)
+
+diff --git a/audio/audio.c b/audio/audio.c
+index 49d76bb..2afec31 100644
+--- a/audio/audio.c
++++ b/audio/audio.c
+@@ -2058,3 +2058,18 @@ void AUD_set_volume_in (SWVoiceIn *sw, int mute, uint8_t lvol, uint8_t rvol)
+         sw->vol.r = nominal_volume.r * rvol / 255;
+     }
+ }
++#ifdef CONFIG_MIXEMU
++static bool mixemu_disabled = false;
++#else
++static bool mixemu_disabled = true;
++#endif
++
++void disable_mixemu (void)
++{
++    mixemu_disabled = true;
++}
++
++bool get_mixemu_disabled (void)
++{
++    return mixemu_disabled;
++}
+diff --git a/audio/audio.h b/audio/audio.h
+index 454ade2..e357672 100644
+--- a/audio/audio.h
++++ b/audio/audio.h
+@@ -24,6 +24,9 @@
+ #ifndef QEMU_AUDIO_H
+ #define QEMU_AUDIO_H
+ 
++#include <stdint.h>
++#include <stdbool.h>
++#include <stdarg.h>
+ #include "config-host.h"
+ #include "qemu-queue.h"
+ 
+@@ -167,4 +170,7 @@ static inline void *advance (void *p, int incr)
+ int wav_start_capture (CaptureState *s, const char *path, int freq,
+                        int bits, int nchannels);
+ 
++void disable_mixemu (void);
++bool get_mixemu_disabled (void);
++
+ #endif  /* audio.h */
+diff --git a/hw/boards.h b/hw/boards.h
+index e1beda3..bd3284c 100644
+--- a/hw/boards.h
++++ b/hw/boards.h
+@@ -25,7 +25,8 @@ typedef struct QEMUMachine {
+         no_vga:1,
+         no_floppy:1,
+         no_cdrom:1,
+-        no_sdcard:1;
++        no_sdcard:1,
++        no_mixemu:1;
+     int is_default;
+     GlobalProperty *compat_props;
+     struct QEMUMachine *next;
+diff --git a/vl.c b/vl.c
+index 5c98297..2f85cd1 100644
+--- a/vl.c
++++ b/vl.c
+@@ -6119,6 +6119,9 @@ int main(int argc, char **argv, char **envp)
+     if (machine->no_sdcard) {
+         default_sdcard = 0;
+     }
++    if (machine->no_mixemu) {
++        disable_mixemu();
++    }
+ 
+     if (display_type == DT_NOGRAPHIC) {
+         if (default_parallel)
+-- 
+1.7.11.7
+

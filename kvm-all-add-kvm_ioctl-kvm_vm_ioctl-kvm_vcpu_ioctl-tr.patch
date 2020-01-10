@@ -1,0 +1,100 @@
+From 7592570787fe3451772271a7b7bac75ceeea135d Mon Sep 17 00:00:00 2001
+Message-Id: <7592570787fe3451772271a7b7bac75ceeea135d.1376492227.git.minovotn@redhat.com>
+In-Reply-To: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+References: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Tue, 13 Aug 2013 16:49:10 +0200
+Subject: [PATCH 03/22] kvm-all: add kvm_ioctl, kvm_vm_ioctl, kvm_vcpu_ioctl
+ tracepoints
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1376412551-32226-4-git-send-email-stefanha@redhat.com>
+Patchwork-id: 53274
+O-Subject: [PATCH RHEL6.5 qemu-kvm v2 3/4] kvm-all: add kvm_ioctl, kvm_vm_ioctl, kvm_vcpu_ioctl tracepoints
+Bugzilla: 903429
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: Kazuya Saito <saito.kazuya@jp.fujitsu.com>
+
+This patch adds tracepoints at ioctl to kvm. Tracing these ioctl is
+useful for clarification whether the cause of troubles is qemu or kvm.
+
+Signed-off-by: Kazuya Saito <saito.kazuya@jp.fujitsu.com>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 9c7757290c6d80c2f5bde6fa71d2c9fe2b331c8c)
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Conflicts:
+  kvm-all.c
+  The CPUState changes upstream are not present in RHEL so we have an
+  env pointer instead of a cpu pointer.
+
+  trace-events
+  Git was confused again but the actual change is identical to upstream.
+---
+ kvm-all.c    | 4 ++++
+ trace-events | 5 +++++
+ 2 files changed, 9 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ kvm-all.c    | 4 ++++
+ trace-events | 5 +++++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/kvm-all.c b/kvm-all.c
+index 06274e6..1157f85 100644
+--- a/kvm-all.c
++++ b/kvm-all.c
+@@ -25,6 +25,7 @@
+ #include "hw/hw.h"
+ #include "gdbstub.h"
+ #include "kvm.h"
++#include "trace.h"
+ 
+ /* This check must be after config-host.h is included */
+ #ifdef CONFIG_EVENTFD
+@@ -168,6 +169,7 @@ int kvm_ioctl(KVMState *s, int type, ...)
+     arg = va_arg(ap, void *);
+     va_end(ap);
+ 
++    trace_kvm_ioctl(type, arg);
+     ret = ioctl(s->fd, type, arg);
+     if (ret == -1)
+         ret = -errno;
+@@ -185,6 +187,7 @@ int kvm_vm_ioctl(KVMState *s, int type, ...)
+     arg = va_arg(ap, void *);
+     va_end(ap);
+ 
++    trace_kvm_vm_ioctl(type, arg);
+     ret = ioctl(s->vmfd, type, arg);
+     if (ret == -1)
+         ret = -errno;
+@@ -202,6 +205,7 @@ int kvm_vcpu_ioctl(CPUState *env, int type, ...)
+     arg = va_arg(ap, void *);
+     va_end(ap);
+ 
++    trace_kvm_vcpu_ioctl(env->cpu_index, type, arg);
+     ret = ioctl(env->kvm_fd, type, arg);
+     if (ret == -1)
+         ret = -errno;
+diff --git a/trace-events b/trace-events
+index 146a2ad..9039e72 100644
+--- a/trace-events
++++ b/trace-events
+@@ -306,3 +306,8 @@ disable hbitmap_set(void *hb, uint64_t start, uint64_t count, uint64_t sbit, uin
+ 
+ # migration.c
+ disable migrate_set_state(int new_state) "new state %d"
++
++# kvm-all.c
++disable kvm_ioctl(int type, void *arg) "type %d, arg %p"
++disable kvm_vm_ioctl(int type, void *arg) "type %d, arg %p"
++disable kvm_vcpu_ioctl(int cpu_index, int type, void *arg) "cpu_index %d, type %d, arg %p"
+-- 
+1.7.11.7
+

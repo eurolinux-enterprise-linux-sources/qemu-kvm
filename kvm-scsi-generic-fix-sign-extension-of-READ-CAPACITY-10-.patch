@@ -1,0 +1,65 @@
+From 0b69aae67928019f61a6aa98aac091666cff85c5 Mon Sep 17 00:00:00 2001
+Message-Id: <0b69aae67928019f61a6aa98aac091666cff85c5.1376317668.git.minovotn@redhat.com>
+In-Reply-To: <5877c7fdc54ad8b9608982a08ce5015eb646708a.1376317668.git.minovotn@redhat.com>
+References: <5877c7fdc54ad8b9608982a08ce5015eb646708a.1376317668.git.minovotn@redhat.com>
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Fri, 9 Aug 2013 14:22:04 +0200
+Subject: [PATCH 4/4] scsi-generic: fix sign extension of READ CAPACITY(10)
+ data
+
+RH-Author: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: <1376058124-12163-1-git-send-email-pbonzini@redhat.com>
+Patchwork-id: 53134
+O-Subject: [RHEL 6.5 qemu-kvm PATCH] scsi-generic: fix sign extension of READ CAPACITY(10) data
+Bugzilla: 963151
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Bugzilla: 963151
+
+Upstream status: 53254e569f8e07501f3e0098bd57d2b780e52faa
+
+Brew build: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=5803670
+
+Issuing the READ CAPACITY(10) command in the guest will cause QEMU
+to update its knowledge of the maximum accessible LBA in the disk.
+The recorded maximum LBA will be wrong if the disk is bigger than
+1TB, because ldl_be_p returns a signed int.
+
+When this is fixed, a latent bug will be unmasked.  If the READ
+CAPACITY(10) command reported an overflow (0xFFFFFFFF), we must
+not overwrite the previously-known maximum accessible LBA, or the guest
+will fail to access the disk above the first 2TB.
+
+[RHEL6: the first bug is not present because there is no ldl_be_p.
+Instead, just fix the second.]
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ hw/scsi-generic.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/scsi-generic.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/hw/scsi-generic.c b/hw/scsi-generic.c
+index 470815b..6019c38 100644
+--- a/hw/scsi-generic.c
++++ b/hw/scsi-generic.c
+@@ -202,7 +202,9 @@ static void scsi_read_complete(void * opaque, int ret)
+         scsi_command_complete(r, 0);
+     } else {
+         /* Snoop READ CAPACITY output to set the blocksize.  */
+-        if (r->req.cmd.buf[0] == READ_CAPACITY_10) {
++        if (r->req.cmd.buf[0] == READ_CAPACITY_10 &&
++	    (r->buf[0] != 0xFF || r->buf[1] != 0xFF || r->buf[2] != 0xFF ||
++	     r->buf[3] != 0xFF || s->max_lba == 0)) {
+             s->blocksize = (r->buf[4] << 24) | (r->buf[5] << 16) |
+                            (r->buf[6] << 8) | r->buf[7];
+             s->max_lba = ((uint64_t) r->buf[0] << 24) | ((uint64_t) r->buf[1] << 16) |
+-- 
+1.7.11.7
+

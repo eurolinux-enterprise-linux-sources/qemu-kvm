@@ -1,0 +1,55 @@
+From b8dd6fcf0fd75e6874178c1d10cc1d4fcd92843b Mon Sep 17 00:00:00 2001
+Message-Id: <b8dd6fcf0fd75e6874178c1d10cc1d4fcd92843b.1374754301.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:32 +0200
+Subject: [PATCH 21/65] qemu-ga: drop temporary extra check for unix_listen
+ return value.
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-22-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52131
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 21/65] qemu-ga: drop temporary extra check for unix_listen return value.
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+Now that unix_listen() error reporting is backported we don't
+need the extra chunk any more.  RHEL-6 only patch, needed due
+out-of-order backporting.
+
+See also commit 1833f0273ccd60bbc3742edd9ba9352833964778
+---
+ qga/channel-posix.c |    9 ---------
+ 1 file changed, 9 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/channel-posix.c | 9 ---------
+ 1 file changed, 9 deletions(-)
+
+diff --git a/qga/channel-posix.c b/qga/channel-posix.c
+index ad574d2..614ff29 100644
+--- a/qga/channel-posix.c
++++ b/qga/channel-posix.c
+@@ -200,15 +200,6 @@ static gboolean ga_channel_open(GAChannel *c, const gchar *path, GAChannelMethod
+             return false;
+         }
+ 
+-        /* FIXME: keep the following "if" temporarily in RHEL-6, in order to
+-         * avoid error reporting / logic regression due to out-of-order
+-         * backports.
+-         */
+-        if (fd == -1) {
+-            g_critical("error opening path: %s", strerror(errno));
+-            return false;
+-        }
+-
+         ga_channel_listen_add(c, fd, true);
+         break;
+     }
+-- 
+1.7.11.7
+

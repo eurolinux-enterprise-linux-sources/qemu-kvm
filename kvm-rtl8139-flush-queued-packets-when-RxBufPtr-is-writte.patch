@@ -1,0 +1,76 @@
+From 6f44551fd1c5be7bdb79be79e5859122c966facb Mon Sep 17 00:00:00 2001
+Message-Id: <6f44551fd1c5be7bdb79be79e5859122c966facb.1474550614.git.jen@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Wed, 10 Aug 2016 13:33:10 -0500
+Subject: [CHANGE 1/4] rtl8139: flush queued packets when RxBufPtr is written
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1470835990-22178-2-git-send-email-stefanha@redhat.com>
+Patchwork-id: 71899
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 1/1] rtl8139: flush queued packets when RxBufPtr is written
+Bugzilla: 1356924
+RH-Acked-by: Xiao Wang <jasowang@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+Net queues support efficient "receive disable".  For example, tap's file
+descriptor will not be polled while its peer has receive disabled.  This
+saves CPU cycles for needlessly copying and then dropping packets which
+the peer cannot receive.
+
+rtl8139 is missing the qemu_flush_queued_packets() call that wakes the
+queue up when receive becomes possible again.
+
+As a result, the Windows 7 guest driver reaches a state where the
+rtl8139 cannot receive packets.  The driver has actually refilled the
+receive buffer but we never resume reception.
+
+The bug can be reproduced by running a large FTP 'get' inside a Windows
+7 guest:
+
+  $ qemu -netdev tap,id=tap0,...
+         -device rtl8139,netdev=tap0
+
+The Linux guest driver does not trigger the bug, probably due to a
+different buffer management strategy.
+
+Reported-by: Oliver Francke <oliver.francke@filoo.de>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 00b7ade807b5ce6779ddd86ce29c5521ec5c529a)
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Conflicts:
+  hw/net/rtl8139.c
+
+  File is located at hw/rtl8139.c downstream.
+
+  Downstream does not have qemu_get_queue() multiqueue support.  Use
+  &s->nic->nc to get VLANClientState.
+
+  There is a context conflict because the DPRINTF() macro upstream is
+  called DEBUG_PRINT() downstream.
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/rtl8139.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/hw/rtl8139.c b/hw/rtl8139.c
+index 7454683..b98ab3d 100644
+--- a/hw/rtl8139.c
++++ b/hw/rtl8139.c
+@@ -2561,6 +2561,9 @@ static void rtl8139_RxBufPtr_write(RTL8139State *s, uint32_t val)
+     /* this value is off by 16 */
+     s->RxBufPtr = MOD2(val + 0x10, s->RxBufferSize);
+ 
++    /* more buffer space may be available so try to receive */
++    qemu_flush_queued_packets(&s->nic->nc);
++
+     DEBUG_PRINT((" CAPR write: rx buffer length %d head 0x%04x read 0x%04x\n",
+            s->RxBufferSize, s->RxBufAddr, s->RxBufPtr));
+ }
+-- 
+2.7.4
+

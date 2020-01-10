@@ -1,0 +1,45 @@
+From 980be230c618e1868cfdd79ac92ffd5d3dd14a68 Mon Sep 17 00:00:00 2001
+Message-Id: <980be230c618e1868cfdd79ac92ffd5d3dd14a68.1376408877.git.minovotn@redhat.com>
+In-Reply-To: <823d94e906b2aeecd2c60bc9f19ca8948a756f27.1376408877.git.minovotn@redhat.com>
+References: <823d94e906b2aeecd2c60bc9f19ca8948a756f27.1376408877.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 30 Jul 2013 11:35:20 +0200
+Subject: [PATCH 02/18] qemu-socket: drop pointless allocation
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1375184130-11076-3-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52780
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 02/12] qemu-socket: drop pointless allocation
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Michael Tokarev <mjt@tls.msk.ru>
+(cherry picked from commit c1204afc7c048cf58b0a8f1c11886f36ca73ef28)
+---
+ qemu-sockets.c |    1 -
+ 1 file changed, 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-sockets.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/qemu-sockets.c b/qemu-sockets.c
+index e97f6af..642bd1c 100644
+--- a/qemu-sockets.c
++++ b/qemu-sockets.c
+@@ -875,7 +875,6 @@ SocketAddress *socket_parse(const char *str, Error **errp)
+         }
+     } else {
+         addr->kind = SOCKET_ADDRESS_KIND_INET;
+-        addr->inet = g_new(InetSocketAddress, 1);
+         addr->inet = inet_parse(str, errp);
+         if (addr->inet == NULL) {
+             goto fail;
+-- 
+1.7.11.7
+

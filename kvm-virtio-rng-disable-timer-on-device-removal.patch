@@ -1,0 +1,47 @@
+From 9a9ffbda9c18c1039049b31a3be7d053aa411dff Mon Sep 17 00:00:00 2001
+From: Amos Kong <akong@redhat.com>
+Date: Tue, 10 Sep 2013 06:08:03 +0200
+Subject: [PATCH 21/39] virtio-rng: disable timer on device removal
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1378793288-3371-22-git-send-email-akong@redhat.com>
+Patchwork-id: 54256
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v3 21/26] virtio-rng: disable timer on device removal
+Bugzilla: 786407
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Amit Shah <amit.shah@redhat.com>
+
+Disable the rate-limit timer on device remove (e.g. hot-unplug).
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Reviewed-by: Anthony Liguori <aliguori@us.ibm.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 8cc677435498561d8fe213bb44a02cf4f75cc685)
+---
+ hw/virtio-rng.c |    2 ++
+ 1 files changed, 2 insertions(+), 0 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ hw/virtio-rng.c |    2 ++
+ 1 files changed, 2 insertions(+), 0 deletions(-)
+
+diff --git a/hw/virtio-rng.c b/hw/virtio-rng.c
+index b7e3e12..44ecf09 100644
+--- a/hw/virtio-rng.c
++++ b/hw/virtio-rng.c
+@@ -200,6 +200,8 @@ void virtio_rng_exit(VirtIODevice *vdev)
+ {
+     VirtIORNG *vrng = DO_UPCAST(VirtIORNG, vdev, vdev);
+ 
++    qemu_del_timer(vrng->rate_limit_timer);
++    qemu_free_timer(vrng->rate_limit_timer);
+     unregister_savevm(vrng->qdev, "virtio-rng", vrng);
+     virtio_cleanup(vdev);
+ }
+-- 
+1.7.1
+

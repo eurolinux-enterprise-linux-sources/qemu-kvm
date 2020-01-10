@@ -1,0 +1,73 @@
+From 5776234e5d3c53acdfb805bc0e83082685de1bad Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Wed, 19 Mar 2014 19:24:06 -0500
+Subject: [PATCH 06/20] dump-guest-memory.py: trim logs in memory listener callback (RHEL only)
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1395257047-25109-7-git-send-email-lersek@redhat.com>
+Patchwork-id: 58151
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 6/7] dump-guest-memory.py: trim logs in memory listener callback (RHEL only)
+Bugzilla: 826266
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Vitaly Kuznetsov <vkuznets@redhat.com>
+RH-Acked-by: Jeff Nelson <jenelson@redhat.com>
+
+In RHEL-6, the callback is invoked once per page, which produces a huge
+log output in guest_phys_blocks_append(). The number of final
+discontiguous ranges (ie. after merging) is low however, so let's log only
+pages that start a new range.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ scripts/dump-guest-memory.py | 18 ++++++------------
+ 1 file changed, 6 insertions(+), 12 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ scripts/dump-guest-memory.py |   18 ++++++------------
+ 1 files changed, 6 insertions(+), 12 deletions(-)
+
+diff --git a/scripts/dump-guest-memory.py b/scripts/dump-guest-memory.py
+index 0fe097b..c711c1f 100644
+--- a/scripts/dump-guest-memory.py
++++ b/scripts/dump-guest-memory.py
+@@ -146,11 +146,9 @@ shape and this command should mostly work."""
+             self.cached_ram_blocks.append(blk)
+ 
+     def guest_phys_blocks_append(self):
+-        print "guest RAM blocks:"
+-        print ("target_start     target_end       host_addr        message "
+-               "count")
+-        print ("---------------- ---------------- ---------------- ------- "
+-               "-----")
++        print "guest RAM blocks (only discontiguous starts logged):"
++        print ("target_start     host_addr        count")
++        print ("---------------- ---------------- -----")
+ 
+         l0table = gdb.parse_and_eval("(PhysPageDesc ***)l1_phys_map")
+         if (l0table == 0):
+@@ -204,17 +202,13 @@ shape and this command should mostly work."""
+                                                  {"target_start": target_start,
+                                                   "target_end"  : target_end,
+                                                   "host_addr"   : host_addr})
+-                        message = "added"
++                        print ("%016x %016x %5u" %
++                               (target_start, host_addr.cast(self.uintptr_t),
++                                len(self.guest_phys_blocks)))
+                     else:
+                         # expand predecessor until @target_end; predecessor's
+                         # start doesn't change
+                         predecessor["target_end"] = target_end
+-                        message = "joined"
+-
+-                    print ("%016x %016x %016x %-7s %5u" %
+-                           (target_start, target_end,
+-                            host_addr.cast(self.uintptr_t), message,
+-                            len(self.guest_phys_blocks)))
+ 
+     def cpu_get_dump_info(self):
+         # We can't synchronize the registers with KVM post-mortem, and
+-- 
+1.7.1
+

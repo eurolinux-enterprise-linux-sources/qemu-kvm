@@ -1,0 +1,57 @@
+From 14d086af41243452051ff540887fc17c64e3fc8b Mon Sep 17 00:00:00 2001
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 9 Jun 2014 10:44:58 +0200
+Subject: [PATCH 16/26] virtio-scsi: add ioeventfd support
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1402310698-15558-1-git-send-email-famz@redhat.com>
+Patchwork-id: 59178
+O-Subject: [RHEL-6.6 qemu-kvm PATCH] virtio-scsi: add ioeventfd support
+Bugzilla: 1106420
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1106420
+Brew:     http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7554685 (RHEL)
+          http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7554771 (RHEV)
+
+Probably due to bad merge months ago, virtio-scsi-pci did not have
+ioeventfd support.  Fix this and enable it by default, as is the
+case for other virtio-pci devices.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 3f910904ecce48bcfd6ee269e8ac84a571fbc1e3)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+
+Conflicts:
+	hw/virtio-pci.c
+
+Trivial conflict resolution due to context difference.
+---
+ hw/virtio-pci.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ hw/virtio-pci.c |    2 ++
+ 1 files changed, 2 insertions(+), 0 deletions(-)
+
+diff --git a/hw/virtio-pci.c b/hw/virtio-pci.c
+index 516a1df..35161c9 100644
+--- a/hw/virtio-pci.c
++++ b/hw/virtio-pci.c
+@@ -1099,6 +1099,8 @@ static PCIDeviceInfo virtio_info[] = {
+         .init      = virtio_scsi_init_pci,
+         .exit      = virtio_scsi_exit_pci,
+         .qdev.props = (Property[]) {
++            DEFINE_PROP_BIT("ioeventfd", VirtIOPCIProxy, flags,
++                            VIRTIO_PCI_FLAG_USE_IOEVENTFD_BIT, true),
+             DEFINE_PROP_UINT32("vectors", VirtIOPCIProxy, nvectors, 4),
+             DEFINE_VIRTIO_SCSI_PROPERTIES(VirtIOPCIProxy, host_features, scsi),
+             DEFINE_PROP_END_OF_LIST(),
+-- 
+1.7.1
+

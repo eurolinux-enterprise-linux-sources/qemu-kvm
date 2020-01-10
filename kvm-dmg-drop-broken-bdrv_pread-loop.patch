@@ -1,0 +1,70 @@
+From fcee81d0b526fa756e29f2d995316d2f4a2f4714 Mon Sep 17 00:00:00 2001
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Tue, 25 Mar 2014 11:45:57 +0100
+Subject: [PATCH 39/48] dmg: drop broken bdrv_pread() loop
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1395744364-16049-39-git-send-email-kwolf@redhat.com>
+Patchwork-id: n/a
+O-Subject: [EMBARGOED RHEL-6.6/6.5.z qemu-kvm PATCH v2 38/45]
+           dmg: drop broken bdrv_pread() loop
+Bugzilla: 1079518
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1079518
+Upstream status: Series embargoed
+
+It is not necessary to check errno for EINTR and the block layer does
+not produce short reads.  Therefore we can drop the loop that attempts
+to read a compressed chunk.
+
+The loop is buggy because it incorrectly adds the transferred bytes
+twice:
+
+  do {
+      ret = bdrv_pread(...);
+      i += ret;
+  } while (ret >= 0 && ret + i < s->lengths[chunk]);
+
+Luckily we can drop the loop completely and perform a single
+bdrv_pread().
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/dmg.c |   15 ++-------------
+ 1 files changed, 2 insertions(+), 13 deletions(-)
+
+diff --git a/block/dmg.c b/block/dmg.c
+index 0559bbc..fc20885 100644
+--- a/block/dmg.c
++++ b/block/dmg.c
+@@ -290,21 +290,10 @@ static inline int dmg_read_chunk(BlockDriverState *bs, int sector_num)
+         s->current_chunk = s->n_chunks;
+         switch (s->types[chunk]) {
+         case 0x80000005: { /* zlib compressed */
+-            int i;
+-
+             /* we need to buffer, because only the chunk as whole can be
+              * inflated. */
+-            i = 0;
+-            do {
+-                ret = bdrv_pread(bs->file, s->offsets[chunk] + i,
+-                                 s->compressed_chunk + i,
+-                                 s->lengths[chunk] - i);
+-                if (ret < 0 && errno == EINTR) {
+-                    ret = 0;
+-                }
+-                i += ret;
+-            } while (ret >= 0 && ret + i < s->lengths[chunk]);
+-
++            ret = bdrv_pread(bs->file, s->offsets[chunk],
++                             s->compressed_chunk, s->lengths[chunk]);
+             if (ret != s->lengths[chunk]) {
+                 return -1;
+             }
+-- 
+1.7.1
+

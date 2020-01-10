@@ -1,0 +1,58 @@
+From bc12e0e9c4ce9919049814e965ad73a0eefde53b Mon Sep 17 00:00:00 2001
+Message-Id: <bc12e0e9c4ce9919049814e965ad73a0eefde53b.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:05 +0200
+Subject: [PATCH 31/65] char-socket: fix error reporting
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <a2d992cad9df207ceaffec664545d82f7261a572.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50809
+O-Subject: [RHEL6.5 qemu-kvm PATCH 31/65] char-socket: fix error reporting
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+Right now the inet connect code tries all available addresses but until one
+doesn't fail.  It passes local_err each time without clearing it from the
+previous failure.  This can trigger an assert since the inet connect code
+tries to set an error on an object != NULL.
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Message-id: 16c806d60aa5e9660ed7751bb4e37dcd278f97f0.1362505276.git.amit.shah@redhat.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit baca6f183d78a0c864a5ccc0ec64e26ba960e604)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ qemu-sockets.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-sockets.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/qemu-sockets.c b/qemu-sockets.c
+index 0625d75..341f175 100644
+--- a/qemu-sockets.c
++++ b/qemu-sockets.c
+@@ -379,6 +379,10 @@ int inet_connect_opts(QemuOpts *opts, Error **errp,
+     }
+ 
+     for (e = res; e != NULL; e = e->ai_next) {
++        if (error_is_set(errp)) {
++            error_free(*errp);
++            *errp = NULL;
++        }
+         if (connect_state != NULL) {
+             connect_state->current_addr = e;
+         }
+-- 
+1.7.11.7
+

@@ -1,0 +1,77 @@
+From 0dc39f3b09e474992420a22426ba6fcea3b1c2d4 Mon Sep 17 00:00:00 2001
+Message-Id: <0dc39f3b09e474992420a22426ba6fcea3b1c2d4.1376572530.git.minovotn@redhat.com>
+In-Reply-To: <1ab1cadd348058496d2f900c3d4ac4b7c325d3e6.1376572530.git.minovotn@redhat.com>
+References: <1ab1cadd348058496d2f900c3d4ac4b7c325d3e6.1376572530.git.minovotn@redhat.com>
+From: Markus Armbruster <armbru@redhat.com>
+Date: Wed, 14 Aug 2013 15:12:51 +0200
+Subject: [PATCH 09/11] target-i386: fix bits 39:32 of the final physical
+ address when using 4M page
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1376493173-5884-2-git-send-email-armbru@redhat.com>
+Patchwork-id: 53411
+O-Subject: [PATCH 6.5 qemu-kvm 1/3] target-i386: fix bits 39:32 of the final physical address when using 4M page
+Bugzilla: 880990
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Markus Armbruster <armbru@redhat.com>
+
+((pde & 0x1fe000) << 19) is the bits 39:32 of the final physical address, and
+we shouldn't use unit32_t to calculate it. Convert the type to hwaddr to fix
+this problem.
+
+Signed-off-by: Wen Congyang <wency@cn.fujitsu.com>
+Reviewed-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 6ad53bdf5830bfc30221aee8d4ced9a9eaf8fe03)
+
+Conflicts:
+	target-i386/arch_memory_mapping.c
+
+Conflicts because we still have target_phys_addr_t instead of hwaddr.
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+---
+ target-i386/arch_memory_mapping.c | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ target-i386/arch_memory_mapping.c | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/target-i386/arch_memory_mapping.c b/target-i386/arch_memory_mapping.c
+index bd50e11..591e04f 100644
+--- a/target-i386/arch_memory_mapping.c
++++ b/target-i386/arch_memory_mapping.c
+@@ -114,7 +114,7 @@ static void walk_pde2(MemoryMappingList *list,
+                       target_phys_addr_t pde_start_addr, int32_t a20_mask,
+                       bool pse)
+ {
+-    target_phys_addr_t pde_addr, pte_start_addr, start_paddr;
++    target_phys_addr_t pde_addr, pte_start_addr, start_paddr, high_paddr;
+     uint32_t pde;
+     target_ulong line_addr, start_vaddr;
+     int i;
+@@ -129,8 +129,13 @@ static void walk_pde2(MemoryMappingList *list,
+ 
+         line_addr = (((unsigned int)i & 0x3ff) << 22);
+         if ((pde & PG_PSE_MASK) && pse) {
+-            /* 4 MB page */
+-            start_paddr = (pde & ~0x3fffff) | ((pde & 0x1fe000) << 19);
++            /*
++             * 4 MB page:
++             * bits 39:32 are bits 20:13 of the PDE
++             * bit3 31:22 are bits 31:22 of the PDE
++             */
++            high_paddr = ((target_phys_addr_t)(pde & 0x1fe000) << 19);
++            start_paddr = (pde & ~0x3fffff) | high_paddr;
+             if (cpu_physical_memory_is_io(start_paddr)) {
+                 /* I/O region */
+                 continue;
+-- 
+1.7.11.7
+

@@ -1,0 +1,74 @@
+From 56fad51ac654027c93e7fcd590f26551eac36b19 Mon Sep 17 00:00:00 2001
+Message-Id: <56fad51ac654027c93e7fcd590f26551eac36b19.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:27:45 +0200
+Subject: [PATCH 080/114] qemu-ga: qmp_guest_fstrim(): get rid of sprintf() +
+ error_set()
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-23-git-send-email-lersek@redhat.com>
+Patchwork-id: 51121
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 22/56] qemu-ga: qmp_guest_fstrim(): get rid of sprintf() + error_set()
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Luiz Capitulino <lcapitulino@redhat.com>
+
+Convert them to error_setg_errno().
+
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+Reviewed-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit 071673b09021b60eab268653c6bcfba92eea7603)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qga/commands-posix.c |   10 +++-------
+ 1 files changed, 3 insertions(+), 7 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/commands-posix.c | 10 +++-------
+ 1 file changed, 3 insertions(+), 7 deletions(-)
+
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index 943a9b8..524e4d5 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -566,7 +566,6 @@ void qmp_guest_fstrim(bool has_minimum, int64_t minimum, Error **err)
+     struct FsMount *mount;
+     int fd;
+     Error *local_err = NULL;
+-    char err_msg[512];
+     struct fstrim_range r = {
+         .start = 0,
+         .len = -1,
+@@ -585,9 +584,7 @@ void qmp_guest_fstrim(bool has_minimum, int64_t minimum, Error **err)
+     QTAILQ_FOREACH(mount, &mounts, next) {
+         fd = qemu_open(mount->dirname, O_RDONLY);
+         if (fd == -1) {
+-            sprintf(err_msg, "failed to open %s, %s", mount->dirname,
+-                    strerror(errno));
+-            error_set(err, QERR_QGA_COMMAND_FAILED, err_msg);
++            error_setg_errno(err, errno, "failed to open %s", mount->dirname);
+             goto error;
+         }
+ 
+@@ -600,9 +597,8 @@ void qmp_guest_fstrim(bool has_minimum, int64_t minimum, Error **err)
+         ret = ioctl(fd, FITRIM, &r);
+         if (ret == -1) {
+             if (errno != ENOTTY && errno != EOPNOTSUPP) {
+-                sprintf(err_msg, "failed to trim %s, %s",
+-                        mount->dirname, strerror(errno));
+-                error_set(err, QERR_QGA_COMMAND_FAILED, err_msg);
++                error_setg_errno(err, errno, "failed to trim %s",
++                                 mount->dirname);
+                 close(fd);
+                 goto error;
+             }
+-- 
+1.7.11.7
+

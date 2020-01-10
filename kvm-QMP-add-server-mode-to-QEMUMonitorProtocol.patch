@@ -1,0 +1,122 @@
+From af81c2148acf5ba1987c58665796d183e9e3139c Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:32 -0500
+Subject: [CHANGE 10/31] QMP: add server mode to QEMUMonitorProtocol
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-11-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60374
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 10/29] QMP: add server mode to QEMUMonitorProtocol
+Bugzilla: 1122410
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+
+QEMU supports socket chardevs that establish connections like a server
+or a client.  The QEMUMonitorProtocol class only supports connecting as
+a client.  It is not possible to connect race-free when launching QEMU
+since trying to connect before QEMU has bound and is listening on the
+socket results in failure.
+
+Add the QEMUMonitorProtocol(server=True) argument to bind and listen on
+the socket.  The QEMU process can then be launched and connects to the
+already existing QMP socket without a race condition:
+
+  qmp = qmp.QEMUMonitorProtocol(monitor_path, server=True)
+  popen = subprocess.Popen(args)
+  qmp.accept()
+
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 37628f11c6b190ebb3082938868aadb23942ee3a)
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ QMP/qmp.py | 43 ++++++++++++++++++++++++++++++++-----------
+ 1 file changed, 32 insertions(+), 11 deletions(-)
+
+diff --git a/QMP/qmp.py b/QMP/qmp.py
+index 722ac83..f6a1912 100644
+--- a/QMP/qmp.py
++++ b/QMP/qmp.py
+@@ -22,19 +22,24 @@ class QMPCapabilitiesError(QMPError):
+     pass
+ 
+ class QEMUMonitorProtocol:
+-    def __init__(self, address):
++    def __init__(self, address, server=False):
+         """
+         Create a QEMUMonitorProtocol class.
+ 
+         @param address: QEMU address, can be either a unix socket path (string)
+                         or a tuple in the form ( address, port ) for a TCP
+                         connection
+-        @note No connection is established, this is done by the connect() method
++        @param server: server mode listens on the socket (bool)
++        @raise socket.error on socket connection errors
++        @note No connection is established, this is done by the connect() or
++              accept() methods
+         """
+         self.__events = []
+         self.__address = address
+         self.__sock = self.__get_sock()
+-        self.__sockfile = self.__sock.makefile()
++        if server:
++            self.__sock.bind(self.__address)
++            self.__sock.listen(1)
+ 
+     def __get_sock(self):
+         if isinstance(self.__address, tuple):
+@@ -43,6 +48,17 @@ class QEMUMonitorProtocol:
+             family = socket.AF_UNIX
+         return socket.socket(family, socket.SOCK_STREAM)
+ 
++    def __negotiate_capabilities(self):
++        self.__sockfile = self.__sock.makefile()
++        greeting = self.__json_read()
++        if greeting is None or not greeting.has_key('QMP'):
++            raise QMPConnectError
++        # Greeting seems ok, negotiate capabilities
++        resp = self.cmd('qmp_capabilities')
++        if "return" in resp:
++            return greeting
++        raise QMPCapabilitiesError
++
+     def __json_read(self, only_event=False):
+         while True:
+             data = self.__sockfile.readline()
+@@ -67,14 +83,19 @@ class QEMUMonitorProtocol:
+         @raise QMPCapabilitiesError if fails to negotiate capabilities
+         """
+         self.__sock.connect(self.__address)
+-        greeting = self.__json_read()
+-        if greeting is None or not greeting.has_key('QMP'):
+-            raise QMPConnectError
+-        # Greeting seems ok, negotiate capabilities
+-        resp = self.cmd('qmp_capabilities')
+-        if "return" in resp:
+-            return greeting
+-        raise QMPCapabilitiesError
++        return self.__negotiate_capabilities()
++
++    def accept(self):
++        """
++        Await connection from QMP Monitor and perform capabilities negotiation.
++
++        @return QMP greeting dict
++        @raise socket.error on socket connection errors
++        @raise QMPConnectError if the greeting is not received
++        @raise QMPCapabilitiesError if fails to negotiate capabilities
++        """
++        self.__sock, _ = self.__sock.accept()
++        return self.__negotiate_capabilities()
+ 
+     def cmd_obj(self, qmp_cmd):
+         """
+-- 
+1.9.3
+

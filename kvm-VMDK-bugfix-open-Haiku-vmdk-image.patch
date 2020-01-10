@@ -1,0 +1,102 @@
+From e9ccaee9eac00e4a397507dfafb49bd8dcb607b0 Mon Sep 17 00:00:00 2001
+Message-Id: <e9ccaee9eac00e4a397507dfafb49bd8dcb607b0.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:38 +0200
+Subject: [PATCH 23/47] VMDK: bugfix, open Haiku vmdk image
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-24-git-send-email-famz@redhat.com>
+Patchwork-id: 51459
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 23/47] VMDK: bugfix, open Haiku vmdk image
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Fam Zheng <famcool@gmail.com>
+
+Haiku provides a specially formed vmdk image, which let qemu abort. It a
+combination of sparse header and flat data (i.e. with not l1/l2 table at
+all). The fix is turn to descriptor when sparse header is zero in field
+'capacity'.
+
+Signed-off-by: Fam Zheng <famcool@gmail.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit f16f509d17de295300404f94598b558ac5b8cfdd)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 15 +++++++++++----
+ 1 file changed, 11 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 15 +++++++++++----
+ 1 file changed, 11 insertions(+), 4 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 343868f..2cc051a 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -409,6 +409,9 @@ static int vmdk_open_vmdk3(BlockDriverState *bs,
+     return ret;
+ }
+ 
++static int vmdk_open_desc_file(BlockDriverState *bs, int flags,
++                               int64_t desc_offset);
++
+ static int vmdk_open_vmdk4(BlockDriverState *bs,
+                            BlockDriverState *file,
+                            int flags)
+@@ -423,6 +426,9 @@ static int vmdk_open_vmdk4(BlockDriverState *bs,
+     if (ret < 0) {
+         return ret;
+     }
++    if (header.capacity == 0 && header.desc_offset) {
++        return vmdk_open_desc_file(bs, flags, header.desc_offset << 9);
++    }
+     l1_entry_sectors = le32_to_cpu(header.num_gtes_per_gte)
+                         * le64_to_cpu(header.granularity);
+     if (l1_entry_sectors <= 0) {
+@@ -560,7 +566,7 @@ static int vmdk_parse_extents(const char *desc, BlockDriverState *bs,
+ 
+             extent = vmdk_add_extent(bs, extent_file, true, sectors,
+                             0, 0, 0, 0, sectors);
+-            extent->flat_start_offset = flat_offset;
++            extent->flat_start_offset = flat_offset << 9;
+         } else if (!strcmp(type, "SPARSE")) {
+             /* SPARSE extent */
+             ret = vmdk_open_sparse(bs, extent_file, bs->open_flags);
+@@ -583,14 +589,15 @@ next_line:
+     return 0;
+ }
+ 
+-static int vmdk_open_desc_file(BlockDriverState *bs, int flags)
++static int vmdk_open_desc_file(BlockDriverState *bs, int flags,
++                               int64_t desc_offset)
+ {
+     int ret;
+     char buf[2048];
+     char ct[128];
+     BDRVVmdkState *s = bs->opaque;
+ 
+-    ret = bdrv_pread(bs->file, 0, buf, sizeof(buf));
++    ret = bdrv_pread(bs->file, desc_offset, buf, sizeof(buf));
+     if (ret < 0) {
+         return ret;
+     }
+@@ -638,7 +645,7 @@ static int vmdk_open(BlockDriverState *bs, int flags)
+         return 0;
+     } else {
+         qemu_co_mutex_init(&s->lock);
+-        return vmdk_open_desc_file(bs, flags);
++        return vmdk_open_desc_file(bs, flags, 0);
+     }
+ }
+ 
+-- 
+1.7.11.7
+

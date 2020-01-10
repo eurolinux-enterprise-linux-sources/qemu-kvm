@@ -1,0 +1,44 @@
+From d63cd1019fc27d73b468545032a1cfaa43c99f09 Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Wed, 19 Mar 2014 19:24:04 -0500
+Subject: [PATCH 04/20] dump-guest-memory.py: convert PhysPageDesc.phys_offset to MPZ (RHEL only)
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1395257047-25109-5-git-send-email-lersek@redhat.com>
+Patchwork-id: 58148
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 4/7] dump-guest-memory.py: convert PhysPageDesc.phys_offset to MPZ (RHEL only)
+Bugzilla: 826266
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Vitaly Kuznetsov <vkuznets@redhat.com>
+RH-Acked-by: Jeff Nelson <jenelson@redhat.com>
+
+Otherwise "phys_offset", as returned by gdb, trips up the bit-and that
+checks the page type encoded in it.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ scripts/dump-guest-memory.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ scripts/dump-guest-memory.py |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/scripts/dump-guest-memory.py b/scripts/dump-guest-memory.py
+index e074ea5..b8262da 100644
+--- a/scripts/dump-guest-memory.py
++++ b/scripts/dump-guest-memory.py
+@@ -153,7 +153,7 @@ shape and this command should mostly work."""
+ 
+                 for l2 in range (self.L2_SIZE):
+                     phys_page_desc = (l2table + l2).dereference()
+-                    ram_addr = phys_page_desc["phys_offset"]
++                    ram_addr = long(phys_page_desc["phys_offset"])
+ 
+                     # we only care about RAM
+                     if ((ram_addr & ~self.TARGET_PAGE_MASK) != 0):
+-- 
+1.7.1
+

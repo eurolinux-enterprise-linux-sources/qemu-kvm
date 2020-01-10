@@ -1,0 +1,50 @@
+From 01fe4108ad6d67cc9d9b4f5478f4c4f2fd276889 Mon Sep 17 00:00:00 2001
+From: Amit Shah <amit.shah@redhat.com>
+Date: Fri, 11 Jul 2014 10:47:20 -0500
+Subject: [CHANGE 09/18] tests: vmstate static checker: remove a field
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <515abee8abd974e5a27d29a6ba3cb19ed3bfaabb.1405075344.git.amit.shah@redhat.com>
+Patchwork-id: 59809
+O-Subject: [RHEL6.6 qemu-kvm PATCH 09/18] tests: vmstate static checker: remove a field
+Bugzilla: 1118718
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Reviewed-by: Juan Quintela <quintela@redhat.com>
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+(cherry picked from commit 55e8e0e19c169ee83fd23436f348a948adf5d095)
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ tests/vmstate-static-checker-data/dump2.json | 6 ------
+ 1 file changed, 6 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ tests/vmstate-static-checker-data/dump2.json | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/tests/vmstate-static-checker-data/dump2.json b/tests/vmstate-static-checker-data/dump2.json
+index 4ccfd67..f6b52d0 100644
+--- a/tests/vmstate-static-checker-data/dump2.json
++++ b/tests/vmstate-static-checker-data/dump2.json
+@@ -58,12 +58,6 @@
+                 "size": 4
+               },
+               {
+-                "field": "usbsts",
+-                "version_id": 0,
+-                "field_exists": false,
+-                "size": 4
+-              },
+-              {
+                 "field": "usbsts_pending",
+                 "version_id": 2,
+                 "field_exists": false,
+-- 
+1.9.3
+

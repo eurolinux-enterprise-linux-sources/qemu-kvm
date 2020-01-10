@@ -1,0 +1,126 @@
+From f867589ce0ac718980790fe26fa9cde06d3b3213 Mon Sep 17 00:00:00 2001
+From: Markus Armbruster <armbru@redhat.com>
+Date: Tue, 22 Jul 2014 09:16:05 -0500
+Subject: [CHANGE 16/17] ide: Treat read/write beyond end as invalid
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1406020565-25364-12-git-send-email-armbru@redhat.com>
+Patchwork-id: 60003
+O-Subject: [PATCH 6.6 qemu-kvm v2 11/11] ide: Treat read/write beyond end as invalid
+Bugzilla: 1064643
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+The block layer fails such reads and writes just fine.  However, they
+then get treated like valid operations that fail: the error action
+gets executed.  Unwanted; reporting the error to the guest is the only
+sensible action.
+
+Reject them before passing them to the block layer.  This bypasses the
+error action and I/O accounting.  Not quite correct for DMA, because
+DMA can fail after some success, and when that happens, the part that
+succeeded isn't counted.  Tolerable, because I/O accounting is an
+inconsistent mess anyway.
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 58ac321135af890b503ebe56d0d00e184779918f)
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	hw/ide/core.c
+
+Watch out for semantic conflict: upstream patch changes ide_dma_cb(),
+but RHEL-6 still has ide_read_dma_cb() and ide_write_dma_cb().
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+---
+ hw/ide/core.c | 36 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 36 insertions(+)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/ide/core.c | 36 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 36 insertions(+)
+
+diff --git a/hw/ide/core.c b/hw/ide/core.c
+index 79a94f9..0b7340b 100644
+--- a/hw/ide/core.c
++++ b/hw/ide/core.c
+@@ -378,6 +378,18 @@ static void ide_rw_error(IDEState *s) {
+     ide_set_irq(s->bus);
+ }
+ 
++static bool ide_sect_range_ok(IDEState *s,
++                              uint64_t sector, uint64_t nb_sectors)
++{
++    uint64_t total_sectors;
++
++    bdrv_get_geometry(s->bs, &total_sectors);
++    if (sector > total_sectors || nb_sectors > total_sectors - sector) {
++        return false;
++    }
++    return true;
++}
++
+ static void ide_sector_read(IDEState *s);
+ static void ide_sector_read_cb(void *opaque, int ret)
+ {
+@@ -434,6 +446,11 @@ static void ide_sector_read(IDEState *s)
+     printf("sector=%" PRId64 "\n", sector_num);
+ #endif
+ 
++    if (!ide_sect_range_ok(s, sector_num, n)) {
++        ide_rw_error(s);
++        return;
++    }
++
+     s->iov.iov_base = s->io_buffer;
+     s->iov.iov_len  = n * BDRV_SECTOR_SIZE;
+     qemu_iovec_init_external(&s->qiov, &s->iov, 1);
+@@ -629,6 +646,13 @@ static void ide_read_dma_cb(void *opaque, int ret)
+ #ifdef DEBUG_AIO
+     printf("aio_read: sector_num=%" PRId64 " n=%d\n", sector_num, n);
+ #endif
++
++    if (!ide_sect_range_ok(s, sector_num, n)) {
++        dma_buf_commit(s, 0);
++        ide_dma_error(s);
++        return;
++    }
++
+     bm->aiocb = dma_bdrv_read(s->bs, &s->sg, sector_num, ide_read_dma_cb, bm);
+     ide_dma_submit_check(s, ide_read_dma_cb, bm);
+ }
+@@ -717,6 +741,11 @@ static void ide_sector_write(IDEState *s)
+         n = s->req_nb_sectors;
+     }
+ 
++    if (!ide_sect_range_ok(s, sector_num, n)) {
++        ide_rw_error(s);
++        return;
++    }
++
+     s->iov.iov_base = s->io_buffer;
+     s->iov.iov_len  = n * BDRV_SECTOR_SIZE;
+     qemu_iovec_init_external(&s->qiov, &s->iov, 1);
+@@ -815,6 +844,13 @@ static void ide_write_dma_cb(void *opaque, int ret)
+ #ifdef DEBUG_AIO
+     printf("aio_write: sector_num=%" PRId64 " n=%d\n", sector_num, n);
+ #endif
++
++    if (!ide_sect_range_ok(s, sector_num, n)) {
++        dma_buf_commit(s, 0);
++        ide_dma_error(s);
++        return;
++    }
++
+     bm->aiocb = dma_bdrv_write(s->bs, &s->sg, sector_num, ide_write_dma_cb, bm);
+     ide_dma_submit_check(s, ide_write_dma_cb, bm);
+ }
+-- 
+1.9.3
+

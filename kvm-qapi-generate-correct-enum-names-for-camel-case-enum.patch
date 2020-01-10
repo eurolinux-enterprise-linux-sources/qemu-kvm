@@ -1,0 +1,118 @@
+From 419fc510bd0b62de8d4b350b364bbdb0da8a85d5 Mon Sep 17 00:00:00 2001
+Message-Id: <419fc510bd0b62de8d4b350b364bbdb0da8a85d5.1374754301.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:13 +0200
+Subject: [PATCH 02/65] qapi: generate correct enum names for camel case enums
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-3-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52117
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 02/65] qapi: generate correct enum names for camel case enums
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ blockdev.c            | 10 +++++-----
+ scripts/qapi-types.py | 12 +++++++++++-
+ scripts/qapi-visit.py |  2 +-
+ 3 files changed, 17 insertions(+), 7 deletions(-)
+
+diff --git a/blockdev.c b/blockdev.c
+index c3c0651..61bf5e3 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -874,7 +874,7 @@ void qmp___com_redhat_drive_mirror(const char *device, const char *target,
+         .has_speed = has_speed,
+         .speed = speed,
+     };
+-    blockdev_do_action(BLOCKDEV_ACTION_KIND___COM_REDHAT_DRIVE_MIRROR, &mirror, errp);
++    blockdev_do_action(BLOCKDEV_ACTION_KIND_COM_REDHAT_DRIVE_MIRROR, &mirror, errp);
+ }
+ 
+ /* New and old BlockDriverState structs for group snapshots */
+@@ -943,7 +943,7 @@ void qmp_transaction(BlockdevActionList *dev_list, Error **errp)
+             full = false;
+             break;
+ 
+-        case BLOCKDEV_ACTION_KIND___COM_REDHAT_DRIVE_MIRROR:
++        case BLOCKDEV_ACTION_KIND_COM_REDHAT_DRIVE_MIRROR:
+             device = dev_info->__com_redhat_drive_mirror->device;
+             if (!dev_info->__com_redhat_drive_mirror->has_mode) {
+                 dev_info->__com_redhat_drive_mirror->mode = NEW_IMAGE_MODE_ABSOLUTE_PATHS;
+@@ -1052,7 +1052,7 @@ void qmp_transaction(BlockdevActionList *dev_list, Error **errp)
+                             flags | BDRV_O_NO_BACKING, drv);
+             break;
+ 
+-        case BLOCKDEV_ACTION_KIND___COM_REDHAT_DRIVE_MIRROR:
++        case BLOCKDEV_ACTION_KIND_COM_REDHAT_DRIVE_MIRROR:
+             /* Grab a reference so hotplug does not delete the BlockDriverState
+              * from underneath us.
+              */
+@@ -1091,7 +1091,7 @@ void qmp_transaction(BlockdevActionList *dev_list, Error **errp)
+                         NULL);
+             break;
+ 
+-        case BLOCKDEV_ACTION_KIND___COM_REDHAT_DRIVE_MIRROR:
++        case BLOCKDEV_ACTION_KIND_COM_REDHAT_DRIVE_MIRROR:
+             mirror_commit(states->old_bs);
+             break;
+ 
+@@ -1116,7 +1116,7 @@ delete_and_fail:
+             }
+             break;
+ 
+-        case BLOCKDEV_ACTION_KIND___COM_REDHAT_DRIVE_MIRROR:
++        case BLOCKDEV_ACTION_KIND_COM_REDHAT_DRIVE_MIRROR:
+             /* This will still invoke the callback and release the
+              * reference.  */
+             if (states->new_bs) {
+diff --git a/scripts/qapi-types.py b/scripts/qapi-types.py
+index 4a734f5..d1b59a0 100644
+--- a/scripts/qapi-types.py
++++ b/scripts/qapi-types.py
+@@ -79,6 +79,16 @@ const char *%(name)s_lookup[] = {
+ ''')
+     return ret
+ 
++def generate_enum_name(name):
++    if name.isupper():
++        return c_fun(name)
++    new_name = ''
++    for c in c_fun(name):
++        if c.isupper():
++            new_name += '_'
++        new_name += c
++    return new_name.lstrip('_').upper()
++
+ def generate_enum(name, values):
+     lookup_decl = mcgen('''
+ extern const char *%(name)s_lookup[];
+@@ -100,7 +110,7 @@ typedef enum %(name)s
+     %(abbrev)s_%(value)s = %(i)d,
+ ''',
+                      abbrev=de_camel_case(name).upper(),
+-                     value=c_fun(value).upper(),
++                     value=generate_enum_name(value),
+                      i=i)
+         i += 1
+ 
+diff --git a/scripts/qapi-visit.py b/scripts/qapi-visit.py
+index 04ef7c4..7a5a4c3 100644
+--- a/scripts/qapi-visit.py
++++ b/scripts/qapi-visit.py
+@@ -173,7 +173,7 @@ void visit_type_%(name)s(Visitor *m, %(name)s ** obj, const char *name, Error **
+                 break;
+ ''',
+                 abbrev = de_camel_case(name).upper(),
+-                enum = c_fun(de_camel_case(key)).upper(),
++                enum = c_fun(de_camel_case(key)).upper().lstrip('_'),
+                 c_type=members[key],
+                 c_name=c_fun(key))
+ 
+-- 
+1.7.11.7
+

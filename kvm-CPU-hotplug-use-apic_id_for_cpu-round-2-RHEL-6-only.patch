@@ -1,0 +1,83 @@
+From fc5d3dd4e0b6a72b14679d71ed54cc1ca241cb82 Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Wed, 21 May 2014 12:35:50 -0500
+Subject: [PATCH 25/26] CPU hotplug: use apic_id_for_cpu(), round 2 (RHEL-6 only)
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1400675750-10782-2-git-send-email-lersek@redhat.com>
+Patchwork-id: 58970
+O-Subject: [RHEL-6.6/RHEL-6.5.z qemu-kvm PATCH 1/1] CPU hotplug: use apic_id_for_cpu(), round 2 (RHEL-6 only)
+Bugzilla: 1099599
+RH-Acked-by: Peter Krempa <pkrempa@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Igor Mammedov <imammedo@redhat.com>
+RH-Acked-by: Eduardo Habkost <ehabkost@redhat.com>
+
+In RHEL-6 commit 3685bf4b ("CPU hotplug: use apic_id_for_cpu()") we forgot
+to update the initialization of the gpe_regs.cpus_sts bitmap: the
+initializtion stayed in the VCPU index domain.
+
+This problem has remained unnoticed for quite some time, but recent RHEL-6
+commit 97c168a5 ("ACPI-level VCPU enablement info for libvirt (RHEL-6
+only)") has exposed it to libvirt as follows.
+
+Since 97c168a5, the "query-cpus" monitor command returns the
+"enabled-in-acpi" field too. Given that "enabled-in-acpi" keys off APIC
+IDs (correctly), but the underlying gpe_regs.cpus_sts bitmap is
+(incorrectly) initialized from VCPU indices, "query-cpus" reports some
+offline VCPUs right after initialization (for non-contiguous VCPU
+topologies), tripping up libvirt.
+
+Fix it by extending 3685bf4b to the init code.
+
+The change has no effect on machine types up to and including rhel6.3.0;
+apic_id_for_cpu() returns "cpu_index" transparently if
+"compat_contiguous_apic_ids" is set -- and that compat flag is set in
+pc_rhel630_compat().
+
+The change affects machine types rhel6.4.0 and rhel6.5.0 retroactively,
+which is arguably the right thing to do.
+
+Upstream status: n/a, same as for 3685bf4b and 97c168a5.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ hw/acpi.c | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/acpi.c |   14 ++++++++++----
+ 1 files changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/hw/acpi.c b/hw/acpi.c
+index 97adc12..347dc1f 100644
+--- a/hw/acpi.c
++++ b/hw/acpi.c
+@@ -911,13 +911,19 @@ static int piix4_device_hotplug(PCIDevice *dev, int state);
+ 
+ void piix4_acpi_system_hot_add_init(PCIBus *bus, const char *cpu_model)
+ {
+-    int i = 0, cpus = smp_cpus;
++    int cpu_index;
+     struct gpe_regs *gpe = &pm_state->gpe;
+ 
+-    while (cpus > 0) {
+-        gpe->cpus_sts[i++] = (cpus < 8) ? (1 << cpus) - 1 : 0xff;
+-        cpus -= 8;
++    memset(gpe->cpus_sts, 0, sizeof gpe->cpus_sts);
++    for (cpu_index = 0; cpu_index < smp_cpus; ++cpu_index) {
++        uint32_t apic_id;
++
++        apic_id = apic_id_for_cpu(cpu_index);
++        if (apic_id < sizeof gpe->cpus_sts * 8) {
++            gpe->cpus_sts[apic_id / 8] |= (1 << (apic_id % 8));
++        }
+     }
++
+     register_ioport_write(GPE_BASE, 4, 1, gpe_writeb, gpe);
+     register_ioport_read(GPE_BASE, 4, 1,  gpe_readb, gpe);
+ 
+-- 
+1.7.1
+

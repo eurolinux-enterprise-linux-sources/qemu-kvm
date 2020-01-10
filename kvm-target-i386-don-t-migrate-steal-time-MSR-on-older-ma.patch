@@ -1,0 +1,88 @@
+From 6488d6cd60195c9eaaec23cc2ad6607dfe299d26 Mon Sep 17 00:00:00 2001
+Message-Id: <6488d6cd60195c9eaaec23cc2ad6607dfe299d26.1382710559.git.minovotn@redhat.com>
+From: Eduardo Habkost <ehabkost@redhat.com>
+Date: Thu, 24 Oct 2013 10:10:59 +0100
+Subject: [PATCH] target-i386: don't migrate steal time MSR on older
+ machine-types
+
+RH-Author: Eduardo Habkost <ehabkost@redhat.com>
+Message-id: <1382609459-11699-1-git-send-email-ehabkost@redhat.com>
+Patchwork-id: 55071
+O-Subject: [RHEL6.4 qemu-kvm PATCH] target-i386: don't migrate steal time MSR on older machine-types
+Bugzilla: 1022821
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Marcelo Tosatti <mtosatti@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Bugzilla: 1022821
+Upstream status: not applicable
+Brew build: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=6462153
+
+When we added the cpu/steal_time_msr subsection, the section is always
+added when the guest sets the steal time MSR. The problem with this is
+that it prevents 6.5->6.4 migration because 6.4 doesn't support the
+subsection.
+
+This patch disables the subsection on the rhel6.4.0 machine-type and
+older. This means we keep bug 903123 unfixed when rhel6.4.0 or lder
+machine-types are used, to allow backwards migration to work.
+
+Signed-off-by: Eduardo Habkost <ehabkost@redhat.com>
+---
+ hw/pc.c               | 3 +++
+ hw/pc.h               | 1 +
+ target-i386/machine.c | 2 +-
+ 3 files changed, 5 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/pc.c               | 3 +++
+ hw/pc.h               | 1 +
+ target-i386/machine.c | 2 +-
+ 3 files changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/hw/pc.c b/hw/pc.c
+index 64312c7..98433dc 100644
+--- a/hw/pc.c
++++ b/hw/pc.c
+@@ -1750,9 +1750,12 @@ static void rhel_common_init(const char *type1_version,
+             .value    = stringify(1),\
+         }
+ 
++bool migrate_steal_time_msr = true;
++
+ static void pc_rhel640_compat(void)
+ {
+     disable_kvm_sep();
++    migrate_steal_time_msr = false;
+ }
+ 
+ static void pc_rhel630_compat(void)
+diff --git a/hw/pc.h b/hw/pc.h
+index 8392c5b..f800d4e 100644
+--- a/hw/pc.h
++++ b/hw/pc.h
+@@ -185,5 +185,6 @@ void disable_kvm_pv_eoi(void);
+ void disable_tsc_deadline(void);
+ void disable_kvm_sep(void);
+ void set_cpu_model_level(const char *name, int level);
++extern bool migrate_steal_time_msr;
+ 
+ #endif
+diff --git a/target-i386/machine.c b/target-i386/machine.c
+index 0dc95a4..63f54ad 100644
+--- a/target-i386/machine.c
++++ b/target-i386/machine.c
+@@ -513,7 +513,7 @@ static bool steal_time_msr_needed(void *opaque)
+ {
+     CPUState *env = opaque;
+ 
+-    return env->steal_time_msr != 0;
++    return migrate_steal_time_msr && (env->steal_time_msr != 0);
+ }
+ 
+ static const VMStateDescription vmstate_steal_time_msr = {
+-- 
+1.7.11.7
+

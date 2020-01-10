@@ -1,0 +1,134 @@
+From 78653b235acb47220ecbc4278fc1fdbed5ab9549 Mon Sep 17 00:00:00 2001
+From: Marcelo Tosatti <mtosatti@redhat.com>
+Date: Wed, 25 Jun 2014 15:57:11 +0200
+Subject: [PATCH 26/26] target-i386: block migration and savevm if invariant tsc is exposed
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Marcelo Tosatti <mtosatti@redhat.com>
+Message-id: <20140625155755.084745180@amt.cnet>
+Patchwork-id: 59376
+O-Subject: [patch 2/2] target-i386: block migration and savevm if invariant tsc is exposed
+Bugzilla: 996771
+RH-Acked-by: Eduardo Habkost <ehabkost@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Andrew Jones <drjones@redhat.com>
+
+v2: drop migration blocker as its not necessary (savevm and
+migration check for the vmstate register blocker)
+
+v3: - drop savevm blocker as its not necessary (migration and
+savevm check for migration blocker)
+    - match upstream error message (Eduardo)
+
+------
+
+Invariant TSC documentation mentions that "invariant TSC will run at a
+constant rate in all ACPI P-, C-. and T-states".
+
+This is not the case if migration to a host with different TSC frequency
+is allowed, or if savevm is performed. So block migration/savevm.
+
+Signed-off-by: Marcelo Tosatti <mtosatti@redhat.com>
+Reviewed-by: Eduardo Habkost <ehabkost@redhat.com>
+Signed-off-by: Eduardo Habkost <ehabkost@redhat.com>
+Reviewed-by: Juan Quintela <quintela@redhat.com>
+[AF: Updated error message]
+Signed-off-by: Andreas Färber <afaerber@suse.de>
+BZ: 996771
+
+upstream commit	68bfd0ad4a1dcc4c328d5db85dc746b49c1ec07e
+
+---
+ qemu-kvm-x86.c    |   45 +++++++++++++++++++++++++++++++++++++++++++++
+ target-i386/kvm.c |    1 +
+ 2 files changed, 46 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ qemu-kvm-x86.c    |   45 +++++++++++++++++++++++++++++++++++++++++++++
+ target-i386/kvm.c |    1 +
+ 2 files changed, 46 insertions(+), 0 deletions(-)
+
+diff --git a/qemu-kvm-x86.c b/qemu-kvm-x86.c
+index 03a75eb..78e58a7 100644
+--- a/qemu-kvm-x86.c
++++ b/qemu-kvm-x86.c
+@@ -1435,9 +1435,43 @@ unsigned long kvm_arch_vcpu_id(CPUArchState *env)
+     return env->cpuid_apic_id;
+ }
+ 
++/*
++ * Find matching entry for function/index on kvm_cpuid2 struct
++ */
++static struct kvm_cpuid_entry2 *cpuid_find_entry(struct kvm_cpuid_entry2 *entries,
++                                                 int nent,
++                                                 uint32_t function,
++                                                 uint32_t index)
++{
++    int i;
++    for (i = 0; i < nent; ++i) {
++        if (entries[i].function == function &&
++            entries[i].index == index) {
++            return &entries[i];
++        }
++    }
++    /* not found: */
++    return NULL;
++}
++
++static Error *invtsc_mig_blocker;
++
++static const VMStateDescription vmstate_cpu_invtsc = {
++    .name = "cpu_invtsc",
++    .version_id = 1,
++    .minimum_version_id = 1,
++    .minimum_version_id_old = 1,
++    .unmigratable = 1,
++    .fields      = (VMStateField []) {
++        VMSTATE_UINT32(halted, CPUState), /* dummy */
++        VMSTATE_END_OF_LIST()
++    }
++};
++
+ int kvm_arch_init_vcpu(CPUState *cenv)
+ {
+     struct kvm_cpuid_entry2 cpuid_ent[100];
++    struct kvm_cpuid_entry2 *c;
+ #ifdef KVM_CPUID_SIGNATURE
+     struct kvm_cpuid_entry2 *pv_ent;
+     uint32_t signature[3];
+@@ -1534,6 +1568,17 @@ int kvm_arch_init_vcpu(CPUState *cenv)
+     for (i = 0x80000000; i <= limit; ++i)
+ 	do_cpuid_ent(&cpuid_ent[cpuid_nent++], i, 0, &copy);
+ 
++    c = cpuid_find_entry(cpuid_ent, cpuid_nent, 0x80000007, 0);
++    if (c && (c->edx & 1<<8) && invtsc_mig_blocker == NULL) {
++        /* migration */
++        error_setg(&invtsc_mig_blocker,
++                   "State blocked by non-migratable CPU device"
++                   " (invtsc flag)");
++        migrate_add_blocker(invtsc_mig_blocker);
++        /* savevm */
++        vmstate_register(NULL, 1, &vmstate_cpu_invtsc, cenv);
++    }
++
+     kvm_setup_cpuid2(cenv, cpuid_nent, cpuid_ent);
+ 
+ #ifdef KVM_CAP_MCE
+diff --git a/target-i386/kvm.c b/target-i386/kvm.c
+index 3d22663..c863a4b 100644
+--- a/target-i386/kvm.c
++++ b/target-i386/kvm.c
+@@ -24,6 +24,7 @@
+ #include "cpu.h"
+ #include "gdbstub.h"
+ #include "host-utils.h"
++#include "migration.h"
+ 
+ static void kvm_clear_vapic(CPUState *env)
+ {
+-- 
+1.7.1
+

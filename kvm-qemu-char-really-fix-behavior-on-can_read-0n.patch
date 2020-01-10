@@ -1,0 +1,108 @@
+From d1bd6569615a47835d2d46e3dad69dd40d03685a Mon Sep 17 00:00:00 2001
+Message-Id: <d1bd6569615a47835d2d46e3dad69dd40d03685a.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:27 +0200
+Subject: [PATCH 53/65] qemu-char: really fix behavior on can_read = 0
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <19e16fc5a696e511435f1e19c10769a7b2ac8c2c.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50831
+O-Subject: [RHEL6.5 qemu-kvm PATCH 53/65] qemu-char: really fix behavior on can_read = 0
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+I misread the glib manual, g_source_remove does not let you re-attach
+the source later.  This behavior (called "blocking" the source in glib)
+is present in glib's source code, but private and not available outside
+glib; hence, we have to resort to re-creating the source every time.
+
+In fact, g_source_remove and g_source_destroy are the same thing,
+except g_source_destroy is O(1) while g_source_remove scans a potentially
+very long list of GSources in the current main loop.  Ugh.  Better
+use g_source_destroy explicitly, and leave "tags" to those dummies who
+cannot track their pointers' lifetimes.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: 1365426195-12596-1-git-send-email-pbonzini@redhat.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 1e885b25275fb6763eb947b1e53b2d6911b967a8)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ qemu-char.c | 17 +++++++++++++----
+ 1 file changed, 13 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 17 +++++++++++++----
+ 1 file changed, 13 insertions(+), 4 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index f134a4d..d23069d 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -543,9 +543,11 @@ typedef struct IOWatchPoll
+ {
+     GSource parent;
+ 
++    GIOChannel *channel;
+     GSource *src;
+ 
+     IOCanReadHandler *fd_can_read;
++    GSourceFunc fd_read;
+     void *opaque;
+ } IOWatchPoll;
+ 
+@@ -558,15 +560,19 @@ static gboolean io_watch_poll_prepare(GSource *source, gint *timeout_)
+ {
+     IOWatchPoll *iwp = io_watch_poll_from_source(source);
+     bool now_active = iwp->fd_can_read(iwp->opaque) > 0;
+-    bool was_active = g_source_get_context(iwp->src) != NULL;
++    bool was_active = iwp->src != NULL;
+     if (was_active == now_active) {
+         return FALSE;
+     }
+ 
+     if (now_active) {
++        iwp->src = g_io_create_watch(iwp->channel, G_IO_IN | G_IO_ERR | G_IO_HUP);
++        g_source_set_callback(iwp->src, iwp->fd_read, iwp->opaque, NULL);
+         g_source_attach(iwp->src, NULL);
+     } else {
+-        g_source_remove(g_source_get_id(iwp->src));
++        g_source_destroy(iwp->src);
++        g_source_unref(iwp->src);
++        iwp->src = NULL;
+     }
+     return FALSE;
+ }
+@@ -585,7 +591,9 @@ static gboolean io_watch_poll_dispatch(GSource *source, GSourceFunc callback,
+ static void io_watch_poll_finalize(GSource *source)
+ {
+     IOWatchPoll *iwp = io_watch_poll_from_source(source);
++    g_source_destroy(iwp->src);
+     g_source_unref(iwp->src);
++    iwp->src = NULL;
+ }
+ 
+ static GSourceFuncs io_watch_poll_funcs = {
+@@ -606,8 +614,9 @@ static guint io_add_watch_poll(GIOChannel *channel,
+     iwp = (IOWatchPoll *) g_source_new(&io_watch_poll_funcs, sizeof(IOWatchPoll));
+     iwp->fd_can_read = fd_can_read;
+     iwp->opaque = user_data;
+-    iwp->src = g_io_create_watch(channel, G_IO_IN | G_IO_ERR | G_IO_HUP);
+-    g_source_set_callback(iwp->src, (GSourceFunc)fd_read, user_data, NULL);
++    iwp->channel = channel;
++    iwp->fd_read = (GSourceFunc) fd_read;
++    iwp->src = NULL;
+ 
+     return g_source_attach(&iwp->parent, NULL);
+ }
+-- 
+1.7.11.7
+

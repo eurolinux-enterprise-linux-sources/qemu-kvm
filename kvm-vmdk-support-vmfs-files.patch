@@ -1,0 +1,71 @@
+From 04a92f6dc3bfb3c09408d7fda4ae5316d433695b Mon Sep 17 00:00:00 2001
+Message-Id: <04a92f6dc3bfb3c09408d7fda4ae5316d433695b.1378302750.git.minovotn@redhat.com>
+In-Reply-To: <b9370b63e1ba262320933a8d26c1dd9b3b2bc4b1.1378302750.git.minovotn@redhat.com>
+References: <b9370b63e1ba262320933a8d26c1dd9b3b2bc4b1.1378302750.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Tue, 27 Aug 2013 01:14:35 +0200
+Subject: [PATCH 4/6] vmdk: support vmfs files
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1377566075-3289-5-git-send-email-famz@redhat.com>
+Patchwork-id: 53779
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 4/4] vmdk: support vmfs files
+Bugzilla: 995865
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+VMware ESX hosts also use different create and extent types for flat
+files, respectively "vmfs" and "VMFS".  This is not documented, but it
+can be found at http://kb.vmware.com/kb/10002511 (Recreating a missing
+virtual machine disk (VMDK) descriptor file).
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 04d542c8b826a1196ca4f03f5a35d83035976bd1)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index d95c7e6..92eaeb2 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -717,7 +717,7 @@ static int vmdk_parse_extents(const char *desc, BlockDriverState *bs,
+ 
+         if (sectors <= 0 ||
+             (strcmp(type, "FLAT") && strcmp(type, "SPARSE") &&
+-             strcmp(type, "VMFSSPARSE")) ||
++             strcmp(type, "VMFS") && strcmp(type, "VMFSSPARSE")) ||
+             (strcmp(access, "RW"))) {
+             goto next_line;
+         }
+@@ -730,7 +730,7 @@ static int vmdk_parse_extents(const char *desc, BlockDriverState *bs,
+         }
+ 
+         /* save to extents array */
+-        if (!strcmp(type, "FLAT")) {
++        if (!strcmp(type, "FLAT") || !strcmp(type, "VMFS")) {
+             /* FLAT extent */
+             VmdkExtent *extent;
+ 
+@@ -788,6 +788,7 @@ static int vmdk_open_desc_file(BlockDriverState *bs, int flags,
+         goto exit;
+     }
+     if (strcmp(ct, "monolithicFlat") &&
++        strcmp(ct, "vmfs") &&
+         strcmp(ct, "vmfsSparse") &&
+         strcmp(ct, "twoGbMaxExtentSparse") &&
+         strcmp(ct, "twoGbMaxExtentFlat")) {
+-- 
+1.7.11.7
+

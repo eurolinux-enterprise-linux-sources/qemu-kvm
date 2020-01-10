@@ -1,0 +1,77 @@
+From d96446df958d4e85990ff670949b03e30b643deb Mon Sep 17 00:00:00 2001
+Message-Id: <d96446df958d4e85990ff670949b03e30b643deb.1378813438.git.minovotn@redhat.com>
+In-Reply-To: <b80f97e724da8388b544413d6a3dcac35d347d9b.1378813438.git.minovotn@redhat.com>
+References: <b80f97e724da8388b544413d6a3dcac35d347d9b.1378813438.git.minovotn@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Wed, 28 Aug 2013 13:14:45 +0200
+Subject: [PATCH 03/13] vpc: Use bdrv_(p)write_sync for metadata writes
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <daac496fe7e95e4f488b1222f15a70c89fe30c4e.1377694139.git.jcody@redhat.com>
+Patchwork-id: 53838
+O-Subject: [RHEL6.5 qemu-kvm PATCH 03/13] vpc: Use bdrv_(p)write_sync for metadata writes
+Bugzilla: 999779
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+Use bdrv_(p)write_sync to ensure metadata integrity in case of a crash.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 078a458e077d6b0db262c4b05fee51d01de2d1d2)
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ block/vpc.c | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vpc.c | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/block/vpc.c b/block/vpc.c
+index 2a1f536..2076766 100644
+--- a/block/vpc.c
++++ b/block/vpc.c
+@@ -270,7 +270,7 @@ static inline int64_t get_sector_offset(BlockDriverState *bs,
+ 
+         s->last_bitmap_offset = bitmap_offset;
+         memset(bitmap, 0xff, s->bitmap_size);
+-        bdrv_pwrite(bs->file, bitmap_offset, bitmap, s->bitmap_size);
++        bdrv_pwrite_sync(bs->file, bitmap_offset, bitmap, s->bitmap_size);
+     }
+ 
+ //    printf("sector: %" PRIx64 ", index: %x, offset: %x, bioff: %" PRIx64 ", bloff: %" PRIx64 "\n",
+@@ -320,7 +320,7 @@ static int rewrite_footer(BlockDriverState* bs)
+     BDRVVPCState *s = bs->opaque;
+     int64_t offset = s->free_data_block_offset;
+ 
+-    ret = bdrv_pwrite(bs->file, offset, s->footer_buf, HEADER_SIZE);
++    ret = bdrv_pwrite_sync(bs->file, offset, s->footer_buf, HEADER_SIZE);
+     if (ret < 0)
+         return ret;
+ 
+@@ -355,7 +355,8 @@ static int64_t alloc_block(BlockDriverState* bs, int64_t sector_num)
+ 
+     // Initialize the block's bitmap
+     memset(bitmap, 0xff, s->bitmap_size);
+-    bdrv_pwrite(bs->file, s->free_data_block_offset, bitmap, s->bitmap_size);
++    bdrv_pwrite_sync(bs->file, s->free_data_block_offset, bitmap,
++        s->bitmap_size);
+ 
+     // Write new footer (the old one will be overwritten)
+     s->free_data_block_offset += s->block_size + s->bitmap_size;
+@@ -366,7 +367,7 @@ static int64_t alloc_block(BlockDriverState* bs, int64_t sector_num)
+     // Write BAT entry to disk
+     bat_offset = s->bat_offset + (4 * index);
+     bat_value = be32_to_cpu(s->pagetable[index]);
+-    ret = bdrv_pwrite(bs->file, bat_offset, &bat_value, 4);
++    ret = bdrv_pwrite_sync(bs->file, bat_offset, &bat_value, 4);
+     if (ret < 0)
+         goto fail;
+ 
+-- 
+1.7.11.7
+

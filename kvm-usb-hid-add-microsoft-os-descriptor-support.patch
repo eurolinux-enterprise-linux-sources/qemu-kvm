@@ -1,0 +1,74 @@
+From 90bd761a7284a9269a0c46e715d58f1fa3d57ae3 Mon Sep 17 00:00:00 2001
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 20 May 2014 10:37:35 +0200
+Subject: [PATCH 07/26] usb-hid: add microsoft os descriptor support
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1400582257-1744-5-git-send-email-kraxel@redhat.com>
+Patchwork-id: 58959
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 4/6] usb-hid: add microsoft os descriptor support
+Bugzilla: 949547
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+Set SelectiveSuspendEnabled registy entry to one.
+This makes Windows use remote suspend by default,
+without manual registry fiddeling.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 88678fbd9dbf01fd0988bcb651508378d85e868a)
+
+Conflicts:
+	hw/usb/dev-hid.c
+---
+ hw/usb-hid.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ hw/usb-hid.c |    7 +++++++
+ 1 files changed, 7 insertions(+), 0 deletions(-)
+
+diff --git a/hw/usb-hid.c b/hw/usb-hid.c
+index 1562661..05bd618 100644
+--- a/hw/usb-hid.c
++++ b/hw/usb-hid.c
+@@ -251,6 +251,10 @@ static const USBDescDevice desc_device_keyboard = {
+     },
+ };
+ 
++static const USBDescMSOS desc_msos_suspend = {
++    .SelectiveSuspendEnabled = true,
++};
++
+ static const USBDesc desc_mouse = {
+     .id = {
+         .idVendor          = 0x0627,
+@@ -262,6 +266,7 @@ static const USBDesc desc_mouse = {
+     },
+     .full = &desc_device_mouse,
+     .str  = desc_strings,
++    .msos = &desc_msos_suspend,
+ };
+ 
+ static const USBDesc desc_tablet = {
+@@ -275,6 +280,7 @@ static const USBDesc desc_tablet = {
+     },
+     .full = &desc_device_tablet,
+     .str  = desc_strings,
++    .msos = &desc_msos_suspend,
+ };
+ 
+ static const USBDesc desc_keyboard = {
+@@ -288,6 +294,7 @@ static const USBDesc desc_keyboard = {
+     },
+     .full = &desc_device_keyboard,
+     .str  = desc_strings,
++    .msos = &desc_msos_suspend,
+ };
+ 
+ static const uint8_t qemu_mouse_hid_report_descriptor[] = {
+-- 
+1.7.1
+

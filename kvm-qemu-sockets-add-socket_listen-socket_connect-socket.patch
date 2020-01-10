@@ -1,0 +1,212 @@
+From fc5f60a2dc3842e35e3fa73f30822b417534afba Mon Sep 17 00:00:00 2001
+Message-Id: <fc5f60a2dc3842e35e3fa73f30822b417534afba.1374754301.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:34 +0200
+Subject: [PATCH 23/65] qemu-sockets: add socket_listen, socket_connect,
+ socket_parse
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-24-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52158
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 23/65] qemu-sockets: add socket_listen, socket_connect, socket_parse
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+These are QAPI-friendly versions of the qemu-sockets functions.  They
+support IP sockets, Unix sockets, and named file descriptors, using a
+QAPI union to dispatch to the correct function.
+
+Reviewed-by: Luiz Capitulino <lcapitulino@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 101f9cbc2b73340197ec610c095fd69f0b1413ed)
+
+Conflicts:
+
+	Makefile
+	qemu-sockets.c
+	qemu-tool.c
+
+{ rhel6: tweaked error handling for old monitor_get_fd ]
+---
+ qemu-sockets.c |  106 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ qemu-tool.c    |    5 +++
+ qemu_socket.h  |    6 ++++
+ 3 files changed, 117 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-sockets.c | 106 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ qemu-tool.c    |   5 +++
+ qemu_socket.h  |   6 ++++
+ 3 files changed, 117 insertions(+)
+
+diff --git a/qemu-sockets.c b/qemu-sockets.c
+index 8808419..6078aff 100644
+--- a/qemu-sockets.c
++++ b/qemu-sockets.c
+@@ -19,6 +19,7 @@
+ #include <errno.h>
+ #include <unistd.h>
+ 
++#include "monitor.h"
+ #include "qemu_socket.h"
+ #include "qemu-common.h" /* for qemu_isdigit */
+ #include "qemu-char.h"
+@@ -847,3 +848,108 @@ int unix_nonblocking_connect(const char *path,
+     qemu_opts_del(opts);
+     return sock;
+ }
++
++SocketAddress *socket_parse(const char *str, Error **errp)
++{
++    SocketAddress *addr = NULL;
++
++    addr = g_new(SocketAddress, 1);
++    if (strstart(str, "unix:", NULL)) {
++        if (str[5] == '\0') {
++            error_setg(errp, "invalid Unix socket address\n");
++            goto fail;
++        } else {
++            addr->kind = SOCKET_ADDRESS_KIND_UNIX;
++            addr->q_unix = g_new(UnixSocketAddress, 1);
++            addr->q_unix->path = g_strdup(str + 5);
++        }
++    } else if (strstart(str, "fd:", NULL)) {
++        if (str[3] == '\0') {
++            error_setg(errp, "invalid file descriptor address\n");
++            goto fail;
++        } else {
++            addr->kind = SOCKET_ADDRESS_KIND_FD;
++            addr->fd = g_new(String, 1);
++            addr->fd->str = g_strdup(str + 3);
++        }
++    } else {
++        addr->kind = SOCKET_ADDRESS_KIND_INET;
++        addr->inet = g_new(InetSocketAddress, 1);
++        addr->inet = inet_parse(str, errp);
++        if (addr->inet == NULL) {
++            goto fail;
++        }
++    }
++    return addr;
++
++fail:
++    qapi_free_SocketAddress(addr);
++    return NULL;
++}
++
++int socket_connect(SocketAddress *addr, Error **errp,
++                   NonBlockingConnectHandler *callback, void *opaque)
++{
++    QemuOpts *opts;
++    int fd;
++
++    opts = qemu_opts_create(&dummy_opts, NULL, 0);
++    switch (addr->kind) {
++    case SOCKET_ADDRESS_KIND_INET:
++        inet_addr_to_opts(opts, addr->inet);
++        fd = inet_connect_opts(opts, errp, callback, opaque);
++        break;
++
++    case SOCKET_ADDRESS_KIND_UNIX:
++        qemu_opt_set(opts, "path", addr->q_unix->path);
++        fd = unix_connect_opts(opts, errp, callback, opaque);
++        break;
++
++    case SOCKET_ADDRESS_KIND_FD:
++        fd = monitor_get_fd(cur_mon, addr->fd->str);
++        if (fd < 0) {
++            error_setg(errp, "monitor get fd failed for %s", addr->fd->str);
++            break;
++        }
++        if (callback) {
++            callback(fd, opaque);
++        }
++        break;
++
++    default:
++        abort();
++    }
++    qemu_opts_del(opts);
++    return fd;
++}
++
++int socket_listen(SocketAddress *addr, Error **errp)
++{
++    QemuOpts *opts;
++    int fd;
++
++    opts = qemu_opts_create(&dummy_opts, NULL, 0);
++    switch (addr->kind) {
++    case SOCKET_ADDRESS_KIND_INET:
++        inet_addr_to_opts(opts, addr->inet);
++        fd = inet_listen_opts(opts, 0, errp);
++        break;
++
++    case SOCKET_ADDRESS_KIND_UNIX:
++        qemu_opt_set(opts, "path", addr->q_unix->path);
++        fd = unix_listen_opts(opts, errp);
++        break;
++
++    case SOCKET_ADDRESS_KIND_FD:
++        fd = monitor_get_fd(cur_mon, addr->fd->str);
++        if (fd < 0) {
++            error_setg(errp, "monitor get fd failed for %s", addr->fd->str);
++        }
++        break;
++
++    default:
++        abort();
++    }
++    qemu_opts_del(opts);
++    return fd;
++}
+diff --git a/qemu-tool.c b/qemu-tool.c
+index f10727f..e05a0c2 100644
+--- a/qemu-tool.c
++++ b/qemu-tool.c
+@@ -36,6 +36,11 @@ void qemu_service_io(void)
+ 
+ Monitor *cur_mon;
+ 
++int monitor_get_fd(Monitor *mon, const char *name)
++{
++    return -1;
++}
++
+ int monitor_cur_is_qmp(void)
+ {
+     return 0;
+diff --git a/qemu_socket.h b/qemu_socket.h
+index 4172ae8..284ab90 100644
+--- a/qemu_socket.h
++++ b/qemu_socket.h
+@@ -30,6 +30,7 @@ int inet_aton(const char *cp, struct in_addr *ia);
+ #endif /* !_WIN32 */
+ 
+ #include "qemu-option.h"
++#include "qapi-visit.h"
+ #include "error.h"
+ #include "qerror.h"
+ 
+@@ -66,6 +67,11 @@ int unix_nonblocking_connect(const char *str,
+                              NonBlockingConnectHandler *callback,
+                              void *opaque, Error **errp);
+ 
++SocketAddress *socket_parse(const char *str, Error **errp);
++int socket_connect(SocketAddress *addr, Error **errp,
++                   NonBlockingConnectHandler *callback, void *opaque);
++int socket_listen(SocketAddress *addr, Error **errp);
++
+ /* Old, ipv4 only bits.  Don't use for new code. */
+ int parse_host_port(struct sockaddr_in *saddr, const char *str);
+ int parse_host_src_port(struct sockaddr_in *haddr,
+-- 
+1.7.11.7
+

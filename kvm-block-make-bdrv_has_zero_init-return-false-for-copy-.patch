@@ -1,0 +1,60 @@
+From d5fa0e70f25fbf1939c587915cf2cdf64b9241b0 Mon Sep 17 00:00:00 2001
+Message-Id: <d5fa0e70f25fbf1939c587915cf2cdf64b9241b0.1379425497.git.minovotn@redhat.com>
+In-Reply-To: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+References: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Fri, 6 Sep 2013 18:12:36 +0200
+Subject: [PATCH 16/25] block: make bdrv_has_zero_init return false for
+ copy-on-write-images
+
+This helps implementing is_allocated on top of get_block_status.
+
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 11212d8fa08a4e5bd56bb4f6877f9a4c0439a02b)
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.c    | 5 +++++
+ qemu-img.c | 9 +--------
+ 2 files changed, 6 insertions(+), 8 deletions(-)
+
+diff --git a/block.c b/block.c
+index 421aae3..22de930 100644
+--- a/block.c
++++ b/block.c
+@@ -2708,6 +2708,11 @@ int bdrv_has_zero_init(BlockDriverState *bs)
+ {
+     assert(bs->drv);
+ 
++    /* If BS is a copy on write image, it is initialized to
++       the contents of the base image, which may not be zeroes.  */
++    if (bs->backing_hd) {
++        return 0;
++    }
+     if (bs->drv->bdrv_has_zero_init) {
+         return bs->drv->bdrv_has_zero_init(bs);
+     }
+diff --git a/qemu-img.c b/qemu-img.c
+index 217246f..9a78fc1 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -1161,14 +1161,7 @@ static int img_convert(int argc, char **argv)
+                should add a specific call to have the info to go faster */
+             buf1 = buf;
+             while (n > 0) {
+-                /* If the output image is being created as a copy on write image,
+-                   copy all sectors even the ones containing only NUL bytes,
+-                   because they may differ from the sectors in the base image.
+-
+-                   If the output is to a host device, we also write out
+-                   sectors that are entirely 0, since whatever data was
+-                   already there is garbage, not 0s. */
+-                if (!has_zero_init || out_baseimg ||
++                if (!has_zero_init ||
+                     is_allocated_sectors_min(buf1, n, &n1, min_sparse)) {
+                     ret = bdrv_write(out_bs, sector_num, buf1, n1);
+                     if (ret < 0) {
+-- 
+1.7.11.7
+

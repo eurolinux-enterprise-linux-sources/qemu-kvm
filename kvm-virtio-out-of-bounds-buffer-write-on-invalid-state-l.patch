@@ -1,0 +1,77 @@
+From f9cd6a3d4edbf9278b8ec0723fd01a544924123e Mon Sep 17 00:00:00 2001
+From: Michael S. Tsirkin <mst@redhat.com>
+Date: Sun, 11 May 2014 14:59:24 -0500
+Subject: [PATCH 10/20] virtio: out-of-bounds buffer write on invalid state load
+
+RH-Author: Michael S. Tsirkin <mst@redhat.com>
+Message-id: <1399820268-7593-1-git-send-email-mst@redhat.com>
+Patchwork-id: 58780
+O-Subject: [PATCH RHEL6.6] virtio: out-of-bounds buffer write on invalid state load
+Bugzilla: 1096089
+RH-Acked-by: Xiao Wang <jasowang@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+
+CVE-2013-4151 QEMU 1.0 out-of-bounds buffer write in
+virtio_load@hw/virtio/virtio.c
+
+So we have this code since way back when:
+
+    num = qemu_get_be32(f);
+
+    for (i = 0; i < num; i++) {
+        vdev->vq[i].vring.num = qemu_get_be32(f);
+
+array of vqs has size VIRTIO_PCI_QUEUE_MAX, so
+on invalid input this will write beyond end of buffer.
+
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+Reviewed-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+(cherry picked from commit cc45995294b92d95319b4782750a3580cabdbc0c)
+
+Conflicts:
+	hw/virtio/virtio.c
+
+Bugzilla: 1096089
+Tested: basic test on developer's box
+Brew build: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7440357
+---
+ hw/virtio.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/virtio.c |    8 +++++++-
+ 1 files changed, 7 insertions(+), 1 deletions(-)
+
+diff --git a/hw/virtio.c b/hw/virtio.c
+index d1fa010..06c6a25 100644
+--- a/hw/virtio.c
++++ b/hw/virtio.c
+@@ -792,7 +792,8 @@ void virtio_save(VirtIODevice *vdev, QEMUFile *f)
+ int virtio_load_with_features(VirtIODevice *vdev, QEMUFile *f,
+                               uint32_t extra_features)
+ {
+-    int num, i, ret;
++    int i, ret;
++    uint32_t num;
+     uint32_t features;
+     uint32_t supported_features;
+ 
+@@ -823,6 +824,11 @@ int virtio_load_with_features(VirtIODevice *vdev, QEMUFile *f,
+ 
+     num = qemu_get_be32(f);
+ 
++    if (num > VIRTIO_PCI_QUEUE_MAX) {
++        error_report("Invalid number of PCI queues: 0x%x", num);
++        return -1;
++    }
++
+     for (i = 0; i < num; i++) {
+         vdev->vq[i].vring.num = qemu_get_be32(f);
+         vdev->vq[i].pa = qemu_get_be64(f);
+-- 
+1.7.1
+

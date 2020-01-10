@@ -1,0 +1,63 @@
+From 54d420a4612798e1a71dd2eeb907f2524a48d5d0 Mon Sep 17 00:00:00 2001
+Message-Id: <54d420a4612798e1a71dd2eeb907f2524a48d5d0.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:28:19 +0200
+Subject: [PATCH 114/114] qemu-ga: ga_get_fd_handle(): abort if fd_counter
+ overflows
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-57-git-send-email-lersek@redhat.com>
+Patchwork-id: 51155
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 56/56] qemu-ga: ga_get_fd_handle(): abort if fd_counter overflows
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Luiz Capitulino <lcapitulino@redhat.com>
+
+Today we reset fd_counter if it wraps, but it's better to abort()
+instead, as fd_counter should never reach INT64_MAX.
+
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+
+*fixed typo: s/resonable/reasonable/
+
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit ce7f7cc2715145eadf1ac45a5dae63f535fc8bbf)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qemu-ga.c |    8 ++++++--
+ 1 files changed, 6 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-ga.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/qemu-ga.c b/qemu-ga.c
+index 5d19991..2336ba9 100644
+--- a/qemu-ga.c
++++ b/qemu-ga.c
+@@ -889,9 +889,13 @@ int64_t ga_get_fd_handle(GAState *s, Error **errp)
+     g_assert(!ga_is_frozen(s));
+ 
+     handle = s->pstate.fd_counter++;
+-    if (s->pstate.fd_counter < 0) {
+-        s->pstate.fd_counter = 0;
++
++    /* This should never happen on a reasonable timeframe, as guest-file-open
++     * would have to be issued 2^63 times */
++    if (s->pstate.fd_counter == INT64_MAX) {
++        abort();
+     }
++
+     if (!write_persistent_state(&s->pstate, s->pstate_filepath)) {
+         error_setg(errp, "failed to commit persistent state to disk");
+     }
+-- 
+1.7.11.7
+

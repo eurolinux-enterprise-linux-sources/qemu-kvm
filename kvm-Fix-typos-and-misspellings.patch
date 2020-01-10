@@ -1,0 +1,65 @@
+From 0d0edcde94fd3a876d091f111291ba98a67dae02 Mon Sep 17 00:00:00 2001
+Message-Id: <0d0edcde94fd3a876d091f111291ba98a67dae02.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:28:14 +0200
+Subject: [PATCH 109/114] Fix typos and misspellings
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-52-git-send-email-lersek@redhat.com>
+Patchwork-id: 51150
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 51/56] Fix typos and misspellings
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Fix various typos and misspellings. The bulk of these were found with
+codespell.
+
+Signed-off-by: Peter Maydell <peter.maydell@linaro.org>
+Reviewed-by: Stefan Weil <sw@weilnetz.de>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 085d813407453e498e05c37d988efba8c6f5af0a)
+
+Conflicts:
+
+	docs/usb-storage.txt
+	hw/arm-misc.h
+	hw/pci/pci_host.c
+	hw/sdhci.c
+	include/qom/object.h
+	monitor.c
+	net/tap.c
+	qemu-options.hx
+	target-i386/translate.c
+	target-s390x/translate.c
+
+RHEL-6 note: only the "qga/commands-posix.c" hunk is taken.
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qga/commands-posix.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/commands-posix.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index 4ca0718..8a6179c 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -121,7 +121,7 @@ void qmp_guest_shutdown(bool has_mode, const char *mode, Error **err)
+         return;
+     }
+ 
+-    /* succeded */
++    /* succeeded */
+ }
+ 
+ int64_t qmp_guest_get_time(Error **errp)
+-- 
+1.7.11.7
+

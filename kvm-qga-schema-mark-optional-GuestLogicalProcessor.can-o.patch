@@ -1,0 +1,56 @@
+From 87e4f5953765ff00c1c68788f1ae7f66361af3b6 Mon Sep 17 00:00:00 2001
+Message-Id: <87e4f5953765ff00c1c68788f1ae7f66361af3b6.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:28:17 +0200
+Subject: [PATCH 112/114] qga schema: mark optional
+ GuestLogicalProcessor.can-offline with optional
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-55-git-send-email-lersek@redhat.com>
+Patchwork-id: 51153
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 54/56] qga schema: mark optional GuestLogicalProcessor.can-offline with #optional
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Suggested-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit c964c9e0985e71527bac47c8351008c3dc18c1b8)
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=924684
+---
+ qapi-schema-guest.json |    7 ++++---
+ 1 files changed, 4 insertions(+), 3 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema-guest.json | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/qapi-schema-guest.json b/qapi-schema-guest.json
+index dac4e6f..2af3515 100644
+--- a/qapi-schema-guest.json
++++ b/qapi-schema-guest.json
+@@ -562,9 +562,10 @@
+ #
+ # @online: Whether the VCPU is enabled.
+ #
+-# @can-offline: Whether offlining the VCPU is possible. This member is always
+-#               filled in by the guest agent when the structure is returned,
+-#               and always ignored on input (hence it can be omitted then).
++# @can-offline: #optional Whether offlining the VCPU is possible. This member
++#               is always filled in by the guest agent when the structure is
++#               returned, and always ignored on input (hence it can be omitted
++#               then).
+ #
+ # Since: 1.5
+ ##
+-- 
+1.7.11.7
+

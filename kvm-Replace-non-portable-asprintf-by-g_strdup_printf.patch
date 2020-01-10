@@ -1,0 +1,113 @@
+From d6ee4e548b399a99465c166d21001904437c12c9 Mon Sep 17 00:00:00 2001
+Message-Id: <d6ee4e548b399a99465c166d21001904437c12c9.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:28:01 +0200
+Subject: [PATCH 096/114] Replace non-portable asprintf by g_strdup_printf
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-39-git-send-email-lersek@redhat.com>
+Patchwork-id: 51137
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 38/56] Replace non-portable asprintf by g_strdup_printf
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+g_strdup_printf already handles OOM errors, so some error handling in
+QEMU code can be removed.
+
+Signed-off-by: Stefan Weil <sw@weilnetz.de>
+Signed-off-by: Blue Swirl <blauwirbel@gmail.com>
+(cherry picked from commit e4ada482420175bc17d6ccb9f2af0e769da78e01)
+
+Conflicts:
+
+	exec.c
+
+RHEL-6 note: minimal impact conflict resolution: file name, error message,
+hardware tabs in source are left unchanged.
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ exec.c               |    8 +++-----
+ path.c               |    5 +----
+ qga/commands-posix.c |   13 +++++--------
+ 3 files changed, 9 insertions(+), 17 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ exec.c               |  8 +++-----
+ path.c               |  5 +----
+ qga/commands-posix.c | 13 +++++--------
+ 3 files changed, 9 insertions(+), 17 deletions(-)
+
+diff --git a/exec.c b/exec.c
+index 298d94c..d8544aa 100644
+--- a/exec.c
++++ b/exec.c
+@@ -2583,18 +2583,16 @@ static void *file_ram_alloc(RAMBlock *block,
+         return NULL;
+     }
+ 
+-    if (asprintf(&filename, "%s/kvm.XXXXXX", path) == -1) {
+-	return NULL;
+-    }
++    filename = g_strdup_printf("%s/kvm.XXXXXX", path);
+ 
+     fd = mkstemp(filename);
+     if (fd < 0) {
+ 	perror("mkstemp");
+-	free(filename);
++	g_free(filename);
+ 	return NULL;
+     }
+     unlink(filename);
+-    free(filename);
++    g_free(filename);
+ 
+     memory = (memory+hpagesize-1) & ~(hpagesize-1);
+ 
+diff --git a/path.c b/path.c
+index 0d2bf14..39edc00 100644
+--- a/path.c
++++ b/path.c
+@@ -46,10 +46,7 @@ static struct pathelem *new_entry(const char *root,
+ {
+     struct pathelem *new = malloc(sizeof(*new));
+     new->name = strdup(name);
+-    if (asprintf(&new->pathname, "%s/%s", root, name) == -1) {
+-        printf("Cannot allocate memory\n");
+-        exit(1);
+-    }
++    new->pathname = g_strdup_printf("%s/%s", root, name);
+     new->num_entries = 0;
+     return new;
+ }
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index d042f07..24f045b 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -940,14 +940,11 @@ GuestNetworkInterfaceList *qmp_guest_network_get_interfaces(Error **errp)
+ 
+             mac_addr = (unsigned char *) &ifr.ifr_hwaddr.sa_data;
+ 
+-            if (asprintf(&info->value->hardware_address,
+-                         "%02x:%02x:%02x:%02x:%02x:%02x",
+-                         (int) mac_addr[0], (int) mac_addr[1],
+-                         (int) mac_addr[2], (int) mac_addr[3],
+-                         (int) mac_addr[4], (int) mac_addr[5]) == -1) {
+-                error_setg_errno(errp, errno, "failed to format MAC");
+-                goto error;
+-            }
++            info->value->hardware_address =
++                g_strdup_printf("%02x:%02x:%02x:%02x:%02x:%02x",
++                                (int) mac_addr[0], (int) mac_addr[1],
++                                (int) mac_addr[2], (int) mac_addr[3],
++                                (int) mac_addr[4], (int) mac_addr[5]);
+ 
+             info->value->has_hardware_address = true;
+             close(sock);
+-- 
+1.7.11.7
+

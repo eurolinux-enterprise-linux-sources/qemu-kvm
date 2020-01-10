@@ -1,0 +1,87 @@
+From 0cbeac54868527d921941ebbbc9c356244a4f13e Mon Sep 17 00:00:00 2001
+Message-Id: <0cbeac54868527d921941ebbbc9c356244a4f13e.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:27:53 +0200
+Subject: [PATCH 088/114] qemu-ga: add ga_open_logfile()
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-31-git-send-email-lersek@redhat.com>
+Patchwork-id: 51129
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 30/56] qemu-ga: add ga_open_logfile()
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+This function sets O_CLOEXEC on the log file fd so that it isn't
+leaked to executed processes.
+
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Acked-by: Amos Kong <akong@redhat.com>
+Tested-by: Amos Kong <akong@redhat.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit 9e92f6d46233171898fc7d0487a04e5b78e44234)
+
+Conflicts:
+
+	qga/main.c
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=892996
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qemu-ga.c |   17 +++++++++++++++--
+ 1 files changed, 15 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-ga.c | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/qemu-ga.c b/qemu-ga.c
+index 24d7c76..30214a2 100644
+--- a/qemu-ga.c
++++ b/qemu-ga.c
+@@ -261,6 +261,19 @@ void ga_set_response_delimited(GAState *s)
+     s->delimit_response = true;
+ }
+ 
++static FILE *ga_open_logfile(const char *logfile)
++{
++    FILE *f;
++
++    f = fopen(logfile, "a");
++    if (!f) {
++        return NULL;
++    }
++
++    qemu_set_cloexec(fileno(f));
++    return f;
++}
++
+ #ifndef _WIN32
+ static bool ga_open_pidfile(const char *pidfile)
+ {
+@@ -402,7 +415,7 @@ void ga_unset_frozen(GAState *s)
+      * in a frozen state at start up, do it now
+      */
+     if (s->deferred_options.log_filepath) {
+-        s->log_file = fopen(s->deferred_options.log_filepath, "a");
++        s->log_file = ga_open_logfile(s->deferred_options.log_filepath);
+         if (!s->log_file) {
+             s->log_file = stderr;
+         }
+@@ -884,7 +897,7 @@ int main(int argc, char **argv)
+             become_daemon(pid_filepath);
+         }
+         if (log_filepath) {
+-            FILE *log_file = fopen(log_filepath, "a");
++            FILE *log_file = ga_open_logfile(log_filepath);
+             if (!log_file) {
+                 g_critical("unable to open specified log file: %s",
+                            strerror(errno));
+-- 
+1.7.11.7
+

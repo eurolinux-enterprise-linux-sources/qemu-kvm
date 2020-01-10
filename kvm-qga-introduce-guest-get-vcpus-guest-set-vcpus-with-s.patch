@@ -1,0 +1,166 @@
+From ac24aa816e5eb5337423869ce391adb7ac7b088f Mon Sep 17 00:00:00 2001
+Message-Id: <ac24aa816e5eb5337423869ce391adb7ac7b088f.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:28:11 +0200
+Subject: [PATCH 106/114] qga: introduce guest-get-vcpus / guest-set-vcpus
+ with stubs
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-49-git-send-email-lersek@redhat.com>
+Patchwork-id: 51147
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 48/56] qga: introduce guest-get-vcpus / guest-set-vcpus with stubs
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit 70e133a7080116340b1a8898893c6d455bd47299)
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=924684
+---
+ qapi-schema-guest.json |   72 ++++++++++++++++++++++++++++++++++++++++++++++++
+ qga/commands-posix.c   |   12 ++++++++
+ qga/commands-win32.c   |   12 ++++++++
+ 3 files changed, 96 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema-guest.json | 72 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ qga/commands-posix.c   | 12 +++++++++
+ qga/commands-win32.c   | 12 +++++++++
+ 3 files changed, 96 insertions(+)
+
+diff --git a/qapi-schema-guest.json b/qapi-schema-guest.json
+index 437d750..dac4e6f 100644
+--- a/qapi-schema-guest.json
++++ b/qapi-schema-guest.json
+@@ -554,3 +554,75 @@
+ ##
+ { 'command': 'guest-network-get-interfaces',
+   'returns': ['GuestNetworkInterface'] }
++
++##
++# @GuestLogicalProcessor:
++#
++# @logical-id: Arbitrary guest-specific unique identifier of the VCPU.
++#
++# @online: Whether the VCPU is enabled.
++#
++# @can-offline: Whether offlining the VCPU is possible. This member is always
++#               filled in by the guest agent when the structure is returned,
++#               and always ignored on input (hence it can be omitted then).
++#
++# Since: 1.5
++##
++{ 'type': 'GuestLogicalProcessor',
++  'data': {'logical-id': 'int',
++           'online': 'bool',
++           '*can-offline': 'bool'} }
++
++##
++# @guest-get-vcpus:
++#
++# Retrieve the list of the guest's logical processors.
++#
++# This is a read-only operation.
++#
++# Returns: The list of all VCPUs the guest knows about. Each VCPU is put on the
++# list exactly once, but their order is unspecified.
++#
++# Since: 1.5
++##
++{ 'command': 'guest-get-vcpus',
++  'returns': ['GuestLogicalProcessor'] }
++
++##
++# @guest-set-vcpus:
++#
++# Attempt to reconfigure (currently: enable/disable) logical processors inside
++# the guest.
++#
++# The input list is processed node by node in order. In each node @logical-id
++# is used to look up the guest VCPU, for which @online specifies the requested
++# state. The set of distinct @logical-id's is only required to be a subset of
++# the guest-supported identifiers. There's no restriction on list length or on
++# repeating the same @logical-id (with possibly different @online field).
++# Preferably the input list should describe a modified subset of
++# @guest-get-vcpus' return value.
++#
++# Returns: The length of the initial sublist that has been successfully
++#          processed. The guest agent maximizes this value. Possible cases:
++#
++#          0:                if the @vcpus list was empty on input. Guest state
++#                            has not been changed. Otherwise,
++#
++#          Error:            processing the first node of @vcpus failed for the
++#                            reason returned. Guest state has not been changed.
++#                            Otherwise,
++#
++#          < length(@vcpus): more than zero initial nodes have been processed,
++#                            but not the entire @vcpus list. Guest state has
++#                            changed accordingly. To retrieve the error
++#                            (assuming it persists), repeat the call with the
++#                            successfully processed initial sublist removed.
++#                            Otherwise,
++#
++#          length(@vcpus):   call successful.
++#
++# Since: 1.5
++##
++{ 'command': 'guest-set-vcpus',
++  'data':    {'vcpus': ['GuestLogicalProcessor'] },
++  'returns': 'int' }
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index 29e5c29..f761701 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -1168,6 +1168,18 @@ void qmp_guest_fstrim(bool has_minimum, int64_t minimum, Error **err)
+ }
+ #endif
+ 
++GuestLogicalProcessorList *qmp_guest_get_vcpus(Error **errp)
++{
++    error_set(errp, QERR_UNSUPPORTED);
++    return NULL;
++}
++
++int64_t qmp_guest_set_vcpus(GuestLogicalProcessorList *vcpus, Error **errp)
++{
++    error_set(errp, QERR_UNSUPPORTED);
++    return -1;
++}
++
+ /* register init/cleanup routines for stateful command groups */
+ void ga_command_state_init(GAState *s, GACommandState *cs)
+ {
+diff --git a/qga/commands-win32.c b/qga/commands-win32.c
+index 3e4fd2a..da3eb2a 100644
+--- a/qga/commands-win32.c
++++ b/qga/commands-win32.c
+@@ -289,6 +289,18 @@ void qmp_guest_set_time(int64_t time_ns, Error **errp)
+     error_set(errp, QERR_UNSUPPORTED);
+ }
+ 
++GuestLogicalProcessorList *qmp_guest_get_vcpus(Error **errp)
++{
++    error_set(errp, QERR_UNSUPPORTED);
++    return NULL;
++}
++
++int64_t qmp_guest_set_vcpus(GuestLogicalProcessorList *vcpus, Error **errp)
++{
++    error_set(errp, QERR_UNSUPPORTED);
++    return -1;
++}
++
+ /* register init/cleanup routines for stateful command groups */
+ void ga_command_state_init(GAState *s, GACommandState *cs)
+ {
+-- 
+1.7.11.7
+

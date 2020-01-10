@@ -1,0 +1,50 @@
+From 474c71949e58d3608cfddfe6efe314db5358210d Mon Sep 17 00:00:00 2001
+Message-Id: <474c71949e58d3608cfddfe6efe314db5358210d.1411757522.git.jen@redhat.com>
+In-Reply-To: <c52ca58a7a8b9f87bde7ca1ab5b11a39d82854e5.1411757522.git.jen@redhat.com>
+References: <c52ca58a7a8b9f87bde7ca1ab5b11a39d82854e5.1411757522.git.jen@redhat.com>
+From: Jeff Nelson <jenelson@redhat.com>
+Date: Fri, 26 Sep 2014 16:39:49 -0400
+Subject: [CHANGE 7/7] Revert "net: Forbid dealing with packets when VM is not
+ running"
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Jeff Nelson <jenelson@redhat.com>
+Message-id: <ecbb0ec992373e424881e3273fc449a3bf13c2e5.1411747689.git.jen@redhat.com>
+Patchwork-id: 61464
+O-Subject: [RHEL-6.6.z qemu-kvm PATCH 7/7] Revert "net: Forbid dealing with packets when VM is not running"
+Bugzilla: 970103
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+This reverts commit c1a65d1a3f9888636f1026da1d5f77d985a8815b.
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ net.c | 6 ------
+ 1 file changed, 6 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ net.c | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/net.c b/net.c
+index ef87f55..4ca648a 100644
+--- a/net.c
++++ b/net.c
+@@ -395,12 +395,6 @@ int qemu_can_send_packet(VLANClientState *sender)
+     VLANState *vlan = sender->vlan;
+     VLANClientState *vc;
+ 
+-    int vm_running = runstate_is_running();
+-
+-    if (!vm_running) {
+-        return 0;
+-    }
+-
+     if (sender->peer) {
+         if (sender->peer->receive_disabled) {
+             return 0;
+-- 
+1.9.3
+

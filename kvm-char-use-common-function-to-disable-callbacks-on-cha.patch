@@ -1,0 +1,180 @@
+From d5d63d84edf86a0312d56013dff7e94ad5f3daf4 Mon Sep 17 00:00:00 2001
+Message-Id: <d5d63d84edf86a0312d56013dff7e94ad5f3daf4.1381329939.git.minovotn@redhat.com>
+In-Reply-To: <fdc2f959b4c2370865a73f9df8a0dc4e2c26d31a.1381329939.git.minovotn@redhat.com>
+References: <fdc2f959b4c2370865a73f9df8a0dc4e2c26d31a.1381329939.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Tue, 8 Oct 2013 05:04:43 +0200
+Subject: [PATCH 2/4] char: use common function to disable callbacks on
+ chardev close
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <cdabc8382927737e88f30d9f61e490a45bb42598.1381208438.git.amit.shah@redhat.com>
+Patchwork-id: 54724
+O-Subject: [RHEL6.5 PATCH 2/3] char: use common function to disable callbacks on chardev close
+Bugzilla: 985205
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+
+This deduplicates code used a lot of times.
+
+CC: <qemu-stable@nongnu.org>
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	qemu-char.c
+---
+ qemu-char.c | 62 +++++++++++++++++++------------------------------------------
+ 1 file changed, 19 insertions(+), 43 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 62 +++++++++++++++++++------------------------------------------
+ 1 file changed, 19 insertions(+), 43 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 7c0c7ca..4cfad71 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -674,6 +674,14 @@ static void io_remove_watch_poll(guint tag)
+     g_source_destroy(&iwp->parent);
+ }
+ 
++static void remove_fd_in_watch(CharDriverState *chr)
++{
++    if (chr->fd_in_tag) {
++        io_remove_watch_poll(chr->fd_in_tag);
++        chr->fd_in_tag = 0;
++    }
++}
++
+ static GIOChannel *io_channel_from_fd(int fd)
+ {
+     GIOChannel *chan;
+@@ -774,10 +782,7 @@ static gboolean fd_chr_read(GIOChannel *chan, GIOCondition cond, void *opaque)
+     status = g_io_channel_read_chars(chan, (gchar *)buf,
+                                      len, &bytes_read, NULL);
+     if (status == G_IO_STATUS_EOF) {
+-        if (chr->fd_in_tag) {
+-            io_remove_watch_poll(chr->fd_in_tag);
+-            chr->fd_in_tag = 0;
+-        }
++        remove_fd_in_watch(chr);
+         qemu_chr_be_event(chr, CHR_EVENT_CLOSED);
+         return FALSE;
+     }
+@@ -807,11 +812,7 @@ static void fd_chr_update_read_handler(CharDriverState *chr)
+ {
+     FDCharDriver *s = chr->opaque;
+ 
+-    if (chr->fd_in_tag) {
+-        io_remove_watch_poll(chr->fd_in_tag);
+-        chr->fd_in_tag = 0;
+-    }
+-
++    remove_fd_in_watch(chr);
+     if (s->fd_in) {
+         chr->fd_in_tag = io_add_watch_poll(s->fd_in, fd_chr_read_poll,
+                                            fd_chr_read, chr);
+@@ -822,11 +823,7 @@ static void fd_chr_close(struct CharDriverState *chr)
+ {
+     FDCharDriver *s = chr->opaque;
+ 
+-    if (chr->fd_in_tag) {
+-        io_remove_watch_poll(chr->fd_in_tag);
+-        chr->fd_in_tag = 0;
+-    }
+-
++    remove_fd_in_watch(chr);
+     if (s->fd_in) {
+         g_io_channel_unref(s->fd_in);
+     }
+@@ -1123,10 +1120,7 @@ static void pty_chr_state(CharDriverState *chr, int connected)
+     PtyCharDriver *s = chr->opaque;
+ 
+     if (!connected) {
+-        if (chr->fd_in_tag) {
+-            io_remove_watch_poll(chr->fd_in_tag);
+-            chr->fd_in_tag = 0;
+-        }
++        remove_fd_in_watch(chr);
+         s->connected = 0;
+         /* (re-)connect poll interval for idle guests: once per second.
+          * We check more frequently in case the guests sends data to
+@@ -1152,10 +1146,7 @@ static void pty_chr_close(struct CharDriverState *chr)
+     PtyCharDriver *s = chr->opaque;
+     int fd;
+ 
+-    if (chr->fd_in_tag) {
+-        io_remove_watch_poll(chr->fd_in_tag);
+-        chr->fd_in_tag = 0;
+-    }
++    remove_fd_in_watch(chr);
+     fd = g_io_channel_unix_get_fd(s->fd);
+     g_io_channel_unref(s->fd);
+     close(fd);
+@@ -2023,10 +2014,7 @@ static gboolean udp_chr_read(GIOChannel *chan, GIOCondition cond, void *opaque)
+     s->bufcnt = bytes_read;
+     s->bufptr = s->bufcnt;
+     if (status != G_IO_STATUS_NORMAL) {
+-        if (chr->fd_in_tag) {
+-            io_remove_watch_poll(chr->fd_in_tag);
+-            chr->fd_in_tag = 0;
+-        }
++        remove_fd_in_watch(chr);
+         return FALSE;
+     }
+ 
+@@ -2044,11 +2032,7 @@ static void udp_chr_update_read_handler(CharDriverState *chr)
+ {
+     NetCharDriver *s = chr->opaque;
+ 
+-    if (chr->fd_in_tag) {
+-        io_remove_watch_poll(chr->fd_in_tag);
+-        chr->fd_in_tag = 0;
+-    }
+-
++    remove_fd_in_watch(chr);
+     if (s->chan) {
+         chr->fd_in_tag = io_add_watch_poll(s->chan, udp_chr_read_poll,
+                                            udp_chr_read, chr);
+@@ -2058,10 +2042,8 @@ static void udp_chr_update_read_handler(CharDriverState *chr)
+ static void udp_chr_close(CharDriverState *chr)
+ {
+     NetCharDriver *s = chr->opaque;
+-    if (chr->fd_in_tag) {
+-        io_remove_watch_poll(chr->fd_in_tag);
+-        chr->fd_in_tag = 0;
+-    }
++
++    remove_fd_in_watch(chr);
+     if (s->chan) {
+         g_io_channel_unref(s->chan);
+         closesocket(s->fd);
+@@ -2283,10 +2265,7 @@ static gboolean tcp_chr_read(GIOChannel *chan, GIOCondition cond, void *opaque)
+         if (s->listen_chan) {
+             s->listen_tag = g_io_add_watch(s->listen_chan, G_IO_IN, tcp_chr_accept, chr);
+         }
+-        if (chr->fd_in_tag) {
+-            io_remove_watch_poll(chr->fd_in_tag);
+-            chr->fd_in_tag = 0;
+-        }
++        remove_fd_in_watch(chr);
+         g_io_channel_unref(s->chan);
+         s->chan = NULL;
+         closesocket(s->fd);
+@@ -2387,10 +2366,7 @@ static void tcp_chr_close(CharDriverState *chr)
+ {
+     TCPCharDriver *s = chr->opaque;
+     if (s->fd >= 0) {
+-        if (chr->fd_in_tag) {
+-            io_remove_watch_poll(chr->fd_in_tag);
+-            chr->fd_in_tag = 0;
+-        }
++        remove_fd_in_watch(chr);
+         if (s->chan) {
+             g_io_channel_unref(s->chan);
+         }
+-- 
+1.7.11.7
+

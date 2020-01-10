@@ -1,0 +1,95 @@
+From cea30130095c452afefc317d9716a3ebfbe23014 Mon Sep 17 00:00:00 2001
+Message-Id: <cea30130095c452afefc317d9716a3ebfbe23014.1368111913.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:17:44 +0200
+Subject: [PATCH 10/65] Revert "iohandlers: Add
+ enable/disable_write_fd_handler() functions"
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <8a789c416ec3c95b4c04d40f3c7fc71890afa081.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50788
+O-Subject: [RHEL6.5 qemu-kvm PATCH 10/65] Revert "iohandlers: Add enable/disable_write_fd_handler() functions"
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+This reverts commit e4f644bb88c42e71dcbba6e54f59fc1084cf6e51.
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ qemu-char.h |  3 ---
+ vl.c        | 35 -----------------------------------
+ 2 files changed, 38 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.h |  3 ---
+ vl.c        | 35 -----------------------------------
+ 2 files changed, 38 deletions(-)
+
+diff --git a/qemu-char.h b/qemu-char.h
+index ca2e9bc..d2332c7 100644
+--- a/qemu-char.h
++++ b/qemu-char.h
+@@ -118,9 +118,6 @@ size_t qemu_chr_mem_osize(const CharDriverState *chr);
+ 
+ /* async I/O support */
+ 
+-void enable_write_fd_handler(int fd, IOHandler *fd_write);
+-void disable_write_fd_handler(int fd);
+-
+ int qemu_set_fd_handler2(int fd,
+                          IOCanRWHandler *fd_read_poll,
+                          IOHandler *fd_read,
+diff --git a/vl.c b/vl.c
+index 6f0e9e3..8fc7964 100644
+--- a/vl.c
++++ b/vl.c
+@@ -2649,41 +2649,6 @@ typedef struct IOHandlerRecord {
+ static QLIST_HEAD(, IOHandlerRecord) io_handlers =
+     QLIST_HEAD_INITIALIZER(io_handlers);
+ 
+-static IOHandlerRecord *find_iohandler(int fd)
+-{
+-    IOHandlerRecord *ioh;
+-
+-    QLIST_FOREACH(ioh, &io_handlers, next) {
+-        if (ioh->fd == fd) {
+-            return ioh;
+-        }
+-    }
+-    return NULL;
+-}
+-
+-void enable_write_fd_handler(int fd, IOHandler *fd_write)
+-{
+-    IOHandlerRecord *ioh;
+-
+-    ioh = find_iohandler(fd);
+-    if (!ioh) {
+-        return;
+-    }
+-
+-    ioh->fd_write = fd_write;
+-}
+-
+-void disable_write_fd_handler(int fd)
+-{
+-    IOHandlerRecord *ioh;
+-
+-    ioh = find_iohandler(fd);
+-    if (!ioh) {
+-        return;
+-    }
+-
+-    ioh->fd_write = NULL;
+-}
+ 
+ /* XXX: fd_read_poll should be suppressed, but an API change is
+    necessary in the character devices to suppress fd_can_read(). */
+-- 
+1.7.11.7
+

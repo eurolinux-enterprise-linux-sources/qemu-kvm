@@ -1,0 +1,52 @@
+From 8a5181c3fa0b1efb69153485808afcb612d0aa60 Mon Sep 17 00:00:00 2001
+Message-Id: <8a5181c3fa0b1efb69153485808afcb612d0aa60.1361183855.git.minovotn@redhat.com>
+From: Miroslav Rezanina <mrezanin@redhat.com>
+Date: Mon, 21 Jan 2013 10:56:54 +0100
+Subject: [PATCH 1/5] block: fix block tray status
+
+RH-Author: Miroslav Rezanina <mrezanin@redhat.com>
+Message-id: <1358765814-31566-1-git-send-email-mrezanin@redhat.com>
+Patchwork-id: 47600
+O-Subject: [RHEL6.5 qemu-kvm PATCH] block: fix block tray status
+Bugzilla: 890012
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+The tray status should change also if you eject empty block device.
+
+Upstream commit: 9ca111544c64b5abed2e79cf52e19a8f227b347b
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block.c |    7 ++++---
+ 1 files changed, 4 insertions(+), 3 deletions(-)
+
+Bugzilla: 890012
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=5296164
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/block.c b/block.c
+index 1f75c37..03e5e65 100644
+--- a/block.c
++++ b/block.c
+@@ -964,9 +964,10 @@ void bdrv_close(BlockDriverState *bs)
+             bdrv_close(bs->file);
+         }
+ 
+-        if (!runstate_check(RUN_STATE_INMIGRATE)) {
+-            bdrv_dev_change_media_cb(bs, false);
+-        }
++    }
++
++    if (!runstate_check(RUN_STATE_INMIGRATE)) {
++        bdrv_dev_change_media_cb(bs, false);
+     }
+ }
+ 
+-- 
+1.7.11.7
+

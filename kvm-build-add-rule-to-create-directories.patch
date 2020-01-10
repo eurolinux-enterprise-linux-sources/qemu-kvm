@@ -1,0 +1,43 @@
+From 5828dd5e1b93e091f4ee2b502c1ca90faeb056d7 Mon Sep 17 00:00:00 2001
+From: Amos Kong <akong@redhat.com>
+Date: Tue, 10 Sep 2013 06:07:44 +0200
+Subject: [PATCH 02/39] build: add rule to create directories
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1378793288-3371-3-git-send-email-akong@redhat.com>
+Patchwork-id: 54237
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v3 02/26] build: add rule to create directories
+Bugzilla: 786407
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Upstream added this rule in commit
+2dee8d54c62abb0a46578ad21cc25782b83e3773
+
+We will only add two new directories to nested-vars
+in this patchset, so no need to clean configure file.
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+---
+ rules.mak |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ rules.mak |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/rules.mak b/rules.mak
+index a00bbb8..3df9da5 100644
+--- a/rules.mak
++++ b/rules.mak
+@@ -88,4 +88,5 @@ endef
+ define unnest-vars
+ $(call unnest-vars-1)
+ $(foreach var,$(nested-vars),$(eval $(var) := $(filter-out %/, $($(var)))))
++$(shell mkdir -p $(sort $(foreach var,$(nested-vars),$(dir $($(var))))))
+ endef
+-- 
+1.7.1
+

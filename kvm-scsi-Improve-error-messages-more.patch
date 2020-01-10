@@ -1,0 +1,113 @@
+From c1e74191d16d95196b5fc39b926fbaab5b915eff Mon Sep 17 00:00:00 2001
+Message-Id: <c1e74191d16d95196b5fc39b926fbaab5b915eff.1419012926.git.jen@redhat.com>
+In-Reply-To: <6542ba6203e55ba5fa5a30171f9fa0690468aa33.1419012926.git.jen@redhat.com>
+References: <6542ba6203e55ba5fa5a30171f9fa0690468aa33.1419012926.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Tue, 4 Nov 2014 12:30:42 -0600
+Subject: [CHANGE 5/6] scsi: Improve error messages more
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1415104242-22499-3-git-send-email-famz@redhat.com>
+Patchwork-id: 62079
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 2/2] scsi: Improve error messages more
+Bugzilla: 1021785
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Remove the "scsi-block:" prefix for error messages as suggested
+by Markus.
+
+Improve the previous patch by making the message the same for both
+scsi-block and scsi-generic, including the strerror() output in both
+and making an explicit reference to SG_IO.  Also s/can not/cannot/.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 6ee143a0a4f8b5c437ac327e3d694a6a0e5380ad)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	hw/scsi-generic.c
+The removed if condition is different, but the resolution is
+straightforward.
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/scsi-disk.c    | 11 ++++++-----
+ hw/scsi-generic.c | 11 +++++++++--
+ 2 files changed, 15 insertions(+), 7 deletions(-)
+
+diff --git a/hw/scsi-disk.c b/hw/scsi-disk.c
+index c7a02bb..fb61f3b 100644
+--- a/hw/scsi-disk.c
++++ b/hw/scsi-disk.c
+@@ -1867,26 +1867,27 @@ static int scsi_block_initfn(SCSIDevice *dev)
+     int rc;
+ 
+     if (!s->qdev.conf.bs) {
+-        error_report("scsi-block: drive property not set");
++        error_report("drive property not set");
+         return -1;
+     }
+ 
+     /* check we are using a driver managing SG_IO (version 3 and after) */
+-    rc =  bdrv_ioctl(s->qdev.conf.bs, SG_GET_VERSION_NUM, &sg_version);
++    rc = bdrv_ioctl(s->qdev.conf.bs, SG_GET_VERSION_NUM, &sg_version);
+     if (rc < 0) {
+-        error_report("scsi-block: can not get version number: %s",
++        error_report("cannot get SG_IO version number: %s.  "
++                     "Is this a SCSI device?",
+                      strerror(-rc));
+         return -1;
+     }
+     if (sg_version < 30000) {
+-        error_report("scsi-block: scsi generic interface too old");
++        error_report("scsi generic interface too old");
+         return -1;
+     }
+ 
+     /* get device type from INQUIRY data */
+     rc = get_device_type(s);
+     if (rc < 0) {
+-        error_report("scsi-block: INQUIRY failed");
++        error_report("INQUIRY failed");
+         return -1;
+     }
+ 
+diff --git a/hw/scsi-generic.c b/hw/scsi-generic.c
+index bc6e29e..87bb008 100644
+--- a/hw/scsi-generic.c
++++ b/hw/scsi-generic.c
+@@ -404,6 +404,7 @@ static void scsi_destroy(SCSIDevice *s)
+ 
+ static int scsi_generic_initfn(SCSIDevice *s)
+ {
++    int rc;
+     int sg_version;
+     struct sg_scsi_id scsiid;
+ 
+@@ -428,8 +429,14 @@ static int scsi_generic_initfn(SCSIDevice *s)
+     }
+ 
+     /* check we are using a driver managing SG_IO (version 3 and after */
+-    if (bdrv_ioctl(s->conf.bs, SG_GET_VERSION_NUM, &sg_version) < 0 ||
+-        sg_version < 30000) {
++    rc = bdrv_ioctl(s->conf.bs, SG_GET_VERSION_NUM, &sg_version);
++    if (rc < 0) {
++        error_report("cannot get SG_IO version number: %s.  "
++                     "Is this a SCSI device?",
++                     strerror(-rc));
++        return -1;
++    }
++    if (sg_version < 30000) {
+         error_report("scsi generic interface too old");
+         return -1;
+     }
+-- 
+2.1.0
+

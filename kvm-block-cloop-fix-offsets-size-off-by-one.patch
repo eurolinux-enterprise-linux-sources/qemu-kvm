@@ -1,0 +1,87 @@
+From 0f7a0435dcb5ecac529ff6e35d619b5b61c90cd8 Mon Sep 17 00:00:00 2001
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Tue, 25 Mar 2014 11:45:42 +0100
+Subject: [PATCH 24/48] block/cloop: fix offsets[] size off-by-one
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1395744364-16049-24-git-send-email-kwolf@redhat.com>
+Patchwork-id: n/a
+O-Subject: [EMBARGOED RHEL-6.6/6.5.z qemu-kvm PATCH v2 23/45]
+           block/cloop: fix offsets[] size off-by-one
+Bugzilla: 1079518
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeff Cody <jcody@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1079518
+Upstream status: Series embargoed
+
+cloop stores the number of compressed blocks in the n_blocks header
+field.  The file actually contains n_blocks + 1 offsets, where the extra
+offset is the end-of-file offset.
+
+The following line in cloop_read_block() results in an out-of-bounds
+offsets[] access:
+
+    uint32_t bytes = s->offsets[block_num + 1] - s->offsets[block_num];
+
+This patch allocates and loads the extra offset so that
+cloop_read_block() works correctly when the last block is accessed.
+
+Notice that we must free s->offsets[] unconditionally now since there is
+always an end-of-file offset.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+
+Conflicts:
+	tests/qemu-iotests/075
+	tests/qemu-iotests/075.out
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/cloop.c |   10 ++++------
+ 1 files changed, 4 insertions(+), 6 deletions(-)
+
+diff --git a/block/cloop.c b/block/cloop.c
+index f39dc77..0a9a3e6 100644
+--- a/block/cloop.c
++++ b/block/cloop.c
+@@ -96,12 +96,12 @@ static int cloop_open(BlockDriverState *bs, int flags)
+     s->n_blocks = be32_to_cpu(s->n_blocks);
+ 
+     /* read offsets */
+-    if (s->n_blocks > UINT32_MAX / sizeof(uint64_t)) {
++    if (s->n_blocks > (UINT32_MAX - 1) / sizeof(uint64_t)) {
+         /* Prevent integer overflow */
+         qerror_report(QERR_GENERIC_ERROR, "n_blocks too large");
+         return -EINVAL;
+     }
+-    offsets_size = s->n_blocks * sizeof(uint64_t);
++    offsets_size = (s->n_blocks + 1) * sizeof(uint64_t);
+     if (offsets_size > 512 * 1024 * 1024) {
+         /* Prevent ridiculous offsets_size which causes memory allocation to
+          * fail or overflows bdrv_pread() size.  In practice the 512 MB
+@@ -118,7 +118,7 @@ static int cloop_open(BlockDriverState *bs, int flags)
+         goto fail;
+     }
+ 
+-    for(i=0;i<s->n_blocks;i++) {
++    for (i = 0; i < s->n_blocks + 1; i++) {
+         uint64_t size;
+ 
+         s->offsets[i] = be64_to_cpu(s->offsets[i]);
+@@ -240,9 +240,7 @@ static coroutine_fn int cloop_co_read(BlockDriverState *bs, int64_t sector_num,
+ static void cloop_close(BlockDriverState *bs)
+ {
+     BDRVCloopState *s = bs->opaque;
+-    if (s->n_blocks > 0) {
+-        g_free(s->offsets);
+-    }
++    g_free(s->offsets);
+     g_free(s->compressed_block);
+     g_free(s->uncompressed_block);
+     inflateEnd(&s->zstream);
+-- 
+1.7.1
+

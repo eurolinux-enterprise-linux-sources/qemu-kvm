@@ -1,0 +1,81 @@
+From 9c45b9d03425125ddec6e88ab4a9e20ea4ee7a5a Mon Sep 17 00:00:00 2001
+Message-Id: <9c45b9d03425125ddec6e88ab4a9e20ea4ee7a5a.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:41 -0500
+Subject: [CHANGE 21/29] scsi-generic: Handle canceled request in
+ scsi_command_complete
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-22-git-send-email-famz@redhat.com>
+Patchwork-id: 64922
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 21/28] scsi-generic: Handle canceled request in scsi_command_complete
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Now that we always called the cb in bdrv_aio_cancel, let's make scsi-generic
+callbacks check io_canceled flag similarly to scsi-disk.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 6c25fa6cf8b58db72956e880d76e4adc301bb472)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ hw/scsi-generic.c | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/scsi-generic.c | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/hw/scsi-generic.c b/hw/scsi-generic.c
+index 87bb008..afaeca8 100644
+--- a/hw/scsi-generic.c
++++ b/hw/scsi-generic.c
+@@ -95,6 +95,9 @@ static void scsi_command_complete(void *opaque, int ret)
+     SCSIGenericReq *r = (SCSIGenericReq *)opaque;
+ 
+     r->req.aiocb = NULL;
++    if (r->req.io_canceled) {
++        goto done;
++    }
+     if (r->io_header.driver_status & SG_ERR_DRIVER_SENSE) {
+         r->req.sense_len = r->io_header.sb_len_wr;
+     }
+@@ -135,6 +138,7 @@ static void scsi_command_complete(void *opaque, int ret)
+             r, r->req.tag, status);
+ 
+     scsi_req_complete(&r->req, status);
++done:
+     if (!r->req.io_canceled) {
+         scsi_req_unref(&r->req);
+     }
+@@ -189,8 +193,7 @@ static void scsi_read_complete(void * opaque, int ret)
+     int len;
+ 
+     r->req.aiocb = NULL;
+-    if (ret) {
+-        DPRINTF("IO error ret %d\n", ret);
++    if (ret || r->req.io_canceled) {
+         scsi_command_complete(r, ret);
+         return;
+     }
+@@ -256,8 +259,7 @@ static void scsi_write_complete(void * opaque, int ret)
+ 
+     DPRINTF("scsi_write_complete() ret = %d\n", ret);
+     r->req.aiocb = NULL;
+-    if (ret) {
+-        DPRINTF("IO error\n");
++    if (ret || r->req.io_canceled) {
+         scsi_command_complete(r, ret);
+         return;
+     }
+-- 
+2.1.0
+

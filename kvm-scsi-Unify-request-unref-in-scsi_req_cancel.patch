@@ -1,0 +1,163 @@
+From 71a15c94ae29988789d1183925a866f8dce73096 Mon Sep 17 00:00:00 2001
+Message-Id: <71a15c94ae29988789d1183925a866f8dce73096.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:42 -0500
+Subject: [CHANGE 22/29] scsi: Unify request unref in scsi_req_cancel
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-23-git-send-email-famz@redhat.com>
+Patchwork-id: 64923
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 22/28] scsi: Unify request unref in scsi_req_cancel
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Before, scsi_req_cancel will take ownership of the canceled request and unref
+it. We did this because we didn't know whether AIO CB will be called or not
+during the cancelling, so we set the io_canceled flag before calling it, and
+skip unref in the potentially called callbacks, which is not very nice.
+
+Now, bdrv_aio_cancel has a stricter contract that the completion callbacks are
+always called, so we can remove the checks of req->io_canceled and just unref
+it in callbacks.
+
+It will also make implementing asynchronous cancellation easier.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 3df9caf88f5c0859ae380101fea47609ba1dbfbd)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	hw/scsi-disk.c
+The callbacks are different in downstream: we don't have unmap and write
+same support, as well as read FUA.
+---
+ hw/scsi-disk.c    | 25 +++++--------------------
+ hw/scsi-generic.c | 13 ++-----------
+ 2 files changed, 7 insertions(+), 31 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/scsi-disk.c    | 25 +++++--------------------
+ hw/scsi-generic.c | 13 ++-----------
+ 2 files changed, 7 insertions(+), 31 deletions(-)
+
+diff --git a/hw/scsi-disk.c b/hw/scsi-disk.c
+index fb61f3b..f4f095c 100644
+--- a/hw/scsi-disk.c
++++ b/hw/scsi-disk.c
+@@ -103,11 +103,6 @@ static void scsi_cancel_io(SCSIRequest *req)
+     DPRINTF("Cancel tag=0x%x\n", req->tag);
+     if (r->req.aiocb) {
+         bdrv_aio_cancel(r->req.aiocb);
+-
+-        /* This reference was left in by scsi_*_data.  We take ownership of
+-         * it the moment scsi_req_cancel is called, independent of whether
+-         * bdrv_aio_cancel completes the request or not.  */
+-        scsi_req_unref(&r->req);
+     }
+     r->req.aiocb = NULL;
+ }
+@@ -184,9 +179,7 @@ static void scsi_flush_complete(void * opaque, int ret)
+     scsi_req_complete(&r->req, GOOD);
+ 
+ done:
+-    if (!r->req.io_canceled) {
+-        scsi_req_unref(&r->req);
+-    }
++    scsi_req_unref(&r->req);
+ }
+ 
+ static bool scsi_is_cmd_fua(SCSICommand *cmd)
+@@ -226,9 +219,7 @@ static void scsi_write_do_fua(SCSIDiskReq *r)
+     }
+ 
+     scsi_req_complete(&r->req, GOOD);
+-    if (!r->req.io_canceled) {
+-        scsi_req_unref(&r->req);
+-    }
++    scsi_req_unref(&r->req);
+ }
+ 
+ static void scsi_dma_complete(void *opaque, int ret)
+@@ -256,9 +247,7 @@ static void scsi_dma_complete(void *opaque, int ret)
+     }
+ 
+ done:
+-    if (!r->req.io_canceled) {
+-        scsi_req_unref(&r->req);
+-    }
++    scsi_req_unref(&r->req);
+ }
+ 
+ static void scsi_read_complete(void * opaque, int ret)
+@@ -285,9 +274,7 @@ static void scsi_read_complete(void * opaque, int ret)
+     scsi_req_data(&r->req, r->qiov.size);
+ 
+ done:
+-    if (!r->req.io_canceled) {
+-        scsi_req_unref(&r->req);
+-    }
++    scsi_req_unref(&r->req);
+ }
+ 
+ /* Read more data from scsi device into buffer.  */
+@@ -417,9 +404,7 @@ static void scsi_write_complete(void * opaque, int ret)
+     }
+ 
+ done:
+-    if (!r->req.io_canceled) {
+-        scsi_req_unref(&r->req);
+-    }
++    scsi_req_unref(&r->req);
+ }
+ 
+ static void scsi_write_data(SCSIRequest *req)
+diff --git a/hw/scsi-generic.c b/hw/scsi-generic.c
+index afaeca8..23f25bb 100644
+--- a/hw/scsi-generic.c
++++ b/hw/scsi-generic.c
+@@ -139,9 +139,7 @@ static void scsi_command_complete(void *opaque, int ret)
+ 
+     scsi_req_complete(&r->req, status);
+ done:
+-    if (!r->req.io_canceled) {
+-        scsi_req_unref(&r->req);
+-    }
++    scsi_req_unref(&r->req);
+ }
+ 
+ /* Cancel a pending data transfer.  */
+@@ -152,11 +150,6 @@ static void scsi_cancel_io(SCSIRequest *req)
+     DPRINTF("Cancel tag=0x%x\n", req->tag);
+     if (r->req.aiocb) {
+         bdrv_aio_cancel(r->req.aiocb);
+-
+-        /* This reference was left in by scsi_*_data.  We take ownership of
+-         * it independent of whether bdrv_aio_cancel completes the request
+-         * or not.  */
+-        scsi_req_unref(&r->req);
+     }
+     r->req.aiocb = NULL;
+ }
+@@ -224,9 +217,7 @@ static void scsi_read_complete(void * opaque, int ret)
+         s->conf.bs->buffer_alignment = s->blocksize;
+ 
+         scsi_req_data(&r->req, len);
+-        if (!r->req.io_canceled) {
+-            scsi_req_unref(&r->req);
+-        }
++        scsi_req_unref(&r->req);
+     }
+ }
+ 
+-- 
+2.1.0
+

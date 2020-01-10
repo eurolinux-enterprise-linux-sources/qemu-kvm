@@ -1,0 +1,68 @@
+From 6f8ae42a399216e0fa9382aa4d4335676d3364ab Mon Sep 17 00:00:00 2001
+Message-Id: <6f8ae42a399216e0fa9382aa4d4335676d3364ab.1481738366.git.ymankad@redhat.com>
+In-Reply-To: <be7cc66c94d4b6c77f9f1e674d4783c7d1c3efac.1481738366.git.ymankad@redhat.com>
+References: <be7cc66c94d4b6c77f9f1e674d4783c7d1c3efac.1481738366.git.ymankad@redhat.com>
+From: Vlad Yasevich <vyasevic@redhat.com>
+Date: Tue, 13 Dec 2016 03:04:47 -0500
+Subject: [CHANGE 08/10] net: update nic info during device reset
+To: ymankad@redhat.com
+
+RH-Author: Vlad Yasevich <vyasevic@redhat.com>
+Message-id: <1481598289-10330-3-git-send-email-vyasevic@redhat.com>
+Patchwork-id: 73041
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 2/4] net: update nic info during device reset
+Bugzilla: 1300626
+RH-Acked-by: Vlad Yasevich <vyasevic@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Xiao Wang <jasowang@redhat.com>
+RH-Acked-by: Laurent Vivier <lvivier@redhat.com>
+
+From: Amos Kong <akong@redhat.com>
+
+macaddr is reset during device reset, but nic info
+isn't updated, this problem exists in e1000 & rtl8139
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+Acked-by: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 655d3b63b036b70714adbdae685055f1bda0f8f1)
+
+Conflicts:
+	hw/net/e1000.c
+	hw/net/rtl8139.c
+        - Lack of qemu_get_queue.  Reference NetClientState directly.
+
+Signed-off-by: Vladislav Yasevich <vyasevic@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ hw/e1000.c   | 1 +
+ hw/rtl8139.c | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/hw/e1000.c b/hw/e1000.c
+index 0f18590..f55d27c 100644
+--- a/hw/e1000.c
++++ b/hw/e1000.c
+@@ -306,6 +306,7 @@ static void e1000_reset(void *opaque)
+         d->mac_reg[RA] |= macaddr[i] << (8 * i);
+         d->mac_reg[RA + 1] |= (i < 2) ? macaddr[i + 4] << (8 * i) : 0;
+     }
++    qemu_format_nic_info_str(&d->nic->nc, macaddr);
+ }
+ 
+ static void
+diff --git a/hw/rtl8139.c b/hw/rtl8139.c
+index b98ab3d..12f829d 100644
+--- a/hw/rtl8139.c
++++ b/hw/rtl8139.c
+@@ -1208,6 +1208,7 @@ static void rtl8139_reset(DeviceState *d)
+ 
+     /* restore MAC address */
+     memcpy(s->phys, s->conf.macaddr.a, 6);
++    qemu_format_nic_info_str(&s->nic->nc, s->phys);
+ 
+     /* reset interrupt mask */
+     s->IntrStatus = 0;
+-- 
+2.7.4
+

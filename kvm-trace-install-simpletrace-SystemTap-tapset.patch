@@ -1,0 +1,97 @@
+From ee66a8c3c1290fe3e9192ffe5470bbf207202ba8 Mon Sep 17 00:00:00 2001
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Fri, 11 Jul 2014 17:18:25 +0200
+Subject: [PATCH 37/44] trace: install simpletrace SystemTap tapset
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1405099110-10975-3-git-send-email-stefanha@redhat.com>
+Patchwork-id: 59860
+O-Subject: [RHEL6.6 qemu-kvm PATCH 2/7] trace: install simpletrace SystemTap tapset
+Bugzilla: 905761
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+The simpletrace SystemTap tapset outputs simpletrace binary traces for
+  SystemTap probes.  This is useful because SystemTap has no default way
+  to format or store traces.  The simpletrace SystemTap tapset provides an
+  easy way to store traces.
+
+  The simpletrace.py tool or custom Python scripts using the
+  simpletrace.py API can analyze SystemTap these traces:
+
+    $ ./configure --enable-trace-backends=dtrace ...
+    $ make && make install
+    $ stap -e 'probe qemu.system.x86_64.simpletrace.* {}' \
+           -c qemu-system-x86_64 >/tmp/trace.out
+    $ scripts/simpletrace.py --no-header trace-events /tmp/trace.out
+    g_malloc 4.531 pid=15519 size=0xb ptr=0x7f8639c10470
+    g_malloc 3.264 pid=15519 size=0x300 ptr=0x7f8639c10490
+    g_free 5.155 pid=15519 ptr=0x7f8639c0f7b0
+
+  Note that, unlike qemu-system-x86_64.stp and
+  qemu-system-x86_64.stp-installed, only one file is needed since the
+  simpletrace SystemTap tapset does not reference the QEMU binary by path.
+  Therefore it doesn't matter whether the QEMU binary is installed or not.
+
+  Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Downstream uses the tracetool shell script instead of simpletrace.py.
+The conflicts are fairly easy to solve, just follow the downstream way
+of doing things.
+
+Add qemu-kvm-simpletrace.stp to qemu-kvm.spec.template in this commit.
+Failure to do so in this commit would break rpmbuild since it complains
+about unpackaged files.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+---
+ Makefile.target               | 11 ++++++++++-
+ redhat/qemu-kvm.spec.template |  1 +
+ 2 files changed, 11 insertions(+), 1 deletion(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ Makefile.target               |   11 ++++++++++-
+ redhat/qemu-kvm.spec.template |    1 +
+ 2 files changed, 11 insertions(+), 1 deletions(-)
+
+diff --git a/Makefile.target b/Makefile.target
+index b9b77c9..ebe7e69 100644
+--- a/Makefile.target
++++ b/Makefile.target
+@@ -43,7 +43,7 @@ config-target.h: config-target.h-timestamp
+ config-target.h-timestamp: config-target.mak
+ 
+ ifdef CONFIG_SYSTEMTAP_TRACE
+-stap: $(QEMU_PROG).stp
++stap: $(QEMU_PROG).stp $(QEMU_PROG)-simpletrace.stp
+ 
+ ifdef CONFIG_USER_ONLY
+ TARGET_TYPE=user
+@@ -59,6 +59,14 @@ $(QEMU_PROG).stp:
+ 		--target-type $(TARGET_TYPE) \
+ 		--probe-prefix qemu.kvm \
+ 		--stap < $(SRC_PATH)/trace-events > $(QEMU_PROG).stp,"  GEN   $(QEMU_PROG).stp")
++
++$(QEMU_PROG)-simpletrace.stp: $(SRC_PATH)/trace-events
++	$(call quiet-command,sh $(SRC_PATH)/tracetool \
++		--$(TRACE_BACKEND) \
++		--probe-prefix qemu.kvm \
++		--simpletrace-stap \
++		< $< > $@,"  GEN   $(QEMU_PROG)-simpletrace.stp")
++
+ else
+ stap:
+ endif
+@@ -444,6 +452,7 @@ endif
+ ifdef CONFIG_SYSTEMTAP_TRACE
+ 	$(INSTALL_DIR) "$(DESTDIR)$(datadir)/../systemtap/tapset"
+ 	$(INSTALL_DATA) $(QEMU_PROG).stp "$(DESTDIR)$(datadir)/../systemtap/tapset"
++	$(INSTALL_DATA) $(QEMU_PROG)-simpletrace.stp "$(DESTDIR)$(datadir)/../systemtap/tapset"
+ endif
+ 
+ # Include automatically generated dependency files
+-- 
+1.7.1
+

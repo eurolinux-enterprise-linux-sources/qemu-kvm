@@ -1,0 +1,79 @@
+From 9305650312d6cf3b99ad14c64843ee7dc8420090 Mon Sep 17 00:00:00 2001
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 18 Aug 2014 14:04:24 -0500
+Subject: [CHANGE 1/4] spice: fix libvirt snapshots
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+Message-id: <1404292979-32705-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 59424
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 1/1] spice: fix libvirt snapshots
+Bugzilla: 1010670
+RH-Acked-by: Levente Kurusa <lkurusa@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+
+Only notify spice-server about migration events in case we got
+target host information beforehand.  So we kick the seamless spice
+client migration only in case a actual live migration happens, not
+when libvirt uses live-migration-to-file for snapshotting.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit a76a2f729aae21c45c7e9eef8d1d80e94d1cc930)
+
+Conflicts:
+	ui/spice-core.c
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ ui/spice-core.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/ui/spice-core.c b/ui/spice-core.c
+index c7ec2da..befecc2 100644
+--- a/ui/spice-core.c
++++ b/ui/spice-core.c
+@@ -47,6 +47,7 @@ static char *auth_passwd;
+ static time_t auth_expires = TIME_MAX;
+ static int spice_migration_completed;
+ static int spice_display_is_running;
++static int spice_have_target_host;
+ int using_spice = 0;
+ 
+ static pthread_t me;
+@@ -539,6 +540,10 @@ void do_info_spice(Monitor *mon, QObject **ret_data)
+ static void migration_state_notifier(Notifier *notifier, void *data)
+ {
+     int state = get_migration_state();
++
++    if (!spice_have_target_host) {
++        return;
++    }
+     if (state == MIG_STATE_ACTIVE) {
+ #ifdef SPICE_INTERFACE_MIGRATION
+         spice_server_migrate_start(spice_server);
+@@ -548,10 +553,13 @@ static void migration_state_notifier(Notifier *notifier, void *data)
+         spice_server_migrate_switch(spice_server);
+         monitor_protocol_event(QEVENT_SPICE_MIGRATE_COMPLETED, NULL);
+         spice_migration_completed = true;
++        spice_have_target_host = false;
+ #else
+         spice_server_migrate_end(spice_server, true);
++        spice_have_target_host = false;
+     } else if (state == MIG_STATE_CANCELLED || state == MIG_STATE_ERROR) {
+         spice_server_migrate_end(spice_server, false);
++        spice_have_target_host = false;
+ #endif
+     }
+ }
+@@ -571,6 +579,7 @@ int qemu_spice_migrate_info(const char *hostname, int port, int tls_port,
+                                     port, tls_port, subject);
+     cb(opaque, NULL);
+ #endif
++    spice_have_target_host = true;
+     return ret;
+ }
+ 
+-- 
+1.9.3
+

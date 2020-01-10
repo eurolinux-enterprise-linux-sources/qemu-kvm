@@ -1,0 +1,112 @@
+From a638ecdb8b6a2edab62cb6ca198240df65953aca Mon Sep 17 00:00:00 2001
+Message-Id: <a638ecdb8b6a2edab62cb6ca198240df65953aca.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:26 -0500
+Subject: [CHANGE 06/29] block: Add bdrv_aio_cancel_async
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-7-git-send-email-famz@redhat.com>
+Patchwork-id: 64907
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 06/28] block: Add bdrv_aio_cancel_async
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+This is the async version of bdrv_aio_cancel, which doesn't block the
+caller. It guarantees that the cb is called either before returning or
+some time later.
+
+bdrv_aio_cancel can base on bdrv_aio_cancel_async, later we can convert
+all .io_cancel implementations to .io_cancel_async, and the aio_poll is
+the common logic. In the end, .io_cancel can be dropped.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 02c50efe08736116048d5fc355043080f4d5859c)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+
+Downstream note:
+
+qemu_aio_wait() is used in the busy wait loop in bdrv_aio_cancel,
+because we don't have the new aio interface. Also we have to restart the
+throttled queues like in bdrv_aio_co_cancel_em.
+---
+ block.c    | 24 +++++++++++++++++++++++-
+ block.h    |  1 +
+ qemu-aio.h |  1 +
+ 3 files changed, 25 insertions(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block.c    | 24 +++++++++++++++++++++++-
+ block.h    |  1 +
+ qemu-aio.h |  1 +
+ 3 files changed, 25 insertions(+), 1 deletion(-)
+
+diff --git a/block.c b/block.c
+index d6deba2..0b1380c 100644
+--- a/block.c
++++ b/block.c
+@@ -3829,7 +3829,29 @@ fail:
+ 
+ void bdrv_aio_cancel(BlockDriverAIOCB *acb)
+ {
+-    acb->aiocb_info->cancel(acb);
++    if (acb->aiocb_info->cancel) {
++        acb->aiocb_info->cancel(acb);
++    } else {
++        BlockDriverState *bs = acb->bs;
++        qemu_aio_ref(acb);
++        bdrv_aio_cancel_async(acb);
++        while (acb->refcnt > 1) {
++            qemu_co_queue_restart_all(&bs->throttled_reqs[0]);
++            qemu_co_queue_restart_all(&bs->throttled_reqs[1]);
++            qemu_aio_wait();
++        }
++        qemu_aio_release(acb);
++    }
++}
++
++/* Async version of aio cancel. The caller is not blocked if the acb implements
++ * cancel_async, otherwise we do nothing and let the request normally complete.
++ * In either case the completion callback must be called. */
++void bdrv_aio_cancel_async(BlockDriverAIOCB *acb)
++{
++    if (acb->aiocb_info->cancel_async) {
++        acb->aiocb_info->cancel_async(acb);
++    }
+ }
+ 
+ /**************************************************************/
+diff --git a/block.h b/block.h
+index f9d48c3..f1db2ff 100644
+--- a/block.h
++++ b/block.h
+@@ -279,6 +279,7 @@ BlockDriverAIOCB *bdrv_aio_discard(BlockDriverState *bs,
+                                    int64_t sector_num, int nb_sectors,
+                                    BlockDriverCompletionFunc *cb, void *opaque);
+ void bdrv_aio_cancel(BlockDriverAIOCB *acb);
++void bdrv_aio_cancel_async(BlockDriverAIOCB *acb);
+ 
+ typedef struct BlockRequest {
+     /* Fields to be filled by multiwrite caller */
+diff --git a/qemu-aio.h b/qemu-aio.h
+index b362263..043c857 100644
+--- a/qemu-aio.h
++++ b/qemu-aio.h
+@@ -23,6 +23,7 @@ typedef void BlockDriverCompletionFunc(void *opaque, int ret);
+ 
+ typedef struct AIOCBInfo {
+     void (*cancel)(BlockDriverAIOCB *acb);
++    void (*cancel_async)(BlockDriverAIOCB *acb);
+     size_t aiocb_size;
+ } AIOCBInfo;
+ 
+-- 
+2.1.0
+

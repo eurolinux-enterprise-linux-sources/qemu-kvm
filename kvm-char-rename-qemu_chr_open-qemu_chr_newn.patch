@@ -1,0 +1,206 @@
+From 1863e51eb96e3f4fd616db4da9440269f3e67f14 Mon Sep 17 00:00:00 2001
+Message-Id: <1863e51eb96e3f4fd616db4da9440269f3e67f14.1368111913.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:17:56 +0200
+Subject: [PATCH 22/65] char: rename qemu_chr_open() -> qemu_chr_new()
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <e681c08aafd1c0c6448bf13be2dc723acb55354d.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50800
+O-Subject: [RHEL6.5 qemu-kvm PATCH 22/65] char: rename qemu_chr_open() -> qemu_chr_new()
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 27143a445b99a283b3c6529738ba17aa0271746e)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	hw/omap2.c
+	hw/omap_uart.c
+	hw/xen_console.c
+	net/slirp.c
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ gdbstub.c       | 2 +-
+ hw/mips_malta.c | 4 ++--
+ hw/omap2.c      | 2 +-
+ hw/usb-serial.c | 4 ++--
+ net/slirp.c     | 2 +-
+ qemu-char.c     | 2 +-
+ qemu-char.h     | 2 +-
+ vl.c            | 8 ++++----
+ 8 files changed, 13 insertions(+), 13 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ gdbstub.c       | 2 +-
+ hw/mips_malta.c | 4 ++--
+ hw/omap2.c      | 2 +-
+ hw/usb-serial.c | 4 ++--
+ net/slirp.c     | 2 +-
+ qemu-char.c     | 2 +-
+ qemu-char.h     | 2 +-
+ vl.c            | 8 ++++----
+ 8 files changed, 13 insertions(+), 13 deletions(-)
+
+diff --git a/gdbstub.c b/gdbstub.c
+index 62e7a5d..3a42ccf 100644
+--- a/gdbstub.c
++++ b/gdbstub.c
+@@ -2569,7 +2569,7 @@ int gdbserver_start(const char *device)
+             sigaction(SIGINT, &act, NULL);
+         }
+ #endif
+-        chr = qemu_chr_open("gdb", device, NULL);
++        chr = qemu_chr_new("gdb", device, NULL);
+         if (!chr)
+             return -1;
+ 
+diff --git a/hw/mips_malta.c b/hw/mips_malta.c
+index 5448eac..19ba99f 100644
+--- a/hw/mips_malta.c
++++ b/hw/mips_malta.c
+@@ -447,7 +447,7 @@ static MaltaFPGAState *malta_fpga_init(target_phys_addr_t base, qemu_irq uart_ir
+     /* 0xa00 is less than a page, so will still get the right offsets.  */
+     cpu_register_physical_memory(base + 0xa00, 0x100000 - 0xa00, malta);
+ 
+-    s->display = qemu_chr_open("fpga", "vc:320x200", malta_fpga_led_init);
++    s->display = qemu_chr_new("fpga", "vc:320x200", malta_fpga_led_init);
+ 
+     s->uart = serial_mm_init(base + 0x900, 3, uart_irq, 230400, uart_chr, 1);
+ 
+@@ -798,7 +798,7 @@ void mips_malta_init (ram_addr_t ram_size,
+         if (!serial_hds[i]) {
+             char label[32];
+             snprintf(label, sizeof(label), "serial%d", i);
+-            serial_hds[i] = qemu_chr_open(label, "null", NULL);
++            serial_hds[i] = qemu_chr_new(label, "null", NULL);
+         }
+     }
+ 
+diff --git a/hw/omap2.c b/hw/omap2.c
+index 7965765..ac3c69b 100644
+--- a/hw/omap2.c
++++ b/hw/omap2.c
+@@ -2159,7 +2159,7 @@ static struct omap_sti_s *omap_sti_init(struct omap_target_agent_s *ta,
+     s->irq = irq;
+     omap_sti_reset(s);
+ 
+-    s->chr = chr ?: qemu_chr_open("null", "null", NULL);
++    s->chr = chr ?: qemu_chr_new("null", "null", NULL);
+ 
+     iomemtype = l4_register_io_memory(omap_sti_readfn,
+                     omap_sti_writefn, s);
+diff --git a/hw/usb-serial.c b/hw/usb-serial.c
+index a603770..ef87025 100644
+--- a/hw/usb-serial.c
++++ b/hw/usb-serial.c
+@@ -533,7 +533,7 @@ static USBDevice *usb_serial_init(const char *filename)
+     filename++;
+ 
+     snprintf(label, sizeof(label), "usbserial%d", index++);
+-    cdrv = qemu_chr_open(label, filename, NULL);
++    cdrv = qemu_chr_new(label, filename, NULL);
+     if (!cdrv)
+         return NULL;
+ 
+@@ -556,7 +556,7 @@ static USBDevice *usb_braille_init(const char *unused)
+     USBDevice *dev;
+     CharDriverState *cdrv;
+ 
+-    cdrv = qemu_chr_open("braille", "braille", NULL);
++    cdrv = qemu_chr_new("braille", "braille", NULL);
+     if (!cdrv)
+         return NULL;
+ 
+diff --git a/net/slirp.c b/net/slirp.c
+index 99b42e8..71ae940 100644
+--- a/net/slirp.c
++++ b/net/slirp.c
+@@ -612,7 +612,7 @@ static int slirp_guestfwd(SlirpState *s, const char *config_str,
+ 
+     fwd = qemu_malloc(sizeof(struct GuestFwd));
+     snprintf(buf, sizeof(buf), "guestfwd.tcp:%d", port);
+-    fwd->hd = qemu_chr_open(buf, p, NULL);
++    fwd->hd = qemu_chr_new(buf, p, NULL);
+     if (!fwd->hd) {
+         error_report("could not open guest forwarding device '%s'", buf);
+         qemu_free(fwd);
+diff --git a/qemu-char.c b/qemu-char.c
+index 973b394..a30e8fd 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -2554,7 +2554,7 @@ CharDriverState *qemu_chr_open_opts(QemuOpts *opts,
+     return chr;
+ }
+ 
+-CharDriverState *qemu_chr_open(const char *label, const char *filename, void (*init)(struct CharDriverState *s))
++CharDriverState *qemu_chr_new(const char *label, const char *filename, void (*init)(struct CharDriverState *s))
+ {
+     const char *p;
+     CharDriverState *chr;
+diff --git a/qemu-char.h b/qemu-char.h
+index c4413ec..8f20266 100644
+--- a/qemu-char.h
++++ b/qemu-char.h
+@@ -79,7 +79,7 @@ struct CharDriverState {
+ QemuOpts *qemu_chr_parse_compat(const char *label, const char *filename);
+ CharDriverState *qemu_chr_open_opts(QemuOpts *opts,
+                                     void (*init)(struct CharDriverState *s));
+-CharDriverState *qemu_chr_open(const char *label, const char *filename, void (*init)(struct CharDriverState *s));
++CharDriverState *qemu_chr_new(const char *label, const char *filename, void (*init)(struct CharDriverState *s));
+ void qemu_chr_fe_set_echo(struct CharDriverState *chr, bool echo);
+ void qemu_chr_fe_open(struct CharDriverState *chr);
+ void qemu_chr_fe_close(struct CharDriverState *chr);
+diff --git a/vl.c b/vl.c
+index 8fc7964..3ec4afb 100644
+--- a/vl.c
++++ b/vl.c
+@@ -4813,7 +4813,7 @@ static int serial_parse(const char *devname)
+         exit(1);
+     }
+     snprintf(label, sizeof(label), "serial%d", index);
+-    serial_hds[index] = qemu_chr_open(label, devname, NULL);
++    serial_hds[index] = qemu_chr_new(label, devname, NULL);
+     if (!serial_hds[index]) {
+         fprintf(stderr, "qemu: could not open serial device '%s': %s\n",
+                 devname, strerror(errno));
+@@ -4835,7 +4835,7 @@ static int parallel_parse(const char *devname)
+         exit(1);
+     }
+     snprintf(label, sizeof(label), "parallel%d", index);
+-    parallel_hds[index] = qemu_chr_open(label, devname, NULL);
++    parallel_hds[index] = qemu_chr_new(label, devname, NULL);
+     if (!parallel_hds[index]) {
+         fprintf(stderr, "qemu: could not open parallel device '%s': %s\n",
+                 devname, strerror(errno));
+@@ -4865,7 +4865,7 @@ static int virtcon_parse(const char *devname)
+     qemu_opt_set(dev_opts, "driver", "virtconsole");
+ 
+     snprintf(label, sizeof(label), "virtcon%d", index);
+-    virtcon_hds[index] = qemu_chr_open(label, devname, NULL);
++    virtcon_hds[index] = qemu_chr_new(label, devname, NULL);
+     if (!virtcon_hds[index]) {
+         fprintf(stderr, "qemu: could not open virtio console '%s': %s\n",
+                 devname, strerror(errno));
+@@ -4881,7 +4881,7 @@ static int debugcon_parse(const char *devname)
+ {   
+     QemuOpts *opts;
+ 
+-    if (!qemu_chr_open("debugcon", devname, NULL)) {
++    if (!qemu_chr_new("debugcon", devname, NULL)) {
+         exit(1);
+     }
+     opts = qemu_opts_create(&qemu_device_opts, "debugcon", 1);
+-- 
+1.7.11.7
+

@@ -1,0 +1,186 @@
+From d33d411a344668d65645640c692313050621d7e8 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Tue, 25 Mar 2014 11:45:31 +0100
+Subject: [PATCH 13/48] qcow2: Catch some L1 table index overflows
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1395744364-16049-13-git-send-email-kwolf@redhat.com>
+Patchwork-id: n/a
+O-Subject: [EMBARGOED RHEL-6.6/6.5.z qemu-kvm PATCH v2 12/45]
+           qcow2: Catch some L1 table index overflows
+Bugzilla: 1079518
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeff Cody <jcody@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1079518
+
+This catches the situation that is described in the bug report at
+https://bugs.launchpad.net/qemu/+bug/865518 and goes like this:
+
+    $ qemu-img create -f qcow2 huge.qcow2 $((1024*1024))T
+    Formatting 'huge.qcow2', fmt=qcow2 size=1152921504606846976 encryption=off cluster_size=65536 lazy_refcounts=off
+    $ qemu-io /tmp/huge.qcow2 -c "write $((1024*1024*1024*1024*1024*1024 - 1024)) 512"
+    Segmentation fault
+
+With this patch applied the segfault will be avoided, however the case
+will still fail, though gracefully:
+
+    $ qemu-img create -f qcow2 /tmp/huge.qcow2 $((1024*1024))T
+    Formatting 'huge.qcow2', fmt=qcow2 size=1152921504606846976 encryption=off cluster_size=65536 lazy_refcounts=off
+    qemu-img: The image size is too large for file format 'qcow2'
+
+Note that even long before these overflow checks kick in, you get
+insanely high memory usage (up to INT_MAX * sizeof(uint64_t) = 16 GB for
+the L1 table), so with somewhat smaller image sizes you'll probably see
+qemu aborting for a failed g_malloc().
+
+If you need huge image sizes, you should increase the cluster size to
+the maximum of 2 MB in order to get higher limits.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(Cherry-picked from 2cf7cfa1cde6672b8a35bbed3fbc989f28c05dce)
+
+Conflicts:
+	block/qcow2-cluster.c
+	block/qcow2.c
+	block/qcow2.h
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/qcow2-cluster.c |   24 ++++++++++++++++--------
+ block/qcow2.c         |   13 +++++++++++--
+ block/qcow2.h         |    4 ++--
+ 3 files changed, 29 insertions(+), 12 deletions(-)
+
+diff --git a/block/qcow2-cluster.c b/block/qcow2-cluster.c
+index 0bea2c5..601b678 100644
+--- a/block/qcow2-cluster.c
++++ b/block/qcow2-cluster.c
+@@ -28,12 +28,12 @@
+ #include "block_int.h"
+ #include "block/qcow2.h"
+ 
+-int qcow2_grow_l1_table(BlockDriverState *bs, int min_size)
++int qcow2_grow_l1_table(BlockDriverState *bs, uint64_t min_size)
+ {
+     BDRVQcowState *s = bs->opaque;
+-    int new_l1_size, new_l1_size2, ret, i;
++    int new_l1_size2, ret, i;
+     uint64_t *new_l1_table;
+-    int64_t new_l1_table_offset;
++    int64_t new_l1_table_offset, new_l1_size;
+     uint8_t data[12];
+ 
+     new_l1_size = s->l1_size;
+@@ -45,8 +45,14 @@ int qcow2_grow_l1_table(BlockDriverState *bs, int min_size)
+     while (min_size > new_l1_size) {
+         new_l1_size = (new_l1_size * 3 + 1) / 2;
+     }
++
++    if (new_l1_size > INT_MAX) {
++        return -EFBIG;
++    }
++
+ #ifdef DEBUG_ALLOC2
+-    printf("grow l1_table from %d to %d\n", s->l1_size, new_l1_size);
++    fprintf(stderr, "grow l1_table from %d to %" PRId64 "\n",
++            s->l1_size, new_l1_size);
+ #endif
+ 
+     new_l1_size2 = sizeof(uint64_t) * new_l1_size;
+@@ -388,8 +394,8 @@ int qcow2_get_cluster_offset(BlockDriverState *bs, uint64_t offset,
+     int *num, uint64_t *cluster_offset)
+ {
+     BDRVQcowState *s = bs->opaque;
+-    unsigned int l1_index, l2_index;
+-    uint64_t l2_offset, *l2_table;
++    unsigned int l2_index;
++    uint64_t l1_index, l2_offset, *l2_table;
+     int l1_bits, c;
+     unsigned int index_in_cluster, nb_clusters;
+     uint64_t nb_available, nb_needed;
+@@ -482,8 +488,8 @@ static int get_cluster_table(BlockDriverState *bs, uint64_t offset,
+                              int *new_l2_index)
+ {
+     BDRVQcowState *s = bs->opaque;
+-    unsigned int l1_index, l2_index;
+-    uint64_t l2_offset;
++    unsigned int l2_index;
++    uint64_t l1_index, l2_offset;
+     uint64_t *l2_table = NULL;
+     int ret;
+ 
+@@ -496,6 +502,8 @@ static int get_cluster_table(BlockDriverState *bs, uint64_t offset,
+             return ret;
+         }
+     }
++
++    assert(l1_index < s->l1_size);
+     l2_offset = s->l1_table[l1_index];
+ 
+     /* seek the l2 table of the given l2 offset */
+diff --git a/block/qcow2.c b/block/qcow2.c
+index 869f3b9..3672db8 100644
+--- a/block/qcow2.c
++++ b/block/qcow2.c
+@@ -201,6 +201,7 @@ static int qcow2_open(BlockDriverState *bs, int flags)
+     QCowHeader header;
+     uint64_t ext_end;
+     bool writethrough;
++    uint64_t l1_vm_state_index;
+ 
+     ret = bdrv_pread(bs->file, 0, &header, sizeof(header));
+     if (ret < 0) {
+@@ -300,7 +301,14 @@ static int qcow2_open(BlockDriverState *bs, int flags)
+         goto fail;
+     }
+     s->l1_size = header.l1_size;
+-    s->l1_vm_state_index = size_to_l1(s, header.size);
++
++    l1_vm_state_index = size_to_l1(s, header.size);
++    if (l1_vm_state_index > INT_MAX) {
++        ret = -EFBIG;
++        goto fail;
++    }
++    s->l1_vm_state_index = l1_vm_state_index;
++
+     /* the L1 table must contain at least enough entries to put
+        header.size bytes */
+     if (s->l1_size < s->l1_vm_state_index) {
+@@ -986,7 +994,8 @@ static int preallocate(BlockDriverState *bs, enum prealloc_mode mode)
+ static int qcow2_truncate(BlockDriverState *bs, int64_t offset)
+ {
+     BDRVQcowState *s = bs->opaque;
+-    int ret, new_l1_size;
++    int64_t new_l1_size;
++    int ret;
+ 
+     if (offset & 511) {
+         return -EINVAL;
+diff --git a/block/qcow2.h b/block/qcow2.h
+index 1944ba4..dd7c59b 100644
+--- a/block/qcow2.h
++++ b/block/qcow2.h
+@@ -195,7 +195,7 @@ static inline int size_to_clusters(BDRVQcowState *s, int64_t size)
+     return (size + (s->cluster_size - 1)) >> s->cluster_bits;
+ }
+ 
+-static inline int size_to_l1(BDRVQcowState *s, int64_t size)
++static inline int64_t size_to_l1(BDRVQcowState *s, int64_t size)
+ {
+     int shift = s->cluster_bits + s->l2_bits;
+     return (size + (1ULL << shift) - 1) >> shift;
+@@ -239,7 +239,7 @@ int qcow2_check_refcounts(BlockDriverState *bs, BdrvCheckResult *res,
+                           BdrvCheckMode fix);
+ 
+ /* qcow2-cluster.c functions */
+-int qcow2_grow_l1_table(BlockDriverState *bs, int min_size);
++int qcow2_grow_l1_table(BlockDriverState *bs, uint64_t min_size);
+ void qcow2_l2_cache_reset(BlockDriverState *bs);
+ int qcow2_decompress_cluster(BlockDriverState *bs, uint64_t cluster_offset);
+ void qcow2_encrypt_sectors(BDRVQcowState *s, int64_t sector_num,
+-- 
+1.7.1
+

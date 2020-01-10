@@ -1,0 +1,57 @@
+From 9a447c68ffeff9c03a1d9b3ed31fdadee26f57e0 Mon Sep 17 00:00:00 2001
+Message-Id: <9a447c68ffeff9c03a1d9b3ed31fdadee26f57e0.1424280081.git.jen@redhat.com>
+In-Reply-To: <54163d537ed24926effb0783707492d2988ecbe8.1424280081.git.jen@redhat.com>
+References: <54163d537ed24926effb0783707492d2988ecbe8.1424280081.git.jen@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Thu, 12 Feb 2015 14:16:19 -0500
+Subject: [CHANGE 4/8] qemu-tool: add qemu_timer_pending() stub function
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1423750582-32065-2-git-send-email-stefanha@redhat.com>
+Patchwork-id: 63801
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 1/4] qemu-tool: add qemu_timer_pending() stub function
+Bugzilla: 1132848
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+The throttling code is used by the block layer.  This means tools like
+qemu-nbd will link against util/throttle.o.
+
+Add the qemu_timer_pending() stub needed by util/throttle.o.  The other
+timer functions are already stubbed.
+
+Downstream only because upstream has a new timer API and stubs go in
+stubs/.  It's not worth trying to backport that.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+---
+ qemu-tool.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ qemu-tool.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/qemu-tool.c b/qemu-tool.c
+index 316c919..1fb61ea 100644
+--- a/qemu-tool.c
++++ b/qemu-tool.c
+@@ -85,6 +85,11 @@ void qemu_mod_timer(QEMUTimer *ts, int64_t expire_time)
+ {
+ }
+ 
++int qemu_timer_pending(QEMUTimer *ts)
++{
++    return 0;
++}
++
+ int qemu_set_fd_handler2(int fd,
+                          IOCanReadHandler *fd_read_poll,
+                          IOHandler *fd_read,
+-- 
+2.1.0
+

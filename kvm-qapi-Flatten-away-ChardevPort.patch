@@ -1,0 +1,203 @@
+From 7e7ff19a98a34c9d18cda06a6933a7267d65ef68 Mon Sep 17 00:00:00 2001
+Message-Id: <7e7ff19a98a34c9d18cda06a6933a7267d65ef68.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:51 +0200
+Subject: [PATCH 40/65] qapi: Flatten away ChardevPort
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-41-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52148
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 40/65] qapi: Flatten away ChardevPort
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Markus Armbruster <armbru@redhat.com>
+
+Simplifies the schema and the code.
+
+QMP command
+
+    { "execute" : "chardev-add",
+      "arguments" : { "id" : "ser0",
+                      "backend" : { "type" : "port",
+                                    "data" : { "type": "serial",
+                                               "device":"/dev/ttyS0"} } } }
+
+becomes
+
+    { "execute" : "chardev-add",
+      "arguments" : { "id" : "ser0",
+                      "backend" : { "type" : "serial",
+                                    "data" : { "device":"/dev/ttyS0"} } } }
+
+Bonus: nicer error messages.  "unknown chardev port (1)" becomes
+"character device backend type 'parallel' not supported".
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Message-id: 1360767256-610-3-git-send-email-armbru@redhat.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit d36b2b904ee921b380fad559cb824a40eb587bcb)
+---
+ qapi-schema.json |   11 +++-----
+ qemu-char.c      |   76 +++++++++++++++++++++++++++++-------------------------
+ 2 files changed, 45 insertions(+), 42 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema.json | 11 +++-----
+ qemu-char.c      | 76 ++++++++++++++++++++++++++++++--------------------------
+ 2 files changed, 45 insertions(+), 42 deletions(-)
+
+diff --git a/qapi-schema.json b/qapi-schema.json
+index 78c68a2..315b391 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -422,7 +422,7 @@
+                                    'out' : 'str' } }
+ 
+ ##
+-# @ChardevPort:
++# @ChardevHostdev:
+ #
+ # Configuration info for device chardevs.
+ #
+@@ -432,11 +432,7 @@
+ #
+ # Since: 1.4
+ ##
+-{ 'enum': 'ChardevPortKind', 'data': [ 'serial',
+-                                       'parallel' ] }
+-
+-{ 'type': 'ChardevPort', 'data': { 'device' : 'str',
+-                                   'type'   : 'ChardevPortKind'} }
++{ 'type': 'ChardevHostdev', 'data': { 'device' : 'str' } }
+ 
+ ##
+ # @ChardevSocket:
+@@ -469,7 +465,8 @@
+ { 'type': 'ChardevDummy', 'data': { } }
+ 
+ { 'union': 'ChardevBackend', 'data': { 'file'   : 'ChardevFile',
+-                                       'port'   : 'ChardevPort',
++                                       'serial' : 'ChardevHostdev',
++                                       'parallel': 'ChardevHostdev',
+                                        'socket' : 'ChardevSocket',
+                                        'pty'    : 'ChardevDummy',
+                                        'null'   : 'ChardevDummy' } }
+diff --git a/qemu-char.c b/qemu-char.c
+index 3bcf367..d088e81 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -3046,15 +3046,17 @@ static CharDriverState *qmp_chardev_open_file(ChardevFile *file, Error **errp)
+     return qemu_chr_open_win_file(out);
+ }
+ 
+-static CharDriverState *qmp_chardev_open_port(ChardevPort *port, Error **errp)
++static CharDriverState *qmp_chardev_open_serial(ChardevHostdev *serial,
++                                                Error **errp)
+ {
+-    switch (port->type) {
+-    case CHARDEV_PORT_KIND_SERIAL:
+-        return qemu_chr_open_win_path(port->device);
+-    default:
+-        error_setg(errp, "unknown chardev port (%d)", port->type);
+-        return NULL;
+-    }
++    return qemu_chr_open_win_path(serial->device);
++}
++
++static CharDriverState *qmp_chardev_open_parallel(ChardevHostdev *parallel,
++                                                  Error **errp)
++{
++    error_setg(errp, "character device backend type 'parallel' not supported");
++    return NULL;
+ }
+ 
+ #else /* WIN32 */
+@@ -3093,38 +3095,39 @@ static CharDriverState *qmp_chardev_open_file(ChardevFile *file, Error **errp)
+     return qemu_chr_open_fd(in, out);
+ }
+ 
+-static CharDriverState *qmp_chardev_open_port(ChardevPort *port, Error **errp)
++static CharDriverState *qmp_chardev_open_serial(ChardevHostdev *serial,
++                                                Error **errp)
+ {
+-    switch (port->type) {
+ #ifdef HAVE_CHARDEV_TTY
+-    case CHARDEV_PORT_KIND_SERIAL:
+-    {
+-        int flags, fd;
+-        flags = O_RDWR;
+-        fd = qmp_chardev_open_file_source(port->device, flags, errp);
+-        if (error_is_set(errp)) {
+-            return NULL;
+-        }
+-        socket_set_nonblock(fd);
+-        return qemu_chr_open_tty_fd(fd);
++    int fd;
++
++    fd = qmp_chardev_open_file_source(serial->device, O_RDWR, errp);
++    if (error_is_set(errp)) {
++        return NULL;
+     }
++    socket_set_nonblock(fd);
++    return qemu_chr_open_tty_fd(fd);
++#else
++    error_setg(errp, "character device backend type 'serial' not supported");
++    return NULL;
+ #endif
++}
++
++static CharDriverState *qmp_chardev_open_parallel(ChardevHostdev *parallel,
++                                                  Error **errp)
++{
+ #ifdef HAVE_CHARDEV_PARPORT
+-    case CHARDEV_PORT_KIND_PARALLEL:
+-    {
+-        int flags, fd;
+-        flags = O_RDWR;
+-        fd = qmp_chardev_open_file_source(port->device, flags, errp);
+-        if (error_is_set(errp)) {
+-            return NULL;
+-        }
+-        return qemu_chr_open_pp_fd(fd);
+-    }
+-#endif
+-    default:
+-        error_setg(errp, "unknown chardev port (%d)", port->type);
++    int fd;
++
++    fd = qmp_chardev_open_file_source(parallel->device, O_RDWR, errp);
++    if (error_is_set(errp)) {
+         return NULL;
+     }
++    return qemu_chr_open_pp_fd(fd);
++#else
++    error_setg(errp, "character device backend type 'parallel' not supported");
++    return NULL;
++#endif
+ }
+ 
+ #endif /* WIN32 */
+@@ -3168,8 +3171,11 @@ ChardevReturn *qmp_chardev_add(const char *id, ChardevBackend *backend,
+     case CHARDEV_BACKEND_KIND_FILE:
+         chr = qmp_chardev_open_file(backend->file, errp);
+         break;
+-    case CHARDEV_BACKEND_KIND_PORT:
+-        chr = qmp_chardev_open_port(backend->port, errp);
++    case CHARDEV_BACKEND_KIND_SERIAL:
++        chr = qmp_chardev_open_serial(backend->serial, errp);
++        break;
++    case CHARDEV_BACKEND_KIND_PARALLEL:
++        chr = qmp_chardev_open_parallel(backend->parallel, errp);
+         break;
+     case CHARDEV_BACKEND_KIND_SOCKET:
+         chr = qmp_chardev_open_socket(backend->socket, errp);
+-- 
+1.7.11.7
+

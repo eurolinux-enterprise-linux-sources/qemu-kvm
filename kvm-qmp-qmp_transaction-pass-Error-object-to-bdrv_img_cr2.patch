@@ -1,0 +1,91 @@
+From 99932293ca5198ac6bf0b13fcc6776f93d9bb840 Mon Sep 17 00:00:00 2001
+Message-Id: <99932293ca5198ac6bf0b13fcc6776f93d9bb840.1368098699.git.minovotn@redhat.com>
+In-Reply-To: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+References: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Thu, 18 Apr 2013 19:04:43 +0200
+Subject: [PATCH 19/24] qmp: qmp_transaction(): pass Error object to
+ bdrv_img_create()
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1366311884-18091-5-git-send-email-lersek@redhat.com>
+Patchwork-id: 50691
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 4/5] qmp: qmp_transaction(): pass Error object to bdrv_img_create()
+Bugzilla: 877240
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+
+RHEL-6 notes:
+- Manual backport of 43e17041156ddecac8a7500648e71287ba270c0a.
+- This backport should also cover upstream commit cf8f242; in upstream
+  qmp_drive_mirror() is non-transactionable, while in RHEL-6 it is. (See
+  RHEL-6 commits 50136880 and ea6612a1.)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ blockdev.c |   22 +++++++++++-----------
+ 1 files changed, 11 insertions(+), 11 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ blockdev.c | 22 +++++++++++-----------
+ 1 file changed, 11 insertions(+), 11 deletions(-)
+
+diff --git a/blockdev.c b/blockdev.c
+index c5213a9..34091d3 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -851,6 +851,7 @@ void qmp_transaction(BlockdevActionList *dev_list, Error **errp)
+     int ret = 0;
+     BlockdevActionList *dev_entry = dev_list;
+     BlkTransactionStates *states, *next;
++    Error *local_err = NULL;
+ 
+     QSIMPLEQ_HEAD(snap_bdrv_states, BlkTransactionStates) snap_bdrv_states;
+     QSIMPLEQ_INIT(&snap_bdrv_states);
+@@ -974,29 +975,28 @@ void qmp_transaction(BlockdevActionList *dev_list, Error **errp)
+             assert(format && drv);
+             bdrv_get_geometry(states->old_bs, &size);
+             size *= 512;
+-            ret = bdrv_img_create(new_image_file, format,
+-                                  NULL, NULL, NULL, size, flags, NULL);
++            bdrv_img_create(new_image_file, format,
++                            NULL, NULL, NULL, size, flags, &local_err);
+         } else {
+             /* create new image w/backing file */
+             switch (mode) {
+             case NEW_IMAGE_MODE_EXISTING:
+-                ret = 0;
+                 break;
+             case NEW_IMAGE_MODE_ABSOLUTE_PATHS:
+-                ret = bdrv_img_create(new_image_file, format,
+-                                      source->filename,
+-                                      source->drv->format_name,
+-                                      NULL, -1, flags, NULL);
++                bdrv_img_create(new_image_file, format,
++                                source->filename,
++                                source->drv->format_name,
++                                NULL, -1, flags, &local_err);
+                 break;
+             default:
+-                ret = -1;
++                error_setg(&local_err, "%s: invalid NewImageMode %u",
++                           __FUNCTION__, (unsigned)mode);
+                 break;
+             }
+         }
+ 
+-        if (ret) {
+-            error_set(errp, QERR_OPEN_FILE_FAILED, new_image_file,
+-                      strerror(-ret));
++        if (error_is_set(&local_err)) {
++            error_propagate(errp, local_err);
+             goto delete_and_fail;
+         }
+ 
+-- 
+1.7.11.7
+

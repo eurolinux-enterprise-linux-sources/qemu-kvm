@@ -1,0 +1,105 @@
+From 48a277270c42b0efe43c06389f241da2e63d069a Mon Sep 17 00:00:00 2001
+Message-Id: <48a277270c42b0efe43c06389f241da2e63d069a.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:27:28 +0200
+Subject: [PATCH 063/114] error: drop error_get_qobject()/error_set_qobject()
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-6-git-send-email-lersek@redhat.com>
+Patchwork-id: 51104
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 05/56] error: drop error_get_qobject()/error_set_qobject()
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+error_get_qobject() is unused since last commit, error_set_qobject()
+has never been used. Also drops error_int.h.
+
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+Reviewed-by: Markus Armbruster <armbru@redhat.com>
+(cherry picked from commit 7795b166d9d1e2b33d428f5acab6d0d5e617ee91)
+
+Conflicts:
+
+	error.c
+	error_int.h
+
+RHEL-6 notes:
+- "qapi/qmp-dispatch.c" continues to call error_get_data(), which is
+  implemented in "error.c",
+- "last commit" corresponds to 23576911332d7b2f40b633467c74d338af0f0c99 in
+  RHEL-6.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ v2: resolved "last commit" for RHEL-6.
+
+ error_int.h |    2 --
+ error.c     |   19 -------------------
+ qemu-ga.c   |    1 -
+ 3 files changed, 0 insertions(+), 22 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ error.c     | 19 -------------------
+ error_int.h |  2 --
+ qemu-ga.c   |  1 -
+ 3 files changed, 22 deletions(-)
+
+diff --git a/error.c b/error.c
+index 867eec2..acf54f3 100644
+--- a/error.c
++++ b/error.c
+@@ -119,22 +119,3 @@ void error_propagate(Error **dst_err, Error *local_err)
+         error_free(local_err);
+     }
+ }
+-
+-QObject *error_get_qobject(Error *err)
+-{
+-    QINCREF(err->obj);
+-    return QOBJECT(err->obj);
+-}
+-
+-void error_set_qobject(Error **errp, QObject *obj)
+-{
+-    Error *err;
+-    if (errp == NULL) {
+-        return;
+-    }
+-    err = qemu_mallocz(sizeof(*err));
+-    err->obj = qobject_to_qdict(obj);
+-    qobject_incref(obj);
+-
+-    *errp = err;
+-}
+diff --git a/error_int.h b/error_int.h
+index 5e39424..8bf36b5 100644
+--- a/error_int.h
++++ b/error_int.h
+@@ -23,7 +23,5 @@
+  * These are used to convert QErrors to Errors
+  */
+ QDict *error_get_data(Error *err);
+-QObject *error_get_qobject(Error *err);
+-void error_set_qobject(Error **errp, QObject *obj);
+   
+ #endif
+diff --git a/qemu-ga.c b/qemu-ga.c
+index e3c1929..919170f 100644
+--- a/qemu-ga.c
++++ b/qemu-ga.c
+@@ -28,7 +28,6 @@
+ #include "module.h"
+ #include "signal.h"
+ #include "qerror.h"
+-#include "error_int.h"
+ #include "qapi/qmp-core.h"
+ #include "qga/channel.h"
+ #ifdef _WIN32
+-- 
+1.7.11.7
+

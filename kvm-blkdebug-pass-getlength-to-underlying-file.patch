@@ -1,0 +1,63 @@
+From f1bd806415c0a48624091742bc97cd10c379b1af Mon Sep 17 00:00:00 2001
+From: Max Reitz <mreitz@redhat.com>
+Date: Fri, 21 Mar 2014 03:45:54 +0100
+Subject: [PATCH 01/30] blkdebug: pass getlength to underlying file
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1395373554-25622-2-git-send-email-mreitz@redhat.com>
+Patchwork-id: 58177
+O-Subject: [RHEL-6.6 qemu-kvm PATCH] blkdebug: pass getlength to underlying file
+Bugzilla: 1023874 1031883
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+BZ: 1023874
+
+This is required when using blkdebug with raw format.  Unlike qcow2/QED,
+raw asks blkdebug for the length of the file, it doesn't get it from
+a header.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit e130225587cb0d48b2c0b7c04b6bf9c95fe75ac9)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/blkdebug.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block/blkdebug.c |    6 ++++++
+ 1 files changed, 6 insertions(+), 0 deletions(-)
+
+diff --git a/block/blkdebug.c b/block/blkdebug.c
+index 3853412..e2d39f4 100644
+--- a/block/blkdebug.c
++++ b/block/blkdebug.c
+@@ -438,6 +438,11 @@ static void blkdebug_debug_event(BlockDriverState *bs, BlkDebugEvent event)
+     }
+ }
+ 
++static int64_t blkdebug_getlength(BlockDriverState *bs)
++{
++    return bdrv_getlength(bs->file);
++}
++
+ static BlockDriver bdrv_blkdebug = {
+     .format_name        = "blkdebug",
+     .protocol_name      = "blkdebug",
+@@ -446,6 +451,7 @@ static BlockDriver bdrv_blkdebug = {
+ 
+     .bdrv_file_open     = blkdebug_open,
+     .bdrv_close         = blkdebug_close,
++    .bdrv_getlength     = blkdebug_getlength,
+ 
+     .bdrv_aio_readv     = blkdebug_aio_readv,
+     .bdrv_aio_writev    = blkdebug_aio_writev,
+-- 
+1.7.1
+

@@ -1,0 +1,197 @@
+From 56b0cc87b2fd95d662d8b2cb56da8ef7d0cd830a Mon Sep 17 00:00:00 2001
+Message-Id: <56b0cc87b2fd95d662d8b2cb56da8ef7d0cd830a.1380723420.git.minovotn@redhat.com>
+In-Reply-To: <68de4f1434a46df7d1b6e59cb348f11c92dbf17c.1380723420.git.minovotn@redhat.com>
+References: <68de4f1434a46df7d1b6e59cb348f11c92dbf17c.1380723420.git.minovotn@redhat.com>
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Tue, 1 Oct 2013 12:27:02 +0200
+Subject: [PATCH 06/13] Add support for JSON pretty printing
+
+RH-Author: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: <1380630429-29077-2-git-send-email-pbonzini@redhat.com>
+Patchwork-id: 54616
+O-Subject: [RHEL 6.5 qemu-kvm PATCH 1/8] Add support for JSON pretty printing
+Bugzilla: 1010610
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Eduardo Habkost <ehabkost@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: "Daniel P. Berrange" <berrange@redhat.com>
+
+The monitor does not pretty-print JSON output, so that everything
+will be on a single line reply. When JSON docs get large this is
+quite unpleasant to read. For the future command line capabilities
+query ability, huge JSON docs will be available. This needs the
+ability to pretty-print.
+
+This introduces a new API qobject_to_json_pretty() that does
+a minimal indentation of list and dict members. As an example,
+this makes
+
+  {"QMP": {"version": {"micro": 50, "minor": 12, "package": "", "major": 0}, "capabilities": []}}
+
+Output as
+
+  {
+      "QMP": {
+          "version": {
+              "micro": 50,
+              "minor": 12,
+              "package": "",
+              "major": 0
+          },
+          "capabilities": [
+          ]
+      }
+  }
+
+NB: this is not turned on for the QMP monitor.
+
+Signed-off-by: Daniel P. Berrange <berrange@redhat.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+---
+ qjson.c | 55 +++++++++++++++++++++++++++++++++++++++++++++++--------
+ qjson.h |  1 +
+ 2 files changed, 48 insertions(+), 8 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qjson.c | 55 +++++++++++++++++++++++++++++++++++++++++++++++--------
+ qjson.h |  1 +
+ 2 files changed, 48 insertions(+), 8 deletions(-)
+
+diff --git a/qjson.c b/qjson.c
+index e4ee433..f9c8e77 100644
+--- a/qjson.c
++++ b/qjson.c
+@@ -72,43 +72,57 @@ QObject *qobject_from_jsonf(const char *string, ...)
+ 
+ typedef struct ToJsonIterState
+ {
++    int indent;
++    int pretty;
+     int count;
+     QString *str;
+ } ToJsonIterState;
+ 
+-static void to_json(const QObject *obj, QString *str);
++static void to_json(const QObject *obj, QString *str, int pretty, int indent);
+ 
+ static void to_json_dict_iter(const char *key, QObject *obj, void *opaque)
+ {
+     ToJsonIterState *s = opaque;
+     QString *qkey;
++    int j;
+ 
+-    if (s->count) {
++    if (s->count)
+         qstring_append(s->str, ", ");
++
++    if (s->pretty) {
++        qstring_append(s->str, "\n");
++        for (j = 0 ; j < s->indent ; j++)
++            qstring_append(s->str, "    ");
+     }
+ 
+     qkey = qstring_from_str(key);
+-    to_json(QOBJECT(qkey), s->str);
++    to_json(QOBJECT(qkey), s->str, s->pretty, s->indent);
+     QDECREF(qkey);
+ 
+     qstring_append(s->str, ": ");
+-    to_json(obj, s->str);
++    to_json(obj, s->str, s->pretty, s->indent);
+     s->count++;
+ }
+ 
+ static void to_json_list_iter(QObject *obj, void *opaque)
+ {
+     ToJsonIterState *s = opaque;
++    int j;
+ 
+-    if (s->count) {
++    if (s->count)
+         qstring_append(s->str, ", ");
++
++    if (s->pretty) {
++        qstring_append(s->str, "\n");
++        for (j = 0 ; j < s->indent ; j++)
++            qstring_append(s->str, "    ");
+     }
+ 
+-    to_json(obj, s->str);
++    to_json(obj, s->str, s->pretty, s->indent);
+     s->count++;
+ }
+ 
+-static void to_json(const QObject *obj, QString *str)
++static void to_json(const QObject *obj, QString *str, int pretty, int indent)
+ {
+     switch (qobject_type(obj)) {
+     case QTYPE_QINT: {
+@@ -193,8 +207,16 @@ static void to_json(const QObject *obj, QString *str)
+ 
+         s.count = 0;
+         s.str = str;
++        s.indent = indent + 1;
++        s.pretty = pretty;
+         qstring_append(str, "{");
+         qdict_iter(val, to_json_dict_iter, &s);
++        if (pretty) {
++            int j;
++            qstring_append(str, "\n");
++            for (j = 0 ; j < indent ; j++)
++                qstring_append(str, "    ");
++        }
+         qstring_append(str, "}");
+         break;
+     }
+@@ -204,8 +226,16 @@ static void to_json(const QObject *obj, QString *str)
+ 
+         s.count = 0;
+         s.str = str;
++        s.indent = indent + 1;
++        s.pretty = pretty;
+         qstring_append(str, "[");
+         qlist_iter(val, (void *)to_json_list_iter, &s);
++        if (pretty) {
++            int j;
++            qstring_append(str, "\n");
++            for (j = 0 ; j < indent ; j++)
++                qstring_append(str, "    ");
++        }
+         qstring_append(str, "]");
+         break;
+     }
+@@ -249,7 +279,16 @@ QString *qobject_to_json(const QObject *obj)
+ {
+     QString *str = qstring_new();
+ 
+-    to_json(obj, str);
++    to_json(obj, str, 0, 0);
++
++    return str;
++}
++
++QString *qobject_to_json_pretty(const QObject *obj)
++{
++    QString *str = qstring_new();
++
++    to_json(obj, str, 1, 0);
+ 
+     return str;
+ }
+diff --git a/qjson.h b/qjson.h
+index 7afec2e..cd60e0b 100644
+--- a/qjson.h
++++ b/qjson.h
+@@ -24,5 +24,6 @@ QObject *qobject_from_jsonf(const char *string, ...)
+ QObject *qobject_from_jsonv(const char *string, va_list *ap);
+ 
+ QString *qobject_to_json(const QObject *obj);
++QString *qobject_to_json_pretty(const QObject *obj);
+ 
+ #endif /* QJSON_H */
+-- 
+1.7.11.7
+

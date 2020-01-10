@@ -1,0 +1,65 @@
+From 61c35148c6b14dd422620183324ac05a16890f93 Mon Sep 17 00:00:00 2001
+From: Max Reitz <mreitz@redhat.com>
+Date: Fri, 2 May 2014 16:58:52 -0500
+Subject: [PATCH 20/26] qcow2: Add more overlap check bitmask macros
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1399049936-13496-21-git-send-email-mreitz@redhat.com>
+Patchwork-id: 58669
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 20/24] qcow2: Add more overlap check bitmask macros
+Bugzilla: 1004420
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1004420
+
+Introduces the macros QCOW2_OL_CONSTANT and QCOW2_OL_ALL in addition to
+the already existing QCOW2_OL_CACHED, signifying all metadata overlap
+checks that can be performed in constant time (regardless of image size
+etc.) and truly all available overlap checks, respectively.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 4a273c398b0c96985d56fed8156e19876b2e3c9e)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2.h | 14 +++++++++++---
+ 1 file changed, 11 insertions(+), 3 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2.h |   14 +++++++++++---
+ 1 files changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/block/qcow2.h b/block/qcow2.h
+index 400bb54..86f0cb2 100644
+--- a/block/qcow2.h
++++ b/block/qcow2.h
+@@ -227,11 +227,19 @@ typedef enum QCow2MetadataOverlap {
+     QCOW2_OL_INACTIVE_L2    = (1 << QCOW2_OL_INACTIVE_L2_BITNR),
+ } QCow2MetadataOverlap;
+ 
++/* Perform all overlap checks which can be done in constant time */
++#define QCOW2_OL_CONSTANT \
++    (QCOW2_OL_MAIN_HEADER | QCOW2_OL_ACTIVE_L1 | QCOW2_OL_REFCOUNT_TABLE | \
++     QCOW2_OL_SNAPSHOT_TABLE)
++
+ /* Perform all overlap checks which don't require disk access */
+ #define QCOW2_OL_CACHED \
+-    (QCOW2_OL_MAIN_HEADER | QCOW2_OL_ACTIVE_L1 | QCOW2_OL_ACTIVE_L2 | \
+-     QCOW2_OL_REFCOUNT_TABLE | QCOW2_OL_REFCOUNT_BLOCK | \
+-     QCOW2_OL_SNAPSHOT_TABLE | QCOW2_OL_INACTIVE_L1)
++    (QCOW2_OL_CONSTANT | QCOW2_OL_ACTIVE_L2 | QCOW2_OL_REFCOUNT_BLOCK | \
++     QCOW2_OL_INACTIVE_L1)
++
++/* Perform all overlap checks */
++#define QCOW2_OL_ALL \
++    (QCOW2_OL_CACHED | QCOW2_OL_INACTIVE_L2)
+ 
+ #define L1E_OFFSET_MASK 0x00ffffffffffff00ULL
+ #define L2E_OFFSET_MASK 0x00ffffffffffff00ULL
+-- 
+1.7.1
+

@@ -1,0 +1,75 @@
+From b71821ca5070c239161e57a78e2db864ed790f1f Mon Sep 17 00:00:00 2001
+Message-Id: <b71821ca5070c239161e57a78e2db864ed790f1f.1380723420.git.minovotn@redhat.com>
+In-Reply-To: <68de4f1434a46df7d1b6e59cb348f11c92dbf17c.1380723420.git.minovotn@redhat.com>
+References: <68de4f1434a46df7d1b6e59cb348f11c92dbf17c.1380723420.git.minovotn@redhat.com>
+From: Markus Armbruster <armbru@redhat.com>
+Date: Mon, 30 Sep 2013 12:28:28 +0200
+Subject: [PATCH 05/13] scsi: Fix scsi_bus_legacy_add_drive() scsi-generic
+ with serial
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1380544108-20587-2-git-send-email-armbru@redhat.com>
+Patchwork-id: 54589
+O-Subject: [PATCH 6.5 qemu-kvm 1/1] scsi: Fix scsi_bus_legacy_add_drive() scsi-generic with serial
+Bugzilla: 1013478
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Markus Armbruster <armbru@redhat.com>
+
+scsi_bus_legacy_add_drive() creates either a scsi-disk or a
+scsi-generic device.  It sets property "serial" to argument serial
+unless null.  Crashes with scsi-generic, because it doesn't have such
+the property.
+
+Only usb_msd_initfn_storage() passes non-null serial.  Reproducer:
+
+    $ qemu-system-x86_64 -nodefaults -display none -S -usb \
+    -drive if=none,file=/dev/sg1,id=usb-drv0 \
+    -device usb-storage,id=usb-msd0,drive=usb-drv0,serial=123
+    qemu-system-x86_64: -device usb-storage,id=usb-msd0,drive=usb-drv0,serial=123: Property '.serial' not found
+    Aborted (core dumped)
+
+Fix by handling exactly like "removable": set the property only when
+it exists.
+
+Cc: qemu-stable@nongnu.org
+Reviewed-by: Andreas Färber <afaerber@suse.de>
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit c24e7517ee4a98e90eee5f0f07708a1fa12326b3)
+
+Conflicts:
+	hw/scsi/scsi-bus.c
+
+Conflicts because the code is still in hw/scsi-bus.c, and we don't
+have QOM.
+---
+ hw/scsi-bus.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/scsi-bus.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/hw/scsi-bus.c b/hw/scsi-bus.c
+index 8c2c74f..c466ffa 100644
+--- a/hw/scsi-bus.c
++++ b/hw/scsi-bus.c
+@@ -201,7 +201,7 @@ SCSIDevice *scsi_bus_legacy_add_drive(SCSIBus *bus, BlockDriverState *bdrv,
+     if (qdev_prop_exists(dev, "removable")) {
+         qdev_prop_set_bit(dev, "removable", removable);
+     }
+-    if (serial) {
++    if (serial && qdev_prop_exists(dev, "serial")) {
+         qdev_prop_set_string(dev, "serial", serial);
+     }
+     if (qdev_prop_set_drive(dev, "drive", bdrv) < 0) {
+-- 
+1.7.11.7
+

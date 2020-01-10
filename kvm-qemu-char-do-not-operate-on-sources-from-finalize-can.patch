@@ -1,0 +1,197 @@
+From 37a222f59b4bb6836ec2e3b297cae33ceac7c963 Mon Sep 17 00:00:00 2001
+Message-Id: <37a222f59b4bb6836ec2e3b297cae33ceac7c963.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:37 +0200
+Subject: [PATCH 63/65] qemu-char: do not operate on sources from finalize
+ callbacks
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <b472acc943fcb92f988d9213ff71f25ca9047aee.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50841
+O-Subject: [RHEL6.5 qemu-kvm PATCH 63/65] qemu-char: do not operate on sources from finalize callbacks
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Due to a glib bug, the finalize callback is called with the GMainContext
+lock held.  Thus, any operation on the context from the callback will
+cause recursive locking and a deadlock.  This happens, for example,
+when a client disconnects from a socket chardev.
+
+The fix for this is somewhat ugly, because we need to forego polymorphism
+and implement our own function to destroy IOWatchPoll sources.  The
+right thing to do here would be child sources, but we support older
+glib versions that do not have them.  Not coincidentially, glib developers
+found and fixed the deadlock as part of implementing child sources.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Tested-by: Sander Eikelenboom <linux@eikelenboom.it>
+Message-id: 1366385529-10329-5-git-send-email-pbonzini@redhat.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 2b316774f60291f57ca9ecb6a9f0712c532cae34)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	qemu-char.c
+---
+ qemu-char.c | 55 ++++++++++++++++++++++++++++++++++++++++---------------
+ 1 file changed, 40 insertions(+), 15 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 55 ++++++++++++++++++++++++++++++++++++++++---------------
+ 1 file changed, 40 insertions(+), 15 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 4db0a22..f02706d 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -590,12 +590,18 @@ static gboolean io_watch_poll_dispatch(GSource *source, GSourceFunc callback,
+ 
+ static void io_watch_poll_finalize(GSource *source)
+ {
++    /* Due to a glib bug, removing the last reference to a source
++     * inside a finalize callback causes recursive locking (and a
++     * deadlock).  This is not a problem inside other callbacks,
++     * including dispatch callbacks, so we call io_remove_watch_poll
++     * to remove this source.  At this point, iwp->src must
++     * be NULL, or we would leak it.
++     *
++     * This would be solved much more elegantly by child sources,
++     * but we support older glib versions that do not have them.
++     */
+     IOWatchPoll *iwp = io_watch_poll_from_source(source);
+-    if (iwp->src) {
+-        g_source_destroy(iwp->src);
+-        g_source_unref(iwp->src);
+-        iwp->src = NULL;
+-    }
++    assert(iwp->src == NULL);
+ }
+ 
+ static GSourceFuncs io_watch_poll_funcs = {
+@@ -626,6 +632,25 @@ static guint io_add_watch_poll(GIOChannel *channel,
+     return tag;
+ }
+ 
++static void io_remove_watch_poll(guint tag)
++{
++    GSource *source;
++    IOWatchPoll *iwp;
++
++    g_return_if_fail (tag > 0);
++
++    source = g_main_context_find_source_by_id(NULL, tag);
++    g_return_if_fail (source != NULL);
++
++    iwp = io_watch_poll_from_source(source);
++    if (iwp->src) {
++        g_source_destroy(iwp->src);
++        g_source_unref(iwp->src);
++        iwp->src = NULL;
++    }
++    g_source_destroy(&iwp->parent);
++}
++
+ static GIOChannel *io_channel_from_fd(int fd)
+ {
+     GIOChannel *chan;
+@@ -731,7 +756,7 @@ static gboolean fd_chr_read(GIOChannel *chan, GIOCondition cond, void *opaque)
+                                      len, &bytes_read, NULL);
+     if (status == G_IO_STATUS_EOF) {
+         if (s->fd_in_tag) {
+-            g_source_remove(s->fd_in_tag);
++            io_remove_watch_poll(s->fd_in_tag);
+             s->fd_in_tag = 0;
+         }
+         qemu_chr_be_event(chr, CHR_EVENT_CLOSED);
+@@ -764,7 +789,7 @@ static void fd_chr_update_read_handler(CharDriverState *chr)
+     FDCharDriver *s = chr->opaque;
+ 
+     if (s->fd_in_tag) {
+-        g_source_remove(s->fd_in_tag);
++        io_remove_watch_poll(s->fd_in_tag);
+         s->fd_in_tag = 0;
+     }
+ 
+@@ -778,7 +803,7 @@ static void fd_chr_close(struct CharDriverState *chr)
+     FDCharDriver *s = chr->opaque;
+ 
+     if (s->fd_in_tag) {
+-        g_source_remove(s->fd_in_tag);
++        io_remove_watch_poll(s->fd_in_tag);
+         s->fd_in_tag = 0;
+     }
+ 
+@@ -1090,7 +1115,7 @@ static void pty_chr_state(CharDriverState *chr, int connected)
+ 
+     if (!connected) {
+         if (s->fd_tag) {
+-            g_source_remove(s->fd_tag);
++            io_remove_watch_poll(s->fd_tag);
+             s->fd_tag = 0;
+         }
+         s->connected = 0;
+@@ -1118,7 +1143,7 @@ static void pty_chr_close(struct CharDriverState *chr)
+     int fd;
+ 
+     if (s->fd_tag) {
+-        g_source_remove(s->fd_tag);
++        io_remove_watch_poll(s->fd_tag);
+         s->fd_tag = 0;
+     }
+     fd = g_io_channel_unix_get_fd(s->fd);
+@@ -2021,7 +2046,7 @@ static gboolean udp_chr_read(GIOChannel *chan, GIOCondition cond, void *opaque)
+     s->bufptr = s->bufcnt;
+     if (status != G_IO_STATUS_NORMAL) {
+         if (s->tag) {
+-            g_source_remove(s->tag);
++            io_remove_watch_poll(s->tag);
+             s->tag = 0;
+         }
+         return FALSE;
+@@ -2042,7 +2067,7 @@ static void udp_chr_update_read_handler(CharDriverState *chr)
+     NetCharDriver *s = chr->opaque;
+ 
+     if (s->tag) {
+-        g_source_remove(s->tag);
++        io_remove_watch_poll(s->tag);
+         s->tag = 0;
+     }
+ 
+@@ -2055,7 +2080,7 @@ static void udp_chr_close(CharDriverState *chr)
+ {
+     NetCharDriver *s = chr->opaque;
+     if (s->tag) {
+-        g_source_remove(s->tag);
++        io_remove_watch_poll(s->tag);
+         s->tag = 0;
+     }
+     if (s->chan) {
+@@ -2282,7 +2307,7 @@ static gboolean tcp_chr_read(GIOChannel *chan, GIOCondition cond, void *opaque)
+             s->listen_tag = g_io_add_watch(s->listen_chan, G_IO_IN, tcp_chr_accept, chr);
+         }
+         if (s->tag) {
+-            g_source_remove(s->tag);
++            io_remove_watch_poll(s->tag);
+             s->tag = 0;
+         }
+         g_io_channel_unref(s->chan);
+@@ -2384,7 +2409,7 @@ static void tcp_chr_close(CharDriverState *chr)
+     TCPCharDriver *s = chr->opaque;
+     if (s->fd >= 0) {
+         if (s->tag) {
+-            g_source_remove(s->tag);
++            io_remove_watch_poll(s->tag);
+             s->tag = 0;
+         }
+         if (s->chan) {
+-- 
+1.7.11.7
+

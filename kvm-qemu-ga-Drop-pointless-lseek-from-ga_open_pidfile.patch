@@ -1,0 +1,58 @@
+From 7e13f8caed03da2ab9c992c0575386b98261f165 Mon Sep 17 00:00:00 2001
+Message-Id: <7e13f8caed03da2ab9c992c0575386b98261f165.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:27:55 +0200
+Subject: [PATCH 090/114] qemu-ga: Drop pointless lseek() from
+ ga_open_pidfile()
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-33-git-send-email-lersek@redhat.com>
+Patchwork-id: 51131
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 32/56] qemu-ga: Drop pointless lseek() from ga_open_pidfile()
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Markus Armbruster <armbru@redhat.com>
+
+After open(), the file offset is already zero, and neither lockf() nor
+ftruncate() change it.
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Reviewed-by: Luiz Capitulino <lcapitulino@redhat.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit 5d27f9ce3de424207883d84352d76150e9707394)
+
+Tech note: this is where I found out about diff.renameLimit and set it to
+3000. The conflict due to the qemu-ga.c <-> qga/main.c rename is gone.
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qemu-ga.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-ga.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/qemu-ga.c b/qemu-ga.c
+index eb7fc7a..f8f6ac4 100644
+--- a/qemu-ga.c
++++ b/qemu-ga.c
+@@ -289,7 +289,7 @@ static bool ga_open_pidfile(const char *pidfile)
+         return false;
+     }
+ 
+-    if (ftruncate(pidfd, 0) || lseek(pidfd, 0, SEEK_SET)) {
++    if (ftruncate(pidfd, 0)) {
+         g_critical("Failed to truncate pid file");
+         goto fail;
+     }
+-- 
+1.7.11.7
+

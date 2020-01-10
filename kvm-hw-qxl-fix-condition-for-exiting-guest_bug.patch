@@ -1,0 +1,51 @@
+From ed8357da6cb4b5678604953ac13c776863eccadf Mon Sep 17 00:00:00 2001
+Message-Id: <ed8357da6cb4b5678604953ac13c776863eccadf.1428549624.git.jen@redhat.com>
+In-Reply-To: <6f5be4df5e31d585f927f6280d6fd1112ee97a20.1428549624.git.jen@redhat.com>
+References: <6f5be4df5e31d585f927f6280d6fd1112ee97a20.1428549624.git.jen@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 31 Mar 2015 14:14:30 -0500
+Subject: [CHANGE 3/7] hw/qxl: fix condition for exiting guest_bug
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1427811270-9831-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 64646
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 1/1] hw/qxl: fix condition for exiting guest_bug
+Bugzilla: 1200019
+RH-Acked-by: John Snow <jsnow@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Jeff Nelson <jenelson@redhat.com>
+
+From: Alon Levy <alevy@redhat.com>
+
+Reported and suggested by Paolo Bonzini, thanks.
+
+Signed-off-by: Alon Levy <alevy@redhat.com>
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit d96aafca057845a4d58cd7b36771f2c97c78cd56)
+---
+ hw/qxl.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/qxl.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/hw/qxl.c b/hw/qxl.c
+index ba4c30e..9c3367b 100644
+--- a/hw/qxl.c
++++ b/hw/qxl.c
+@@ -1486,7 +1486,7 @@ static void ioport_write(void *opaque, uint32_t addr, uint32_t val)
+     qxl_async_io async = QXL_SYNC;
+     uint32_t orig_io_port = io_port;
+ 
+-    if (d->guest_bug && !io_port == QXL_IO_RESET) {
++    if (d->guest_bug && io_port != QXL_IO_RESET) {
+         return;
+     }
+ 
+-- 
+2.1.0
+

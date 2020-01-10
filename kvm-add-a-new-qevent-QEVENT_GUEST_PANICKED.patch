@@ -1,0 +1,97 @@
+From 9aa3e9a115598e35f964012d1417e769f7a407cd Mon Sep 17 00:00:00 2001
+Message-Id: <9aa3e9a115598e35f964012d1417e769f7a407cd.1369899578.git.minovotn@redhat.com>
+In-Reply-To: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+References: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Wed, 22 May 2013 11:31:06 +0200
+Subject: [PATCH 07/15] add a new qevent: QEVENT_GUEST_PANICKED
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1369222273-3298-3-git-send-email-lersek@redhat.com>
+Patchwork-id: 51522
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 2/9] add a new qevent: QEVENT_GUEST_PANICKED
+Bugzilla: 833530
+RH-Acked-by: Andrew Jones <drjones@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+This event will be emited when qemu detects guest panic.
+
+Signed-off-by: Wen Congyang <wency@cn.fujitsu.com>
+Signed-off-by: Hu Tao <hutao@cn.fujitsu.com>
+Reviewed-by: Markus Armbruster <armbru@redhat.com>
+Message-id: cf0bc45ecf9ecd3699bc72dc39f8cbab8ed79d8c.1366945969.git.hutao@cn.fujitsu.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit c401a8a5156a2596b285586002d544c595d40cf7)
+
+Conflicts:
+- QMP/qmp-events.txt (events are in alphabetic order upstream)
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ v2:
+ - fixed conflict reason [Paolo Bonzini]
+
+ monitor.h          |    1 +
+ monitor.c          |    1 +
+ QMP/qmp-events.txt |   13 +++++++++++++
+ 3 files changed, 15 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ QMP/qmp-events.txt | 13 +++++++++++++
+ monitor.c          |  1 +
+ monitor.h          |  1 +
+ 3 files changed, 15 insertions(+)
+
+diff --git a/QMP/qmp-events.txt b/QMP/qmp-events.txt
+index 8eec12a..a7cc553 100644
+--- a/QMP/qmp-events.txt
++++ b/QMP/qmp-events.txt
+@@ -335,6 +335,19 @@ Example:
+ Note: If action is "reset", "shutdown", or "pause" the WATCHDOG event is
+ followed respectively by the RESET, SHUTDOWN, or STOP events.
+ 
++GUEST_PANICKED
++--------------
++
++Emitted when guest OS panic is detected.
++
++Data:
++
++- "action": Action that has been taken (json-string, currently always "pause").
++
++Example:
++
++{ "event": "GUEST_PANICKED",
++     "data": { "action": "pause" } }
+ 
+ BLOCK_JOB_COMPLETED
+ -------------------
+diff --git a/monitor.c b/monitor.c
+index 8f88c2d..a2433c1 100644
+--- a/monitor.c
++++ b/monitor.c
+@@ -495,6 +495,7 @@ static const char *monitor_event_names[] = {
+     [QEVENT_WAKEUP] = "WAKEUP",
+     [QEVENT_BALLOON_CHANGE] = "BALLOON_CHANGE",
+     [QEVENT_SPICE_MIGRATE_COMPLETED] = "SPICE_MIGRATE_COMPLETED",
++    [QEVENT_GUEST_PANICKED] = "GUEST_PANICKED",
+ };
+ QEMU_BUILD_BUG_ON(ARRAY_SIZE(monitor_event_names) != QEVENT_MAX)
+ 
+diff --git a/monitor.h b/monitor.h
+index f538274..4821f8a 100644
+--- a/monitor.h
++++ b/monitor.h
+@@ -49,6 +49,7 @@ typedef enum MonitorEvent {
+     QEVENT_WAKEUP,
+     QEVENT_BALLOON_CHANGE,
+     QEVENT_SPICE_MIGRATE_COMPLETED,
++    QEVENT_GUEST_PANICKED,
+ 
+     /* Add to 'monitor_event_names' array in monitor.c when
+      * defining new events here */
+-- 
+1.7.11.7
+

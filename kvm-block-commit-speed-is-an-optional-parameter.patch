@@ -1,0 +1,53 @@
+From f457ce81964e8d208eb8069089a87041399e7860 Mon Sep 17 00:00:00 2001
+Message-Id: <f457ce81964e8d208eb8069089a87041399e7860.1484162498.git.ymankad@redhat.com>
+In-Reply-To: <6da299cbd22aeea340aaabe3e57b8efc46a477f6.1484162498.git.ymankad@redhat.com>
+References: <6da299cbd22aeea340aaabe3e57b8efc46a477f6.1484162498.git.ymankad@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Mon, 9 Jan 2017 20:21:02 -0500
+Subject: [CHANGE 6/7] block-commit: speed is an optional parameter
+To: ymankad@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <20170109202103.28932-7-mreitz@redhat.com>
+Patchwork-id: 73229
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 6/7] block-commit: speed is an optional parameter
+Bugzilla: 1405882
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+As speed is an optional parameter for the QMP block-commit command, it
+should be set to 0 if not given (as it is undefined if has_speed is
+false), that is, the speed should not be limited.
+
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 5450466394c95cea8b661fb197ed215a4ab5d700)
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ blockdev.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/blockdev.c b/blockdev.c
+index 128b728..be68c8f 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -1493,6 +1493,10 @@ void qmp___com_redhat_block_commit(const char *device,
+      */
+     BlockErrorAction on_error = BLOCK_ERR_REPORT;
+ 
++    if (!has_speed) {
++        speed = 0;
++    }
++
+     /* drain all i/o before commits */
+     bdrv_drain_all();
+ 
+-- 
+2.7.4
+

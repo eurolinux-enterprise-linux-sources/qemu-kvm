@@ -1,0 +1,64 @@
+From efc8397cccbc8fa61b0811cf6bb23c7d34687268 Mon Sep 17 00:00:00 2001
+Message-Id: <efc8397cccbc8fa61b0811cf6bb23c7d34687268.1375111395.git.minovotn@redhat.com>
+In-Reply-To: <fefc9cbca3288c4ca491968f9b7b5bf462059171.1375111395.git.minovotn@redhat.com>
+References: <fefc9cbca3288c4ca491968f9b7b5bf462059171.1375111395.git.minovotn@redhat.com>
+From: Orit Wasserman <owasserm@redhat.com>
+Date: Wed, 24 Jul 2013 13:49:59 +0200
+Subject: [PATCH 3/4] Fix real mode guest segments dpl value in savevm
+
+RH-Author: Orit Wasserman <owasserm@redhat.com>
+Message-id: <1374673799-1452-3-git-send-email-owasserm@redhat.com>
+Patchwork-id: 52696
+O-Subject: [RHEL6.5 qemu-kvm PATCH 2/2] Fix real mode guest segments dpl value in savevm
+Bugzilla: 888767
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Gleb Natapov <gleb@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+
+Older KVM version put invalid value in the segments registers dpl field for
+real mode guests (0x3).
+This breaks migration from those hosts to hosts with unrestricted guest support.
+We detect it by checking CS dpl value for real mode guest and fix the dpl values
+of all the segment registers.
+
+Signed-off-by: Orit Wasserman <owasserm@redhat.com>
+---
+ target-i386/machine.c | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ target-i386/machine.c | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/target-i386/machine.c b/target-i386/machine.c
+index 7e61887..b623d4d 100644
+--- a/target-i386/machine.c
++++ b/target-i386/machine.c
+@@ -356,6 +356,23 @@ static void cpu_pre_save(void *opaque)
+ #else
+     env->fpregs_format_vmstate = 1;
+ #endif
++
++    /*
++     * Real mode guest segments register DPL should be zero.
++     * Older KVM version were setting it wrongly.
++     * Fixing it will allow live migration to host with unrestricted guest
++     * support (otherwise the migration will fail with invalid guest state
++     * error).
++     */
++    if (!(env->cr[0] & CR0_PE_MASK) &&
++        (env->segs[R_CS].flags >> DESC_DPL_SHIFT & 3) != 0) {
++        env->segs[R_CS].flags &= ~(env->segs[R_CS].flags & DESC_DPL_MASK);
++        env->segs[R_DS].flags &= ~(env->segs[R_DS].flags & DESC_DPL_MASK);
++        env->segs[R_ES].flags &= ~(env->segs[R_ES].flags & DESC_DPL_MASK);
++        env->segs[R_FS].flags &= ~(env->segs[R_FS].flags & DESC_DPL_MASK);
++        env->segs[R_GS].flags &= ~(env->segs[R_GS].flags & DESC_DPL_MASK);
++        env->segs[R_SS].flags &= ~(env->segs[R_SS].flags & DESC_DPL_MASK);
++    }
+ }
+ 
+ static int cpu_pre_load(void *opaque)
+-- 
+1.7.11.7
+

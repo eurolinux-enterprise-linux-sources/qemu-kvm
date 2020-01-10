@@ -1,0 +1,208 @@
+From 5b5aaea27f542da7927da2502fcf9d76f061789d Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:49 -0500
+Subject: [CHANGE 27/31] qemu-iotests: Backport 080
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-28-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60380
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 27/29] qemu-iotests: Backport 080
+Bugzilla: 1122410
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+The test needs the following adjustments for RHEL 6:
+
+* Use qcow2 v2 instead of v3 (fixed 72 byte header size)
+
+* qemu-img convert -s (and qcow2_snapshot_load_tmp(), which it tests)
+  doesn't exist in RHEL 6, remove that part.
+
+* Trivial output changes
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ tests/qemu-iotests/080     | 19 +------------
+ tests/qemu-iotests/080.out | 66 ++++++++++++++++++++++++----------------------
+ 2 files changed, 35 insertions(+), 50 deletions(-)
+
+diff --git a/tests/qemu-iotests/080 b/tests/qemu-iotests/080
+index 6b3a3e7..3203a45 100755
+--- a/tests/qemu-iotests/080
++++ b/tests/qemu-iotests/080
+@@ -43,7 +43,7 @@ _supported_fmt qcow2
+ _supported_proto generic
+ _supported_os Linux
+ 
+-header_size=104
++header_size=72
+ 
+ offset_backing_file_offset=8
+ offset_backing_file_size=16
+@@ -53,7 +53,6 @@ offset_refcount_table_offset=48
+ offset_refcount_table_clusters=56
+ offset_nb_snapshots=60
+ offset_snapshots_offset=64
+-offset_header_size=100
+ offset_ext_magic=$header_size
+ offset_ext_size=$((header_size + 4))
+ 
+@@ -64,14 +63,6 @@ offset_snap1_l1_offset=$((offset_snap1 + 0))
+ offset_snap1_l1_size=$((offset_snap1 + 8))
+ 
+ echo
+-echo "== Huge header size =="
+-_make_test_img 64M
+-poke_file "$TEST_IMG" "$offset_header_size" "\xff\xff\xff\xff"
+-{ $QEMU_IO -c "read 0 512" $TEST_IMG; } 2>&1 | _filter_qemu_io | _filter_testdir
+-poke_file "$TEST_IMG" "$offset_header_size" "\x7f\xff\xff\xff"
+-{ $QEMU_IO -c "read 0 512" $TEST_IMG; } 2>&1 | _filter_qemu_io | _filter_testdir
+-
+-echo
+ echo "== Huge unknown header extension =="
+ _make_test_img 64M
+ poke_file "$TEST_IMG" "$offset_backing_file_offset" "\xff\xff\xff\xff\xff\xff\xff\xff"
+@@ -166,14 +157,6 @@ poke_file "$TEST_IMG" "$offset_l2_table_0" "\xbf\xff\xff\xff\xff\xff\x00\x00"
+ poke_file "$TEST_IMG" "$offset_l2_table_0" "\x80\x00\x00\xff\xff\xff\x00\x00"
+ { $QEMU_IMG snapshot -c test $TEST_IMG; } 2>&1 | _filter_qemu_io | _filter_testdir
+ 
+-echo
+-echo "== Invalid snapshot L1 table =="
+-_make_test_img 64M
+-{ $QEMU_IO -c "write 0 512" $TEST_IMG; } 2>&1 | _filter_qemu_io | _filter_testdir
+-{ $QEMU_IMG snapshot -c test $TEST_IMG; } 2>&1 | _filter_testdir
+-poke_file "$TEST_IMG" "$offset_snap1_l1_size" "\x10\x00\x00\x00"
+-{ $QEMU_IMG convert -s test $TEST_IMG $TEST_IMG.snap; } 2>&1 | _filter_testdir
+-
+ # success, all done
+ echo "*** done"
+ rm -f $seq.full
+diff --git a/tests/qemu-iotests/080.out b/tests/qemu-iotests/080.out
+index f7a943c..3fc6745 100644
+--- a/tests/qemu-iotests/080.out
++++ b/tests/qemu-iotests/080.out
+@@ -1,83 +1,85 @@
+ QA output created by 080
+ 
+-== Huge header size ==
+-Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
+-qemu-io: can't open device TEST_DIR/t.qcow2: qcow2 header exceeds cluster size
+-no file open, try 'help open'
+-qemu-io: can't open device TEST_DIR/t.qcow2: qcow2 header exceeds cluster size
+-no file open, try 'help open'
+-
+ == Huge unknown header extension ==
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
+-qemu-io: can't open device TEST_DIR/t.qcow2: Invalid backing file offset
++Invalid backing file offset
++qemu-io: can't open device TEST_DIR/t.qcow2
+ no file open, try 'help open'
+-qemu-io: can't open device TEST_DIR/t.qcow2: Header extension too large
++Header extension too large
++qemu-io: can't open device TEST_DIR/t.qcow2
+ no file open, try 'help open'
+ 
+ == Huge refcount table size ==
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
+-qemu-io: can't open device TEST_DIR/t.qcow2: Reference count table too large
++Reference count table too large
++qemu-io: can't open device TEST_DIR/t.qcow2
+ no file open, try 'help open'
+-qemu-io: can't open device TEST_DIR/t.qcow2: Reference count table too large
++Reference count table too large
++qemu-io: can't open device TEST_DIR/t.qcow2
+ no file open, try 'help open'
+ 
+ == Misaligned refcount table ==
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
+-qemu-io: can't open device TEST_DIR/t.qcow2: Invalid reference count table offset
++Invalid reference count table offset
++qemu-io: can't open device TEST_DIR/t.qcow2
+ no file open, try 'help open'
+ 
+ == Huge refcount offset ==
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
+-qemu-io: can't open device TEST_DIR/t.qcow2: Invalid reference count table offset
++Invalid reference count table offset
++qemu-io: can't open device TEST_DIR/t.qcow2
+ no file open, try 'help open'
+ 
+ == Invalid snapshot table ==
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
+-qemu-io: can't open device TEST_DIR/t.qcow2: Too many snapshots
++Too many snapshots
++qemu-io: can't open device TEST_DIR/t.qcow2
+ no file open, try 'help open'
+-qemu-io: can't open device TEST_DIR/t.qcow2: Too many snapshots
++Too many snapshots
++qemu-io: can't open device TEST_DIR/t.qcow2
+ no file open, try 'help open'
+-qemu-io: can't open device TEST_DIR/t.qcow2: Invalid snapshot table offset
++Invalid snapshot table offset
++qemu-io: can't open device TEST_DIR/t.qcow2
+ no file open, try 'help open'
+-qemu-io: can't open device TEST_DIR/t.qcow2: Invalid snapshot table offset
++Invalid snapshot table offset
++qemu-io: can't open device TEST_DIR/t.qcow2
+ no file open, try 'help open'
+ 
+ == Hitting snapshot table size limit ==
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
+-qemu-img: Could not create snapshot 'test': -27 (File too large)
++Could not create snapshot 'test': -27 (File too large)
+ read 512/512 bytes at offset 0
+ 512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+ 
+ == Invalid L1 table ==
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
+-qemu-io: can't open device TEST_DIR/t.qcow2: Active L1 table too large
++Active L1 table too large
++qemu-io: can't open device TEST_DIR/t.qcow2
+ no file open, try 'help open'
+-qemu-io: can't open device TEST_DIR/t.qcow2: Active L1 table too large
++Active L1 table too large
++qemu-io: can't open device TEST_DIR/t.qcow2
+ no file open, try 'help open'
+-qemu-io: can't open device TEST_DIR/t.qcow2: Invalid L1 table offset
++Invalid L1 table offset
++qemu-io: can't open device TEST_DIR/t.qcow2
+ no file open, try 'help open'
+-qemu-io: can't open device TEST_DIR/t.qcow2: Invalid L1 table offset
++Invalid L1 table offset
++qemu-io: can't open device TEST_DIR/t.qcow2
+ no file open, try 'help open'
+ 
+ == Invalid L1 table (with internal snapshot in the image) ==
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
+-qemu-img: Could not open 'TEST_DIR/t.IMGFMT': L1 table is too small
++Could not open 'TEST_DIR/t.IMGFMT': Invalid argument
+ 
+ == Invalid backing file size ==
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
+-qemu-io: can't open device TEST_DIR/t.qcow2: Backing file name too long
++Backing file name too long
++qemu-io: can't open device TEST_DIR/t.qcow2
+ no file open, try 'help open'
+ 
+ == Invalid L2 entry (huge physical offset) ==
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
+ wrote 512/512 bytes at offset 0
+ 512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-qemu-img: Could not create snapshot 'test': -27 (File too large)
+-qemu-img: Could not create snapshot 'test': -11 (Resource temporarily unavailable)
+-
+-== Invalid snapshot L1 table ==
+-Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
+-wrote 512/512 bytes at offset 0
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-qemu-img: Failed to load snapshot: Snapshot L1 table too large
++Could not create snapshot 'test': -27 (File too large)
++Could not create snapshot 'test': -11 (Resource temporarily unavailable)
+ *** done
+-- 
+1.9.3
+

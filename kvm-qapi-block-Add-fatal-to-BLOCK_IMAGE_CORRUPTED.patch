@@ -1,0 +1,98 @@
+From 46daeb671fb586e46d779083f30113e41358b25d Mon Sep 17 00:00:00 2001
+Message-Id: <46daeb671fb586e46d779083f30113e41358b25d.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:21:56 -0500
+Subject: [CHANGE 13/42] qapi/block: Add "fatal" to BLOCK_IMAGE_CORRUPTED
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-14-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64477
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 13/39] qapi/block: Add "fatal" to BLOCK_IMAGE_CORRUPTED
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1129892
+
+Not every BLOCK_IMAGE_CORRUPTED event must be fatal; for example, when
+reading from an image, they should generally not be. Nonetheless, even
+an image only read from may of course be corrupted and this can be
+detected during normal operation. In this case, a non-fatal event should
+be emitted, but the image should not be marked corrupt (in accordance to
+"fatal" set to false).
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Message-id: 1409926039-29044-2-git-send-email-mreitz@redhat.com
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 9bf040b962f90aa2e1cef6543dfee6c96f73ef7e)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	block/qcow2-refcount.c
+	qapi/block-core.json
+	QMP/qmp-events.txt
+
+Upstream, there is a more sophisticated QMP event support than just a
+list of events in a text file.
+
+Also, there is no way to mark an image as being corrupt downstream, so
+the description has to accommodate that fact.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ QMP/qmp-events.txt     | 5 ++++-
+ block/qcow2-refcount.c | 4 ++--
+ 2 files changed, 6 insertions(+), 3 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ QMP/qmp-events.txt     | 5 ++++-
+ block/qcow2-refcount.c | 4 ++--
+ 2 files changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/QMP/qmp-events.txt b/QMP/qmp-events.txt
+index b6694d9..c7c4c4b 100644
+--- a/QMP/qmp-events.txt
++++ b/QMP/qmp-events.txt
+@@ -14,13 +14,16 @@ Data:
+             offset into the image (json-int)
+ - "size":   If the corruption resulted from an image access, this is the access
+             size (json-int)
++- "fatal":  If set, access to the image is prevented after this event and it
++            must be repaired (Since 2.2; before, every BLOCK_IMAGE_CORRUPTED
++            event was fatal) (json-bool)
+ 
+ Example:
+ 
+ { "event": "BLOCK_IMAGE_CORRUPTED",
+     "data": { "device": "ide0-hd0",
+         "msg": "Prevented active L1 table overwrite", "offset": 196608,
+-        "size": 65536 },
++        "size": 65536, "fatal": true },
+     "timestamp": { "seconds": 1378126126, "microseconds": 966463 } }
+ 
+ BLOCK_IO_ERROR
+diff --git a/block/qcow2-refcount.c b/block/qcow2-refcount.c
+index b292068..fff0ddb 100644
+--- a/block/qcow2-refcount.c
++++ b/block/qcow2-refcount.c
+@@ -1648,8 +1648,8 @@ int qcow2_pre_write_overlap_check(BlockDriverState *bs, int ign, int64_t offset,
+         message = g_strdup_printf("Prevented %s overwrite",
+                 metadata_ol_names[metadata_ol_bitnr]);
+         data = qobject_from_jsonf("{ 'device': %s, 'msg': %s, 'offset': %"
+-                PRId64 ", 'size': %" PRId64 " }", bs->device_name, message,
+-                offset, size);
++                PRId64 ", 'size': %" PRId64 ", 'fatal': true }",
++                bs->device_name, message, offset, size);
+         monitor_protocol_event(QEVENT_BLOCK_IMAGE_CORRUPTED, data);
+         g_free(message);
+         qobject_decref(data);
+-- 
+2.1.0
+

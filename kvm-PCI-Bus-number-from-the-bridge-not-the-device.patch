@@ -1,0 +1,72 @@
+From daa093cf3b29cc36a29e8aa34d6b64db07eee8be Mon Sep 17 00:00:00 2001
+Message-Id: <daa093cf3b29cc36a29e8aa34d6b64db07eee8be.1424811078.git.jen@redhat.com>
+From: Bandan Das <bsd@redhat.com>
+Date: Wed, 18 Feb 2015 05:32:52 -0500
+Subject: [CHANGE 1/4] PCI: Bus number from the bridge, not the device
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Bandan Das <bsd@redhat.com>
+Message-id: <jpgpp97bx8b.fsf@redhat.com>
+Patchwork-id: 63884
+O-Subject: [RHEL-6.7 qemu-kvm PATCH] PCI: Bus number from the bridge, not the device
+Bugzilla: 1010828
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Alex Williamson <alex.williamson@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+BZ: https://bugzilla.redhat.com/show_bug.cgi?id=1010828
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=8745137
+
+pcibus_dev_print() was erroneously retrieving the device bus
+number from the secondary bus number offset of the device
+instead of the bridge above the device.  This ends of landing
+in the 2nd byte of the 3rd BAR for devices, which thankfully
+is usually zero.
+
+Note: pcibus_get_dev_path() copied this code,
+inheriting the same bug.  pcibus_get_dev_path() is used for
+ramblock naming, so changing it can effect migration.  However,
+I've only seen this byte be non-zero for an assigned device,
+which can't migrate anyway, so hopefully we won't run into
+any issues.
+
+This patch does not touch pcibus_get_dev_path, as
+bus number is guest assigned for nested buses,
+so using it for migration is broken anyway.
+Fix it properly later.
+
+Signed-off-by: Alex Williamson <alex.williamson@redhat.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+(cherry picked from commit 7f5feab4dda39b39dce24113313587587aa2d0ab)
+
+RHEL6 Notes:
+This is a minor change that affects just the information that is
+being printed (info qtree). Presumably, it was printing some bogus
+value before this change.
+---
+ hw/pci.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/pci.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/hw/pci.c b/hw/pci.c
+index 5e5b31b..ef22fee 100644
+--- a/hw/pci.c
++++ b/hw/pci.c
+@@ -1931,8 +1931,7 @@ static void pcibus_dev_print(Monitor *mon, DeviceState *dev, int indent)
+ 
+     monitor_printf(mon, "%*sclass %s, addr %02x:%02x.%x, "
+                    "pci id %04x:%04x (sub %04x:%04x)\n",
+-                   indent, "", ctxt,
+-                   d->config[PCI_SECONDARY_BUS],
++                   indent, "", ctxt, pci_bus_num(d->bus),
+                    PCI_SLOT(d->devfn), PCI_FUNC(d->devfn),
+                    pci_get_word(d->config + PCI_VENDOR_ID),
+                    pci_get_word(d->config + PCI_DEVICE_ID),
+-- 
+2.1.0
+

@@ -1,0 +1,261 @@
+From 8bfaea987b126bcf570711f1c53e4134a6ff162d Mon Sep 17 00:00:00 2001
+From: Max Reitz <mreitz@redhat.com>
+Date: Fri, 2 May 2014 16:58:50 -0500
+Subject: [PATCH 18/26] qcow2: Use negated overflow check mask
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1399049936-13496-19-git-send-email-mreitz@redhat.com>
+Patchwork-id: 58664
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 18/24] qcow2: Use negated overflow check mask
+Bugzilla: 1004420
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1004420
+
+In qcow2_check_metadata_overlap and qcow2_pre_write_overlap_check,
+change the parameter signifying the checks to perform from its current
+positive form to a negative one, i.e., it will no longer explicitly
+specify every check to perform but rather a mask of checks not to
+perform.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 231bb267644ee3a9ebfd9c7f42d5d41610194b45)
+
+Conflicts:
+	block/qcow2-cluster.c
+
+There is no expand_zero_clusters_in_l1() downstream, just as there is no
+qcow2_process_discards().
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-cache.c    |  8 +++-----
+ block/qcow2-cluster.c  |  9 ++++-----
+ block/qcow2-refcount.c | 22 ++++++++++------------
+ block/qcow2-snapshot.c | 12 +++++-------
+ block/qcow2.c          |  5 ++---
+ block/qcow2.h          |  4 ++--
+ 6 files changed, 26 insertions(+), 34 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-cache.c    |    8 +++-----
+ block/qcow2-cluster.c  |    9 ++++-----
+ block/qcow2-refcount.c |   22 ++++++++++------------
+ block/qcow2-snapshot.c |   12 +++++-------
+ block/qcow2.c          |    5 ++---
+ block/qcow2.h          |    4 ++--
+ 6 files changed, 26 insertions(+), 34 deletions(-)
+
+diff --git a/block/qcow2-cache.c b/block/qcow2-cache.c
+index 1e34387..4a0bf00 100644
+--- a/block/qcow2-cache.c
++++ b/block/qcow2-cache.c
+@@ -114,15 +114,13 @@ static int qcow2_cache_entry_flush(BlockDriverState *bs, Qcow2Cache *c, int i)
+     }
+ 
+     if (c == s->refcount_block_cache) {
+-        ret = qcow2_pre_write_overlap_check(bs,
+-                QCOW2_OL_DEFAULT & ~QCOW2_OL_REFCOUNT_BLOCK,
++        ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_REFCOUNT_BLOCK,
+                 c->entries[i].offset, s->cluster_size);
+     } else if (c == s->l2_table_cache) {
+-        ret = qcow2_pre_write_overlap_check(bs,
+-                QCOW2_OL_DEFAULT & ~QCOW2_OL_ACTIVE_L2,
++        ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_ACTIVE_L2,
+                 c->entries[i].offset, s->cluster_size);
+     } else {
+-        ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_DEFAULT,
++        ret = qcow2_pre_write_overlap_check(bs, 0,
+                 c->entries[i].offset, s->cluster_size);
+     }
+ 
+diff --git a/block/qcow2-cluster.c b/block/qcow2-cluster.c
+index 391c132..deffd6d 100644
+--- a/block/qcow2-cluster.c
++++ b/block/qcow2-cluster.c
+@@ -75,8 +75,8 @@ int qcow2_grow_l1_table(BlockDriverState *bs, uint64_t min_size)
+ 
+     /* the L1 position has not yet been updated, so these clusters must
+      * indeed be completely free */
+-    ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_DEFAULT,
+-                                        new_l1_table_offset, new_l1_size2);
++    ret = qcow2_pre_write_overlap_check(bs, 0, new_l1_table_offset,
++                                        new_l1_size2);
+     if (ret < 0) {
+         goto fail;
+     }
+@@ -150,8 +150,7 @@ int qcow2_write_l1_entry(BlockDriverState *bs, int l1_index)
+         buf[i] = cpu_to_be64(s->l1_table[l1_start_index + i]);
+     }
+ 
+-    ret = qcow2_pre_write_overlap_check(bs,
+-            QCOW2_OL_DEFAULT & ~QCOW2_OL_ACTIVE_L1,
++    ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_ACTIVE_L1,
+             s->l1_table_offset + 8 * l1_start_index, sizeof(buf));
+     if (ret < 0) {
+         return ret;
+@@ -390,7 +389,7 @@ static int copy_sectors(BlockDriverState *bs, uint64_t start_sect,
+                         &s->aes_encrypt_key);
+     }
+ 
+-    ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_DEFAULT,
++    ret = qcow2_pre_write_overlap_check(bs, 0,
+             cluster_offset + n_start * BDRV_SECTOR_SIZE, n * BDRV_SECTOR_SIZE);
+     if (ret < 0) {
+         return ret;
+diff --git a/block/qcow2-refcount.c b/block/qcow2-refcount.c
+index 67a8c9b..a770e67 100644
+--- a/block/qcow2-refcount.c
++++ b/block/qcow2-refcount.c
+@@ -1148,9 +1148,8 @@ static int check_oflag_copied(BlockDriverState *bs, BdrvCheckResult *res,
+         }
+ 
+         if (l2_dirty) {
+-            ret = qcow2_pre_write_overlap_check(bs,
+-                    QCOW2_OL_DEFAULT & ~QCOW2_OL_ACTIVE_L2, l2_offset,
+-                    s->cluster_size);
++            ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_ACTIVE_L2,
++                                                l2_offset, s->cluster_size);
+             if (ret < 0) {
+                 fprintf(stderr, "ERROR: Could not write L2 table; metadata "
+                         "overlap check failed: %s\n", strerror(-ret));
+@@ -1191,8 +1190,7 @@ static int write_reftable_entry(BlockDriverState *bs, int rt_index)
+         buf[i] = cpu_to_be64(s->refcount_table[rt_start_index + i]);
+     }
+ 
+-    ret = qcow2_pre_write_overlap_check(bs,
+-            QCOW2_OL_DEFAULT & ~QCOW2_OL_REFCOUNT_TABLE,
++    ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_REFCOUNT_TABLE,
+             s->refcount_table_offset + rt_start_index * sizeof(uint64_t),
+             sizeof(buf));
+     if (ret < 0) {
+@@ -1243,8 +1241,7 @@ static int64_t realloc_refcount_block(BlockDriverState *bs, int reftable_index,
+ 
+     /* new block has not yet been entered into refcount table, therefore it is
+      * no refcount block yet (regarding this check) */
+-    ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_DEFAULT, new_offset,
+-            s->cluster_size);
++    ret = qcow2_pre_write_overlap_check(bs, 0, new_offset, s->cluster_size);
+     if (ret < 0) {
+         fprintf(stderr, "Could not write refcount block; metadata overlap "
+                 "check failed: %s\n", strerror(-ret));
+@@ -1476,8 +1473,8 @@ fail:
+  * looking for overlaps with important metadata sections (L1/L2 tables etc.),
+  * i.e. a sanity check without relying on the refcount tables.
+  *
+- * The chk parameter specifies exactly what checks to perform (being a bitmask
+- * of QCow2MetadataOverlap values).
++ * The ign parameter specifies what checks not to perform (being a bitmask of
++ * QCow2MetadataOverlap values), i.e., what sections to ignore.
+  *
+  * Returns:
+  * - 0 if writing to this offset will not affect the mentioned metadata
+@@ -1485,10 +1482,11 @@ fail:
+  * - a negative value (-errno) indicating an error while performing a check,
+  *   e.g. when bdrv_read failed on QCOW2_OL_INACTIVE_L2
+  */
+-int qcow2_check_metadata_overlap(BlockDriverState *bs, int chk, int64_t offset,
++int qcow2_check_metadata_overlap(BlockDriverState *bs, int ign, int64_t offset,
+                                  int64_t size)
+ {
+     BDRVQcowState *s = bs->opaque;
++    int chk = QCOW2_OL_DEFAULT & ~ign;
+     int i, j;
+ 
+     if (!size) {
+@@ -1604,10 +1602,10 @@ static const char *metadata_ol_names[] = {
+  * Returns 0 if there were neither overlaps nor errors while checking for
+  * overlaps; or a negative value (-errno) on error.
+  */
+-int qcow2_pre_write_overlap_check(BlockDriverState *bs, int chk, int64_t offset,
++int qcow2_pre_write_overlap_check(BlockDriverState *bs, int ign, int64_t offset,
+                                   int64_t size)
+ {
+-    int ret = qcow2_check_metadata_overlap(bs, chk, offset, size);
++    int ret = qcow2_check_metadata_overlap(bs, ign, offset, size);
+ 
+     if (ret < 0) {
+         return ret;
+diff --git a/block/qcow2-snapshot.c b/block/qcow2-snapshot.c
+index 821a534..201e07a 100644
+--- a/block/qcow2-snapshot.c
++++ b/block/qcow2-snapshot.c
+@@ -158,8 +158,7 @@ static int qcow2_write_snapshots(BlockDriverState *bs)
+ 
+     /* The snapshot list position has not yet been updated, so these clusters
+      * must indeed be completely free */
+-    ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_DEFAULT, offset,
+-                                        snapshots_size);
++    ret = qcow2_pre_write_overlap_check(bs, 0, offset, snapshots_size);
+     if (ret < 0) {
+         return ret;
+     }
+@@ -326,8 +325,8 @@ int qcow2_snapshot_create(BlockDriverState *bs, QEMUSnapshotInfo *sn_info)
+         l1_table[i] = cpu_to_be64(s->l1_table[i]);
+     }
+ 
+-    ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_DEFAULT,
+-            sn->l1_table_offset, s->l1_size * sizeof(uint64_t));
++    ret = qcow2_pre_write_overlap_check(bs, 0, sn->l1_table_offset,
++                                        s->l1_size * sizeof(uint64_t));
+     if (ret < 0) {
+         goto fail;
+     }
+@@ -439,9 +438,8 @@ int qcow2_snapshot_goto(BlockDriverState *bs, const char *snapshot_id)
+         goto fail;
+     }
+ 
+-    ret = qcow2_pre_write_overlap_check(bs,
+-            QCOW2_OL_DEFAULT & ~QCOW2_OL_ACTIVE_L1,
+-            s->l1_table_offset, cur_l1_bytes);
++    ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_ACTIVE_L1,
++                                        s->l1_table_offset, cur_l1_bytes);
+     if (ret < 0) {
+         goto fail;
+     }
+diff --git a/block/qcow2.c b/block/qcow2.c
+index 1d922b0..550459e 100644
+--- a/block/qcow2.c
++++ b/block/qcow2.c
+@@ -731,7 +731,7 @@ static int qcow2_co_writev(BlockDriverState *bs,
+                 cur_nr_sectors * 512);
+         }
+ 
+-        ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_DEFAULT,
++        ret = qcow2_pre_write_overlap_check(bs, 0,
+                 cluster_offset + index_in_cluster * BDRV_SECTOR_SIZE,
+                 cur_nr_sectors * BDRV_SECTOR_SIZE);
+         if (ret < 0) {
+@@ -1338,8 +1338,7 @@ static int qcow2_write_compressed(BlockDriverState *bs, int64_t sector_num,
+         }
+         cluster_offset &= s->cluster_offset_mask;
+ 
+-        ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_DEFAULT,
+-                cluster_offset, out_len);
++        ret = qcow2_pre_write_overlap_check(bs, 0, cluster_offset, out_len);
+         if (ret < 0) {
+             goto fail;
+         }
+diff --git a/block/qcow2.h b/block/qcow2.h
+index 9e2ffa9..651cbf7 100644
+--- a/block/qcow2.h
++++ b/block/qcow2.h
+@@ -309,9 +309,9 @@ int qcow2_update_snapshot_refcount(BlockDriverState *bs,
+ int qcow2_check_refcounts(BlockDriverState *bs, BdrvCheckResult *res,
+                           BdrvCheckMode fix);
+ 
+-int qcow2_check_metadata_overlap(BlockDriverState *bs, int chk, int64_t offset,
++int qcow2_check_metadata_overlap(BlockDriverState *bs, int ign, int64_t offset,
+                                  int64_t size);
+-int qcow2_pre_write_overlap_check(BlockDriverState *bs, int chk, int64_t offset,
++int qcow2_pre_write_overlap_check(BlockDriverState *bs, int ign, int64_t offset,
+                                   int64_t size);
+ 
+ /* qcow2-cluster.c functions */
+-- 
+1.7.1
+

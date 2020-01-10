@@ -1,0 +1,107 @@
+From 5c83359264106e1563eecdb2539d90d758f0b190 Mon Sep 17 00:00:00 2001
+Message-Id: <5c83359264106e1563eecdb2539d90d758f0b190.1375955382.git.minovotn@redhat.com>
+In-Reply-To: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+References: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Tue, 6 Aug 2013 16:31:40 +0200
+Subject: [PATCH 32/35] char: io_channel_send: don't lose written bytes
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1375806701-27520-2-git-send-email-lersek@redhat.com>
+Patchwork-id: 53002
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 1/2] char: io_channel_send: don't lose written bytes
+Bugzilla: 985334
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+The g_io_channel_write_chars() documentation states,
+
+  bytes_written: The number of bytes written. This can be nonzero even if
+                 the return value is not G_IO_STATUS_NORMAL. [...]
+
+io_channel_send() could lose such bytes before.
+
+Furthermore, the (status == G_IO_STATUS_EOF) condition used to evaluate to
+constant false whenever it was reached. When that condition actually held,
+it always led to -1 / EINVAL. This patch (almost) distinguishes
+G_IO_STATUS_EOF only when no bytes have been written, and then treats it
+as an error.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Amit Shah <amit.shah@redhat.com>
+Reviewed-by: Anthony Liguori <aliguori@us.ibm.com>
+Message-id: 1373998781-29561-2-git-send-email-lersek@redhat.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit ac8c26f633b01bb32cdf347f9dbd5a80c6712925)
+---
+ qemu-char.c |   41 +++++++++++++++++++----------------------
+ 1 files changed, 19 insertions(+), 22 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 41 +++++++++++++++++++----------------------
+ 1 file changed, 19 insertions(+), 22 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 7459f15..3d2037c 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -717,35 +717,32 @@ static GIOChannel *io_channel_from_socket(int fd)
+ 
+ static int io_channel_send(GIOChannel *fd, const void *buf, size_t len)
+ {
+-    GIOStatus status;
+-    size_t offset;
++    size_t offset = 0;
++    GIOStatus status = G_IO_STATUS_NORMAL;
+ 
+-    offset = 0;
+-    while (offset < len) {
+-        gsize bytes_written;
++    while (offset < len && status == G_IO_STATUS_NORMAL) {
++        gsize bytes_written = 0;
+ 
+         status = g_io_channel_write_chars(fd, buf + offset, len - offset,
+                                           &bytes_written, NULL);
+-        if (status != G_IO_STATUS_NORMAL) {
+-            if (status == G_IO_STATUS_AGAIN) {
+-                /* If we've written any data, return a partial write. */
+-                if (offset) {
+-                    break;
+-                }
+-                errno = EAGAIN;
+-            } else {
+-                errno = EINVAL;
+-            }
+-
+-            return -1;
+-        } else if (status == G_IO_STATUS_EOF) {
+-            break;
+-        }
+-
+         offset += bytes_written;
+     }
+ 
+-    return offset;
++    if (offset > 0) {
++        return offset;
++    }
++    switch (status) {
++    case G_IO_STATUS_NORMAL:
++        g_assert(len == 0);
++        return 0;
++    case G_IO_STATUS_AGAIN:
++        errno = EAGAIN;
++        return -1;
++    default:
++        break;
++    }
++    errno = EINVAL;
++    return -1;
+ }
+ 
+ typedef struct FDCharDriver {
+-- 
+1.7.11.7
+

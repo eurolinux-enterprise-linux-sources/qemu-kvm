@@ -1,0 +1,63 @@
+From 1100663fee522a48a50b721593f3953a2373eeda Mon Sep 17 00:00:00 2001
+Message-Id: <1100663fee522a48a50b721593f3953a2373eeda.1376495567.git.minovotn@redhat.com>
+In-Reply-To: <00d7e0e572c0fbe3521a2d1ffb6cc704e1abd2eb.1376495567.git.minovotn@redhat.com>
+References: <00d7e0e572c0fbe3521a2d1ffb6cc704e1abd2eb.1376495567.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Wed, 14 Aug 2013 08:52:49 +0200
+Subject: [PATCH 5/6] Build rbd block driver only for qemu-kvm-rhev
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1376470370-32441-6-git-send-email-kwolf@redhat.com>
+Patchwork-id: 53333
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 5/6] Build rbd block driver only for qemu-kvm-rhev
+Bugzilla: 988079
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Bugzilla: 988079
+Upstream status: n/a
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ Makefile.objs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ Makefile.objs     | 2 +-
+ Makefile.objs.rej | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile.objs b/Makefile.objs
+index 15364ea..3cdb9ce 100644
+--- a/Makefile.objs
++++ b/Makefile.objs
+@@ -32,7 +32,7 @@ block-nested-$(CONFIG_WIN32) += raw-win32.o
+ block-nested-$(CONFIG_POSIX) += raw-posix.o
+ block-nested-$(CONFIG_CURL) += curl.o
+ block-nested-$(CONFIG_GLUSTERFS) += gluster.o
+-block-nested-y += rbd.o
++block-nested-$(CONFIG_LIVE_SNAPSHOTS) += rbd.o
+ 
+ block-obj-y +=  $(addprefix block/, $(block-nested-y))
+ 
+diff --git a/Makefile.objs.rej b/Makefile.objs.rej
+index deb3269..ca6bd0a 100644
+--- a/Makefile.objs.rej
++++ b/Makefile.objs.rej
+@@ -4,8 +4,8 @@
+  block-nested-$(CONFIG_WIN32) += raw-win32.o
+  block-nested-$(CONFIG_POSIX) += raw-posix.o
+  block-nested-$(CONFIG_CURL) += curl.o
+--block-nested-$(CONFIG_RBD) += rbd.o
+-+block-nested-y += rbd.o
++-block-nested-y += rbd.o
+++block-nested-$(CONFIG_LIVE_SNAPSHOTS) += rbd.o
+  
+  block-obj-y +=  $(addprefix block/, $(block-nested-y))
+  
+-- 
+1.7.11.7
+

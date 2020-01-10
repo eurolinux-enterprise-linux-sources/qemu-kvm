@@ -1,0 +1,58 @@
+From 094980710228d302ccc649e10556f01231e010bb Mon Sep 17 00:00:00 2001
+Message-Id: <094980710228d302ccc649e10556f01231e010bb.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:21:55 -0500
+Subject: [CHANGE 12/42] block: Catch !bs->drv in bdrv_check()
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-13-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64475
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 12/39] block: Catch !bs->drv in bdrv_check()
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1129892
+
+qemu-img check calls bdrv_check() twice if the first run repaired some
+inconsistencies. If the first run however again triggered corruption
+prevention (on qcow2) due to very bad inconsistencies, bs->drv may be
+NULL afterwards. Thus, bdrv_check() should check whether bs->drv is set.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 908bcd540f489f7adf2d804347905b0025d808d3)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/block.c b/block.c
+index dcc6d26..1a77e3e 100644
+--- a/block.c
++++ b/block.c
+@@ -1494,6 +1494,9 @@ bool bdrv_dev_is_medium_locked(BlockDriverState *bs)
+  */
+ int bdrv_check(BlockDriverState *bs, BdrvCheckResult *res, BdrvCheckMode fix)
+ {
++    if (bs->drv == NULL) {
++        return -ENOMEDIUM;
++    }
+     if (bs->drv->bdrv_check == NULL) {
+         return -ENOTSUP;
+     }
+-- 
+2.1.0
+

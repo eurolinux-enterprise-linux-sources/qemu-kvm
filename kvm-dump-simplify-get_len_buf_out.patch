@@ -1,0 +1,104 @@
+From 7547dfe76872624bad8c8e18e33cd9edf8a2fe76 Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Tue, 17 Jun 2014 13:11:48 +0200
+Subject: [PATCH 08/44] dump: simplify get_len_buf_out()
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1403010708-7504-9-git-send-email-lersek@redhat.com>
+Patchwork-id: 59257
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 8/8] dump: simplify get_len_buf_out()
+Bugzilla: 1102659
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+We can (and should) rely on the fact that s->flag_compress is exactly one
+of DUMP_DH_COMPRESSED_ZLIB, DUMP_DH_COMPRESSED_LZO, and
+DUMP_DH_COMPRESSED_SNAPPY.
+
+This is ensured by the QMP schema and dump_init() in combination.
+
+Suggested-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit b87ef3518b2eeb9a57ee0d06d7e82a07ab5e4ffd)
+---
+ dump.c | 44 +++++++++++++++-----------------------------
+ 1 file changed, 15 insertions(+), 29 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ dump.c |   46 ++++++++++++++++------------------------------
+ 1 files changed, 16 insertions(+), 30 deletions(-)
+
+diff --git a/dump.c b/dump.c
+index 2167487..0b284ed 100644
+--- a/dump.c
++++ b/dump.c
+@@ -1220,35 +1220,24 @@ static void free_data_cache(DataCache *data_cache)
+ 
+ static size_t get_len_buf_out(size_t page_size, uint32_t flag_compress)
+ {
+-    size_t len_buf_out_zlib, len_buf_out_lzo, len_buf_out_snappy;
+-    size_t len_buf_out;
+-
+-    /* init buf_out */
+-    len_buf_out_zlib = len_buf_out_lzo = len_buf_out_snappy = 0;
+-
+-    /* buf size for zlib */
+-    len_buf_out_zlib = compressBound(page_size);
+-
+-    /* buf size for lzo */
+-#ifdef CONFIG_LZO
+-    /*
+-     * LZO will expand incompressible data by a little amount. please check the
+-     * following URL to see the expansion calculation:
+-     * http://www.oberhumer.com/opensource/lzo/lzofaq.php
+-     */
+-    len_buf_out_lzo = page_size + page_size / 16 + 64 + 3;
+-#endif
++    switch (flag_compress) {
++    case DUMP_DH_COMPRESSED_ZLIB:
++        return compressBound(page_size);
++
++    case DUMP_DH_COMPRESSED_LZO:
++        /*
++         * LZO will expand incompressible data by a little amount. Please check
++         * the following URL to see the expansion calculation:
++         * http://www.oberhumer.com/opensource/lzo/lzofaq.php
++         */
++        return page_size + page_size / 16 + 64 + 3;
+ 
+ #ifdef CONFIG_SNAPPY
+-    /* buf size for snappy */
+-    len_buf_out_snappy = snappy_max_compressed_length(page_size);
++    case DUMP_DH_COMPRESSED_SNAPPY:
++        return snappy_max_compressed_length(page_size);
+ #endif
+-
+-    /* get the biggest that can store all kinds of compressed page */
+-    len_buf_out = MAX(len_buf_out_zlib,
+-                      MAX(len_buf_out_lzo, len_buf_out_snappy));
+-
+-    return len_buf_out;
++    }
++    return 0;
+ }
+ 
+ /*
+@@ -1284,10 +1273,7 @@ static int write_dump_pages(DumpState *s)
+ 
+     /* prepare buffer to store compressed data */
+     len_buf_out = get_len_buf_out(TARGET_PAGE_SIZE, s->flag_compress);
+-    if (len_buf_out == 0) {
+-        dump_error(s, "dump: failed to get length of output buffer.\n");
+-        goto out;
+-    }
++    assert(len_buf_out != 0);
+ 
+ #ifdef CONFIG_LZO
+     wrkmem = g_malloc(LZO1X_1_MEM_COMPRESS);
+-- 
+1.7.1
+

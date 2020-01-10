@@ -1,0 +1,71 @@
+From 2c2bf0ff5c5476e19688872d59755aa66ca38007 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Tue, 3 Jun 2014 10:01:34 +0200
+Subject: [PATCH 15/26] qcow1: Stricter backing file length check
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1401789694-14289-7-git-send-email-kwolf@redhat.com>
+Patchwork-id: 59112
+O-Subject: [RHEL-6.6/6.5.z qemu-kvm PATCH 6/6] qcow1: Stricter backing file length check
+Bugzilla: 1097235
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1097235
+
+Like qcow2 since commit 6d33e8e7, error out on invalid lengths instead
+of silently truncating them to 1023.
+
+Also don't rely on bdrv_pread() catching integer overflows that make len
+negative, but use unsigned variables in the first place.
+
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Benoit Canet <benoit@irqsave.net>
+(cherry picked from commit d66e5cee002c471b78139228a4e7012736b375f9)
+
+Conflicts:
+	tests/qemu-iotests/092
+	tests/qemu-iotests/092.out
+
+Replaced error_setg() by qerror_report() for RHEL 6.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/qcow.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block/qcow.c |    7 +++++--
+ 1 files changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/block/qcow.c b/block/qcow.c
+index e6ba2c9..c52de71 100644
+--- a/block/qcow.c
++++ b/block/qcow.c
+@@ -94,7 +94,8 @@ static int qcow_probe(const uint8_t *buf, int buf_size, const char *filename)
+ static int qcow_open(BlockDriverState *bs, int flags)
+ {
+     BDRVQcowState *s = bs->opaque;
+-    int len, i, shift, ret;
++    unsigned int len, i, shift;
++    int ret;
+     QCowHeader header;
+ 
+     ret = bdrv_pread(bs->file, 0, &header, sizeof(header));
+@@ -199,7 +200,9 @@ static int qcow_open(BlockDriverState *bs, int flags)
+     if (header.backing_file_offset != 0) {
+         len = header.backing_file_size;
+         if (len > 1023) {
+-            len = 1023;
++            qerror_report(QERR_GENERIC_ERROR, "Backing file name too long");
++            ret = -EINVAL;
++            goto fail;
+         }
+         ret = bdrv_pread(bs->file, header.backing_file_offset,
+                    bs->backing_file, len);
+-- 
+1.7.1
+

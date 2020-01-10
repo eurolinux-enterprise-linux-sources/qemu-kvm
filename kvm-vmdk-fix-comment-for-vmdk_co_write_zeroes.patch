@@ -1,0 +1,60 @@
+From f0474e57abf884b69c3682cd37daaca892347bda Mon Sep 17 00:00:00 2001
+Message-Id: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Thu, 8 Aug 2013 06:09:31 +0200
+Subject: [PATCH 01/13] vmdk: fix comment for vmdk_co_write_zeroes
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1375942181-5262-2-git-send-email-famz@redhat.com>
+Patchwork-id: 53067
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 01/11] vmdk: fix comment for vmdk_co_write_zeroes
+Bugzilla: 994804
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+The comment was truncated. Add the missing parts, especially explain why
+we need zero_dry_run.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Michael Tokarev <mjt@tls.msk.ru>
+(cherry picked from commit 8e50724313895a87057cc243ad805f2eb21feb9f)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index fa1fb0a..361836a 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -1166,8 +1166,10 @@ static coroutine_fn int vmdk_co_read(BlockDriverState *bs, int64_t sector_num,
+ /**
+  * vmdk_write:
+  * @zeroed:       buf is ignored (data is zero), use zeroed_grain GTE feature
+- * if possible, otherwise return -ENOTSUP.
+- * @zero_dry_run: used for zeroed == true only, don't update L2 table, just
++ *                if possible, otherwise return -ENOTSUP.
++ * @zero_dry_run: used for zeroed == true only, don't update L2 table, just try
++ *                with each cluster. By dry run we can find if the zero write
++ *                is possible without modifying image data.
+  *
+  * Returns: error code with 0 for success.
+  */
+@@ -1294,6 +1296,8 @@ static int coroutine_fn vmdk_co_write_zeroes(BlockDriverState *bs,
+     int ret;
+     BDRVVmdkState *s = bs->opaque;
+     qemu_co_mutex_lock(&s->lock);
++    /* write zeroes could fail if sectors not aligned to cluster, test it with
++     * dry_run == true before really updating image */
+     ret = vmdk_write(bs, sector_num, NULL, nb_sectors, true, true);
+     if (!ret) {
+         ret = vmdk_write(bs, sector_num, NULL, nb_sectors, true, false);
+-- 
+1.7.11.7
+

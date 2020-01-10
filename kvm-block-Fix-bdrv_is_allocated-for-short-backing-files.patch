@@ -1,0 +1,119 @@
+From 3298345cd406450194d46bd4cd6c505c0f8b5712 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Tue, 3 Jun 2014 10:27:07 +0200
+Subject: [PATCH 2/9] block: Fix bdrv_is_allocated() for short backing files
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1401791227-26801-1-git-send-email-kwolf@redhat.com>
+Patchwork-id: 59113
+O-Subject: [RHEL-6.6 qemu-kvm PATCH] block: Fix bdrv_is_allocated() for short backing files
+Bugzilla: 1092117
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7529975
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1092117
+
+bdrv_is_allocated() shouldn't return true for sectors that are
+unallocated, but after the end of a short backing file, even though
+such sectors are (correctly) marked as containing zeros.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Max Reitz <mreitz@redhat.com>
+(cherry picked from commit e88ae2264d93f98e4b656fa76555c745abe57684)
+
+Conflicts:
+	block.c
+	block.h
+
+Conflicts because some bdrv_co_get_block_status() patches are missing in
+RHEL 6:
+
+* 92bc50a5 block/get_block_status: avoid redundant callouts on raw
+           devices
+* c3d86884 block/get_block_status: fix BDRV_BLOCK_ZERO for unallocated
+           blocks
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+git-backport-diff output:
+
+Key:
+[----] : patches are identical
+[####] : number of functional differences between upstream/downstream patch
+[down] : patch is downstream-only
+The flags [FC] indicate (F)unctional and (C)ontextual differences, respectively
+
+001/1:[0008] [FC] 'block: Fix bdrv_is_allocated() for short backing files'
+---
+ block.c | 10 ++++++----
+ block.h |  3 +++
+ 2 files changed, 9 insertions(+), 4 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ block.c |   10 ++++++----
+ block.h |    3 +++
+ 2 files changed, 9 insertions(+), 4 deletions(-)
+
+diff --git a/block.c b/block.c
+index abae182..be28eec 100644
+--- a/block.c
++++ b/block.c
+@@ -2790,7 +2790,7 @@ static int64_t coroutine_fn bdrv_co_get_block_status(BlockDriverState *bs,
+ 
+     if (!bs->drv->bdrv_co_get_block_status) {
+         *pnum = nb_sectors;
+-        ret = BDRV_BLOCK_DATA;
++        ret = BDRV_BLOCK_DATA | BDRV_BLOCK_ALLOCATED;
+         if (bs->drv->protocol_name) {
+             ret |= BDRV_BLOCK_OFFSET_VALID | (sector_num * BDRV_SECTOR_SIZE);
+         }
+@@ -2803,6 +2803,10 @@ static int64_t coroutine_fn bdrv_co_get_block_status(BlockDriverState *bs,
+         return ret;
+     }
+ 
++    if (ret & (BDRV_BLOCK_DATA | BDRV_BLOCK_ZERO)) {
++        ret |= BDRV_BLOCK_ALLOCATED;
++    }
++
+     if (!(ret & BDRV_BLOCK_DATA)) {
+         if (bdrv_has_zero_init(bs)) {
+             ret |= BDRV_BLOCK_ZERO;
+@@ -2865,9 +2869,7 @@ int coroutine_fn bdrv_is_allocated(BlockDriverState *bs, int64_t sector_num,
+     if (ret < 0) {
+         return ret;
+     }
+-    return
+-        (ret & BDRV_BLOCK_DATA) ||
+-        ((ret & BDRV_BLOCK_ZERO) && !bdrv_has_zero_init(bs));
++    return (ret & BDRV_BLOCK_ALLOCATED);
+ }
+ 
+ /*
+diff --git a/block.h b/block.h
+index a93425a..84ad858 100644
+--- a/block.h
++++ b/block.h
+@@ -91,6 +91,8 @@ typedef struct BlockDevOps {
+ /* BDRV_BLOCK_DATA: data is read from bs->file or another file
+  * BDRV_BLOCK_ZERO: sectors read as zero
+  * BDRV_BLOCK_OFFSET_VALID: sector stored in bs->file as raw data
++ * BDRV_BLOCK_ALLOCATED: the content of the block is determined by this
++ *                       layer (as opposed to the backing file)
+  *
+  * If BDRV_BLOCK_OFFSET_VALID is set, bits 9-62 represent the offset in
+  * bs->file where sector data can be read from as raw data.
+@@ -112,6 +114,7 @@ typedef struct BlockDevOps {
+ #define BDRV_BLOCK_DATA         1
+ #define BDRV_BLOCK_ZERO         2
+ #define BDRV_BLOCK_OFFSET_VALID 4
++#define BDRV_BLOCK_ALLOCATED    0x10
+ #define BDRV_BLOCK_OFFSET_MASK  BDRV_SECTOR_MASK
+ 
+ typedef enum {
+-- 
+1.7.1
+

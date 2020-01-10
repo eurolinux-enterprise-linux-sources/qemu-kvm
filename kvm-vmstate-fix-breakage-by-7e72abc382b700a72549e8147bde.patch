@@ -1,0 +1,52 @@
+From 7c0f9e44c3f16407526720a808d04157358fface Mon Sep 17 00:00:00 2001
+Message-Id: <7c0f9e44c3f16407526720a808d04157358fface.1480669977.git.ymankad@redhat.com>
+From: =?UTF-8?q?Marc-Andr=C3=A9=20Lureau?= <marcandre.lureau@redhat.com>
+Date: Wed, 16 Nov 2016 20:33:17 +0530
+Subject: [CHANGE] vmstate: fix breakage by
+ 7e72abc382b700a72549e8147bdea413534eeedc
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+To: rhvirt-patches@redhat.com,
+    ymankad@redhat.com
+
+RH-Author: Marc-André Lureau <marcandre.lureau@redhat.com>
+Message-id: <20161116143317.30368-2-marcandre.lureau@redhat.com>
+Patchwork-id: 72856
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 1/1] vmstate: fix breakage by 7e72abc382b700a72549e8147bdea413534eeedc
+Bugzilla: 1294941
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Laurent Vivier <lvivier@redhat.com>
+
+From: TeLeMan <geleman@gmail.com>
+
+cirrus_post_load() will be executed twice when loading vm states and then the
+wrong physical memory will be registered. This issue may lead to crash qemu.
+
+Signed-off-by: TeLeMan <geleman@gmail.com>
+Acked-by: Juan Quintela <quintela@redhat.com>
+Signed-off-by: Blue Swirl <blauwirbel@gmail.com>
+
+(cherry picked from commit ae6b2c4ed956c17456e70efefe13ad0ab7db31de)
+Signed-off-by: Marc-André Lureau <marcandre.lureau@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ hw/cirrus_vga.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/hw/cirrus_vga.c b/hw/cirrus_vga.c
+index 7876531..e6e2e60 100644
+--- a/hw/cirrus_vga.c
++++ b/hw/cirrus_vga.c
+@@ -3029,7 +3029,6 @@ static const VMStateDescription vmstate_pci_cirrus_vga = {
+     .version_id = 2,
+     .minimum_version_id = 2,
+     .minimum_version_id_old = 2,
+-    .post_load = cirrus_post_load,
+     .fields      = (VMStateField []) {
+         VMSTATE_PCI_DEVICE(dev, PCICirrusVGAState),
+         VMSTATE_STRUCT(cirrus_vga, PCICirrusVGAState, 0,
+-- 
+2.7.4
+

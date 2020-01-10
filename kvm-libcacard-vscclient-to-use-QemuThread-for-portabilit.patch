@@ -1,0 +1,67 @@
+From 005577b5c5dc61a0c1cd13671a4d06db79da79f7 Mon Sep 17 00:00:00 2001
+Message-Id: <005577b5c5dc61a0c1cd13671a4d06db79da79f7.1375955382.git.minovotn@redhat.com>
+In-Reply-To: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+References: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+From: Alon Levy <alevy@redhat.com>
+Date: Thu, 1 Aug 2013 11:53:28 +0200
+Subject: [PATCH 09/35] libcacard: vscclient to use QemuThread for portability
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Alon Levy <alevy@redhat.com>
+Message-id: <1375358029-12968-10-git-send-email-alevy@redhat.com>
+Patchwork-id: 52899
+O-Subject: [RHEL-6.5 RHEL-6.4.z qemu-kvm v6 09/30] libcacard: vscclient to use QemuThread for portability
+Bugzilla: 917860
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+From: Marc-André Lureau <marcandre.lureau@redhat.com>
+
+Signed-off-by: Marc-André Lureau <marcandre.lureau@redhat.com>
+Reviewed-by: Alon Levy <alevy@redhat.com>
+(cherry picked from commit 930c8ad472ec00d40cfbf1e9b1395946bf0dd392)
+changes: downstream we do not have cf218714, which added
+    the 4th (mode) argument to qemu_thread_create() for joinable
+    thread support.
+---
+ libcacard/vscclient.c | 9 ++-------
+ 1 file changed, 2 insertions(+), 7 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ libcacard/vscclient.c | 9 ++-------
+ 1 file changed, 2 insertions(+), 7 deletions(-)
+
+diff --git a/libcacard/vscclient.c b/libcacard/vscclient.c
+index 8733943..37b011b 100644
+--- a/libcacard/vscclient.c
++++ b/libcacard/vscclient.c
+@@ -218,8 +218,7 @@ on_host_init(VSCMsgHeader *mhHeader, VSCMsgInit *incoming)
+     int num_capabilities =
+         1 + ((mhHeader->length - sizeof(VSCMsgInit)) / sizeof(uint32_t));
+     int i;
+-    int rv;
+-    pthread_t thread_id;
++    QemuThread thread_id;
+ 
+     incoming->version = ntohl(incoming->version);
+     if (incoming->version != VSCARD_VERSION) {
+@@ -242,11 +241,7 @@ on_host_init(VSCMsgHeader *mhHeader, VSCMsgInit *incoming)
+     send_msg(VSC_ReaderRemove, VSCARD_MINIMAL_READER_ID, NULL, 0);
+     /* launch the event_thread. This will trigger reader adds for all the
+      * existing readers */
+-    rv = pthread_create(&thread_id, NULL, event_thread, NULL);
+-    if (rv < 0) {
+-        perror("pthread_create");
+-        return rv;
+-    }
++    qemu_thread_create(&thread_id, event_thread, NULL);
+     return 0;
+ }
+ 
+-- 
+1.7.11.7
+

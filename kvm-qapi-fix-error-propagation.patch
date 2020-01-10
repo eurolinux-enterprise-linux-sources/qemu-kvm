@@ -1,0 +1,351 @@
+From 9f92807cbdb5a66301c3a10d406ccd14ad1f551d Mon Sep 17 00:00:00 2001
+From: Miroslav Rezanina <mrezanin@redhat.com>
+Date: Thu, 18 Jul 2013 09:10:20 +0200
+Subject: [PATCH 21/21] qapi: fix error propagation
+
+Message-id: <1373565275-8756-5-git-send-email-lcapitulino@redhat.com>
+Patchwork-id: 52446
+O-Subject: [RHEL6.5 qemu-kvm PATCH 4/4] qapi: fix error propagation
+Bugzilla: 983635
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Don't overwrite / leak previously set errors.
+Make traversal cope with missing mandatory sub-structs.
+Don't try to end a container that could not be started.
+
+v1->v2:
+- unchanged
+
+v2->v3:
+- instead of examining, assert that we never overwrite errors with
+  error_set()
+- allow visitors to set a NULL struct pointer successfully, so traversal
+  of incomplete objects can continue
+- check for a NULL "obj" before accessing "(*obj)->has_XXX" (this is not a
+  typo, "obj != NULL" implies "*obj != NULL" here)
+- fix start_struct / end_struct balance for unions as well
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+(cherry picked from commit d195325b05199038b5907fa791729425b9720d21)
+
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+Conflicts:
+        tests/test-qmp-input-visitor.c
+
+[RHEL6 NOTE: test-qmp-input-visitor.c doesn't exist in RHEL6]
+---
+ docs/qapi-code-gen.txt |    2 +
+ error.c                |    3 +-
+ error.h                |    2 +-
+ qapi/qapi-visit-core.c |   10 +--
+ scripts/qapi-visit.py  |  150 ++++++++++++++++++++++++++++++-----------------
+ 5 files changed, 105 insertions(+), 62 deletions(-)
+
+diff --git a/docs/qapi-code-gen.txt b/docs/qapi-code-gen.txt
+index dccf598..a9724a9 100644
+--- a/docs/qapi-code-gen.txt
++++ b/docs/qapi-code-gen.txt
+@@ -220,6 +220,8 @@ Example:
+     #endif
+     mdroth@illuin:~/w/qemu2.git$
+ 
++(The actual structure of the visit_type_* functions is a bit more complex
++in order to propagate errors correctly and avoid leaking memory).
+ 
+ === scripts/qapi-commands.py ===
+ 
+diff --git a/error.c b/error.c
+index 50b1290..b77760e 100644
+--- a/error.c
++++ b/error.c
+@@ -31,6 +31,7 @@ void error_set(Error **errp, const char *fmt, ...)
+     if (errp == NULL) {
+         return;
+     }
++    assert(*errp == NULL);
+ 
+     err = qemu_mallocz(sizeof(*err));
+ 
+@@ -156,7 +157,7 @@ bool error_is_type(Error *err, const char *fmt)
+ 
+ void error_propagate(Error **dst_err, Error *local_err)
+ {
+-    if (dst_err) {
++    if (dst_err && !*dst_err) {
+         *dst_err = local_err;
+     } else if (local_err) {
+         error_free(local_err);
+diff --git a/error.h b/error.h
+index 1f736c9..29fe535 100644
+--- a/error.h
++++ b/error.h
+@@ -61,7 +61,7 @@ void error_set_field(Error *err, const char *field, const char *value);
+ /**
+  * Propagate an error to an indirect pointer to an error.  This function will
+  * always transfer ownership of the error reference and handles the case where
+- * dst_err is NULL correctly.
++ * dst_err is NULL correctly.  Errors after the first are discarded.
+  */
+ void error_propagate(Error **dst_err, Error *local_err);
+ 
+diff --git a/qapi/qapi-visit-core.c b/qapi/qapi-visit-core.c
+index ddef3ed..9b732ca 100644
+--- a/qapi/qapi-visit-core.c
++++ b/qapi/qapi-visit-core.c
+@@ -38,9 +38,8 @@ void visit_start_struct(Visitor *v, void **obj, const char *kind,
+ 
+ void visit_end_struct(Visitor *v, Error **errp)
+ {
+-    if (!error_is_set(errp)) {
+-        v->end_struct(v, errp);
+-    }
++    assert(!error_is_set(errp));
++    v->end_struct(v, errp);
+ }
+ 
+ void visit_start_list(Visitor *v, const char *name, Error **errp)
+@@ -61,9 +60,8 @@ GenericList *visit_next_list(Visitor *v, GenericList **list, Error **errp)
+ 
+ void visit_end_list(Visitor *v, Error **errp)
+ {
+-    if (!error_is_set(errp)) {
+-        v->end_list(v, errp);
+-    }
++    assert(!error_is_set(errp));
++    v->end_list(v, errp);
+ }
+ 
+ void visit_start_optional(Visitor *v, bool *present, const char *name,
+diff --git a/scripts/qapi-visit.py b/scripts/qapi-visit.py
+index 8d4e94a..04ef7c4 100644
+--- a/scripts/qapi-visit.py
++++ b/scripts/qapi-visit.py
+@@ -17,32 +17,49 @@ import os
+ import getopt
+ import errno
+ 
+-def generate_visit_struct_body(field_prefix, members):
+-    ret = ""
++def generate_visit_struct_body(field_prefix, name, members):
++    ret = mcgen('''
++if (!error_is_set(errp)) {
++''')
++    push_indent()
++
+     if len(field_prefix):
+         field_prefix = field_prefix + "."
++        ret += mcgen('''
++Error **errp = &err; /* from outer scope */
++Error *err = NULL;
++visit_start_struct(m, NULL, "", "%(name)s", 0, &err);
++''',
++                name=name)
++    else:
++        ret += mcgen('''
++Error *err = NULL;
++visit_start_struct(m, (void **)obj, "%(name)s", name, sizeof(%(name)s), &err);
++''',
++                name=name)
++
++    ret += mcgen('''
++if (!err) {
++    if (!obj || *obj) {
++''')
++
++    push_indent()
++    push_indent()
+     for argname, argentry, optional, structured in parse_args(members):
+         if optional:
+             ret += mcgen('''
+-visit_start_optional(m, (obj && *obj) ? &(*obj)->%(c_prefix)shas_%(c_name)s : NULL, "%(name)s", errp);
+-if ((*obj)->%(prefix)shas_%(c_name)s) {
++visit_start_optional(m, obj ? &(*obj)->%(c_prefix)shas_%(c_name)s : NULL, "%(name)s", &err);
++if (obj && (*obj)->%(prefix)shas_%(c_name)s) {
+ ''',
+                          c_prefix=c_var(field_prefix), prefix=field_prefix,
+                          c_name=c_var(argname), name=argname)
+             push_indent()
+ 
+         if structured:
+-            ret += mcgen('''
+-visit_start_struct(m, NULL, "", "%(name)s", 0, errp);
+-''',
+-                         name=argname)
+-            ret += generate_visit_struct_body(field_prefix + argname, argentry)
+-            ret += mcgen('''
+-visit_end_struct(m, errp);
+-''')
++            ret += generate_visit_struct_body(field_prefix + argname, argname, argentry)
+         else:
+             ret += mcgen('''
+-visit_type_%(type)s(m, (obj && *obj) ? &(*obj)->%(c_prefix)s%(c_name)s : NULL, "%(name)s", errp);
++visit_type_%(type)s(m, obj ? &(*obj)->%(c_prefix)s%(c_name)s : NULL, "%(name)s", &err);
+ ''',
+                          c_prefix=c_var(field_prefix), prefix=field_prefix,
+                          type=type_name(argentry), c_name=c_var(argname),
+@@ -52,7 +69,25 @@ visit_type_%(type)s(m, (obj && *obj) ? &(*obj)->%(c_prefix)s%(c_name)s : NULL, "
+             pop_indent()
+             ret += mcgen('''
+ }
+-visit_end_optional(m, errp);
++visit_end_optional(m, &err);
++''')
++
++    pop_indent()
++    ret += mcgen('''
++
++    error_propagate(errp, err);
++    err = NULL;
++}
++''')
++
++    pop_indent()
++    pop_indent()
++    ret += mcgen('''
++        /* Always call end_struct if start_struct succeeded.  */
++        visit_end_struct(m, &err);
++    }
++    error_propagate(errp, err);
++}
+ ''')
+     return ret
+ 
+@@ -61,22 +96,14 @@ def generate_visit_struct(name, members):
+ 
+ void visit_type_%(name)s(Visitor *m, %(name)s ** obj, const char *name, Error **errp)
+ {
+-    if (error_is_set(errp)) {
+-        return;
+-    }
+-    visit_start_struct(m, (void **)obj, "%(name)s", name, sizeof(%(name)s), errp);
+-    if (obj && !*obj) {
+-        goto end;
+-    }
+ ''',
+                 name=name)
++
+     push_indent()
+-    ret += generate_visit_struct_body("", members)
++    ret += generate_visit_struct_body("", name, members)
+     pop_indent()
+ 
+     ret += mcgen('''
+-end:
+-    visit_end_struct(m, errp);
+ }
+ ''')
+     return ret
+@@ -87,18 +114,23 @@ def generate_visit_list(name, members):
+ void visit_type_%(name)sList(Visitor *m, %(name)sList ** obj, const char *name, Error **errp)
+ {
+     GenericList *i, **prev = (GenericList **)obj;
++    Error *err = NULL;
+ 
+-    if (error_is_set(errp)) {
+-        return;
+-    }
+-    visit_start_list(m, name, errp);
+-
+-    for (; (i = visit_next_list(m, prev, errp)) != NULL; prev = &i) {
+-        %(name)sList *native_i = (%(name)sList *)i;
+-        visit_type_%(name)s(m, &native_i->value, NULL, errp);
++    if (!error_is_set(errp)) {
++        visit_start_list(m, name, &err);
++        if (!err) {
++            for (; (i = visit_next_list(m, prev, &err)) != NULL; prev = &i) {
++                %(name)sList *native_i = (%(name)sList *)i;
++                visit_type_%(name)s(m, &native_i->value, NULL, &err);
++            }
++            error_propagate(errp, err);
++            err = NULL;
++
++            /* Always call end_list if start_list succeeded.  */
++            visit_end_list(m, &err);
++        }
++        error_propagate(errp, err);
+     }
+-
+-    visit_end_list(m, errp);
+ }
+ ''',
+                 name=name)
+@@ -122,27 +154,23 @@ void visit_type_%(name)s(Visitor *m, %(name)s ** obj, const char *name, Error **
+ {
+     Error *err = NULL;
+ 
+-    if (error_is_set(errp)) {
+-        return;
+-    }
+-    visit_start_struct(m, (void **)obj, "%(name)s", name, sizeof(%(name)s), &err);
+-    if (obj && !*obj) {
+-        goto end;
+-    }
+-    visit_type_%(name)sKind(m, &(*obj)->kind, "type", &err);
+-    if (err) {
+-        error_propagate(errp, err);
+-        goto end;
+-    }
+-    switch ((*obj)->kind) {
++    if (!error_is_set(errp)) {
++        visit_start_struct(m, (void **)obj, "%(name)s", name, sizeof(%(name)s), &err);
++        if (!err) {
++            if (!obj || *obj) {
++                visit_type_%(name)sKind(m, &(*obj)->kind, "type", &err);
++                if (!err) {
++                    switch ((*obj)->kind) {
+ ''',
+                  name=name)
+ 
++    push_indent()
++    push_indent()
+     for key in members:
+         ret += mcgen('''
+-    case %(abbrev)s_KIND_%(enum)s:
+-        visit_type_%(c_type)s(m, &(*obj)->%(c_name)s, "data", errp);
+-        break;
++            case %(abbrev)s_KIND_%(enum)s:
++                visit_type_%(c_type)s(m, &(*obj)->%(c_name)s, "data", &err);
++                break;
+ ''',
+                 abbrev = de_camel_case(name).upper(),
+                 enum = c_fun(de_camel_case(key)).upper(),
+@@ -150,11 +178,25 @@ void visit_type_%(name)s(Visitor *m, %(name)s ** obj, const char *name, Error **
+                 c_name=c_fun(key))
+ 
+     ret += mcgen('''
+-    default:
+-        abort();
++            default:
++                abort();
++            }
++        }
++        error_propagate(errp, err);
++        err = NULL;
++    }
++''')
++    pop_indent()
++    ret += mcgen('''
++        /* Always call end_struct if start_struct succeeded.  */
++        visit_end_struct(m, &err);
+     }
+-end:
+-    visit_end_struct(m, errp);
++    error_propagate(errp, err);
++}
++''')
++
++    pop_indent();
++    ret += mcgen('''
+ }
+ ''')
+ 
+-- 
+1.7.1
+

@@ -1,0 +1,146 @@
+From 56d485b2ddf90266776b6fcd7d06314c24b38b0e Mon Sep 17 00:00:00 2001
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Thu, 10 Jul 2014 23:24:31 +0200
+Subject: [PATCH 31/44] block: vhdx - improve error message, and .bdrv_check implementation
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <fd950f635c638edfa7be271d6315ff943bc52fa5.1405033137.git.jcody@redhat.com>
+Patchwork-id: 59767
+O-Subject: [RHEL6-6 qemu-kvm PATCH v2 22/24] block: vhdx - improve error message, and .bdrv_check implementation
+Bugzilla: 1063559
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+If there is a dirty log file to be replayed in a VHDX image, it is
+replayed in .vhdx_open().  However, if the file is opened read-only,
+then a somewhat cryptic error message results.
+
+This adds a more helpful error message for the user.  If an image file
+contains a log to be replayed, and is opened read-only, the user is
+instructed to run 'qemu-img check -r all' on the image file.
+
+Running qemu-img check -r all will cause the image file to be opened
+r/w, which will replay the log file.  If a log file replay is detected,
+this is flagged, and bdrv_check will increase the corruptions_fixed
+count for the image.
+
+[Fixed typo in error message that was pointed out by Eric Blake
+<eblake@redhat.com>.
+--Stefan]
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 7e30e6a6746b417c7e0dbc9af009560fbb63f336)
+
+RHEL6 Notes:
+
+    Differences from upstream due to lack of Error argument to
+    vhdx_open().  Instead of setting errp, vhdx_parse_log() will
+    print the error message via error_report, if there is a log
+    to replay and the image was opened r/o.
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ block/vhdx-log.c |  9 +++++++++
+ block/vhdx.c     | 22 ++++++++++++++++++++--
+ block/vhdx.h     |  2 ++
+ 3 files changed, 31 insertions(+), 2 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block/vhdx-log.c |    9 +++++++++
+ block/vhdx.c     |   22 ++++++++++++++++++++--
+ block/vhdx.h     |    2 ++
+ 3 files changed, 31 insertions(+), 2 deletions(-)
+
+diff --git a/block/vhdx-log.c b/block/vhdx-log.c
+index bd0d613..a9f8185 100644
+--- a/block/vhdx-log.c
++++ b/block/vhdx-log.c
+@@ -761,6 +761,15 @@ int vhdx_parse_log(BlockDriverState *bs, BDRVVHDXState *s, bool *flushed)
+     }
+ 
+     if (logs.valid) {
++        if (bs->read_only) {
++            ret = -EPERM;
++            error_report("VHDX image file '%s' opened read-only, but "
++                         "contains a log that needs to be replayed.  To "
++                         "replay the log, execute:\n qemu-img check -r "
++                         "all '%s'",
++                          bs->filename, bs->filename);
++            goto exit;
++        }
+         /* now flush the log */
+         ret = vhdx_log_flush(bs, s, &logs);
+         if (ret < 0) {
+diff --git a/block/vhdx.c b/block/vhdx.c
+index 256bbe8..3ff0db2 100644
+--- a/block/vhdx.c
++++ b/block/vhdx.c
+@@ -893,7 +893,6 @@ static int vhdx_open(BlockDriverState *bs, int flags)
+     int ret = 0;
+     uint32_t i;
+     uint64_t signature;
+-    bool log_flushed = false;
+ 
+ 
+     s->bat = NULL;
+@@ -922,7 +921,7 @@ static int vhdx_open(BlockDriverState *bs, int flags)
+         goto fail;
+     }
+ 
+-    ret = vhdx_parse_log(bs, s, &log_flushed);
++    ret = vhdx_parse_log(bs, s, &s->log_replayed_on_open);
+     if (ret < 0) {
+         goto fail;
+     }
+@@ -1861,6 +1860,24 @@ exit:
+     return ret;
+ }
+ 
++/* If opened r/w, the VHDX driver will automatically replay the log,
++ * if one is present, inside the vhdx_open() call.
++ *
++ * If qemu-img check -r all is called, the image is automatically opened
++ * r/w and any log has already been replayed, so there is nothing (currently)
++ * for us to do here
++ */
++static int vhdx_check(BlockDriverState *bs, BdrvCheckResult *result,
++                       BdrvCheckMode fix)
++{
++    BDRVVHDXState *s = bs->opaque;
++
++    if (s->log_replayed_on_open) {
++        result->corruptions_fixed++;
++    }
++    return 0;
++}
++
+ static QEMUOptionParameter vhdx_create_options[] = {
+     {
+         .name = BLOCK_OPT_SIZE,
+@@ -1905,6 +1922,7 @@ static BlockDriver bdrv_vhdx = {
+     .bdrv_co_writev         = vhdx_co_writev,
+     .bdrv_create            = vhdx_create,
+     .bdrv_get_info          = vhdx_get_info,
++    .bdrv_check             = vhdx_check,
+ 
+     .create_options         = vhdx_create_options,
+ };
+diff --git a/block/vhdx.h b/block/vhdx.h
+index 365eca0..c9a742f 100644
+--- a/block/vhdx.h
++++ b/block/vhdx.h
+@@ -394,6 +394,8 @@ typedef struct BDRVVHDXState {
+ 
+     Error *migration_blocker;
+ 
++    bool log_replayed_on_open;
++
+     QLIST_HEAD(VHDXRegionHead, VHDXRegionEntry) regions;
+ } BDRVVHDXState;
+ 
+-- 
+1.7.1
+

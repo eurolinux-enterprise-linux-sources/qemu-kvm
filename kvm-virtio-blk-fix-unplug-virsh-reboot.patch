@@ -1,0 +1,74 @@
+From 44d9306ede26ea2881e6c1f104b901be647022a8 Mon Sep 17 00:00:00 2001
+Message-Id: <44d9306ede26ea2881e6c1f104b901be647022a8.1369221838.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Thu, 9 May 2013 10:27:50 +0200
+Subject: [PATCH 1/8] virtio-blk: fix unplug + virsh reboot
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1368095270-21681-1-git-send-email-lersek@redhat.com>
+Patchwork-id: 51208
+O-Subject: [RHEL-6.5 qemu-kvm 869586 PATCH] virtio-blk: fix unplug + virsh reboot
+Bugzilla: 869586
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Don Dutile <ddutile@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=869586
+Brew:     https://brewweb.devel.redhat.com/taskinfo?taskID=5734841
+
+virtio-blk registers a vmstate change handler. Unfortunately this
+handler is not unregistered on unplug, leading to some random
+crashes if the system is restarted, e.g. via virsh reboot.
+Lets unregister the vmstate change handler if the device is removed.
+
+Signed-off-by: Christian Borntraeger <borntraeger@de.ibm.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 69b302b2044a9a0f6d157d25b39a91ff7124c61f)
+
+QE triggered this problem with a VirtLab testcase: repeated virtio-blk
+hotplug and hot-unplug, then VM state change via monitor.
+
+Tested by QE.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ hw/virtio-blk.c |    4 +++-
+ 1 files changed, 3 insertions(+), 1 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/virtio-blk.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/hw/virtio-blk.c b/hw/virtio-blk.c
+index 6f7a9dc..8731afc 100644
+--- a/hw/virtio-blk.c
++++ b/hw/virtio-blk.c
+@@ -34,6 +34,7 @@ typedef struct VirtIOBlock
+     VirtIOBlkConf *blk;
+     unsigned short sector_mask;
+     DeviceState *qdev;
++    VMChangeStateEntry *change;
+ #ifdef CONFIG_VIRTIO_BLK_DATA_PLANE
+     VirtIOBlockDataPlane *dataplane;
+ #endif
+@@ -677,7 +678,7 @@ VirtIODevice *virtio_blk_init(DeviceState *dev, VirtIOBlkConf *blk)
+     }
+ #endif
+ 
+-    qemu_add_vm_change_state_handler(virtio_blk_dma_restart_cb, s);
++    s->change = qemu_add_vm_change_state_handler(virtio_blk_dma_restart_cb, s);
+     s->qdev = dev;
+     register_savevm(dev, "virtio-blk", virtio_blk_id++, 2,
+                     virtio_blk_save, virtio_blk_load, s);
+@@ -703,6 +704,7 @@ void virtio_blk_exit(VirtIODevice *vdev)
+     virtio_blk_data_plane_destroy(s->dataplane);
+     s->dataplane = NULL;
+ #endif
++    qemu_del_vm_change_state_handler(s->change);
+     unregister_savevm(s->qdev, "virtio-blk", s);
+     virtio_cleanup(vdev);
+ }
+-- 
+1.7.11.7
+

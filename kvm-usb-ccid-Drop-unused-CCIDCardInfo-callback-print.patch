@@ -1,0 +1,83 @@
+From 499b9d583f1f03596fd28169a2951a9c2bfc9db9 Mon Sep 17 00:00:00 2001
+Message-Id: <499b9d583f1f03596fd28169a2951a9c2bfc9db9.1375955382.git.minovotn@redhat.com>
+In-Reply-To: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+References: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+From: Alon Levy <alevy@redhat.com>
+Date: Thu, 1 Aug 2013 11:53:39 +0200
+Subject: [PATCH 20/35] usb-ccid: Drop unused CCIDCardInfo callback print()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Alon Levy <alevy@redhat.com>
+Message-id: <1375358029-12968-21-git-send-email-alevy@redhat.com>
+Patchwork-id: 52910
+O-Subject: [RHEL-6.5 RHEL-6.4.z qemu-kvm v6 20/30] usb-ccid: Drop unused CCIDCardInfo callback print()
+Bugzilla: 917860
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+From: Markus Armbruster <armbru@redhat.com>
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 1cc2428ccec8759130c45033c8a44867e919485f)
+
+Conflicts:
+	hw/usb-ccid.c
+---
+ hw/ccid.h     |  1 -
+ hw/usb-ccid.c | 11 -----------
+ 2 files changed, 12 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/ccid.h     |  1 -
+ hw/usb-ccid.c | 11 -----------
+ 2 files changed, 12 deletions(-)
+
+diff --git a/hw/ccid.h b/hw/ccid.h
+index dbfc13c..d3e0371 100644
+--- a/hw/ccid.h
++++ b/hw/ccid.h
+@@ -29,7 +29,6 @@ struct CCIDCardState {
+  */
+ struct CCIDCardInfo {
+     DeviceInfo qdev;
+-    void (*print)(Monitor *mon, CCIDCardState *card, int indent);
+     const uint8_t *(*get_atr)(CCIDCardState *card, uint32_t *len);
+     void (*apdu_from_guest)(CCIDCardState *card,
+                             const uint8_t *apdu,
+diff --git a/hw/usb-ccid.c b/hw/usb-ccid.c
+index 340eceb..77d87bf 100644
+--- a/hw/usb-ccid.c
++++ b/hw/usb-ccid.c
+@@ -1162,16 +1162,6 @@ static Answer *ccid_peek_next_answer(USBCCIDState *s)
+         : &s->pending_answers[s->pending_answers_start % PENDING_ANSWERS_NUM];
+ }
+ 
+-static void ccid_bus_dev_print(Monitor *mon, DeviceState *qdev, int indent)
+-{
+-    CCIDCardState *card = DO_UPCAST(CCIDCardState, qdev, qdev);
+-    CCIDCardInfo *info = DO_UPCAST(CCIDCardInfo, qdev, qdev->info);
+-
+-    if (info->print) {
+-        info->print(mon, card, indent);
+-    }
+-}
+-
+ struct CCIDBus {
+     BusState qbus;
+ };
+@@ -1179,7 +1169,6 @@ struct CCIDBus {
+ static struct BusInfo ccid_bus_info = {
+     .name = "ccid-bus",
+     .size = sizeof(CCIDBus),
+-    .print_dev = ccid_bus_dev_print,
+     .props = (Property[]) {
+         DEFINE_PROP_UINT32("slot", struct CCIDCardState, slot, 0),
+         DEFINE_PROP_END_OF_LIST(),
+-- 
+1.7.11.7
+

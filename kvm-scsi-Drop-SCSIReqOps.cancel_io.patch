@@ -1,0 +1,141 @@
+From b210cae905afecf6efdbbdfabd5c31a4ed9d02aa Mon Sep 17 00:00:00 2001
+Message-Id: <b210cae905afecf6efdbbdfabd5c31a4ed9d02aa.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:43 -0500
+Subject: [CHANGE 23/29] scsi: Drop SCSIReqOps.cancel_io
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-24-git-send-email-famz@redhat.com>
+Patchwork-id: 64924
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 23/28] scsi: Drop SCSIReqOps.cancel_io
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+The only two implementations are identical to each other, with nothing specific
+to device: they only call bdrv_aio_cancel with the SCSIRequest.aiocb.
+
+Let's move it to scsi-bus.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit a83cfd12d9868b6732e3c6e5b2cbd69a2e0ab689)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	hw/scsi-disk.c
+Context conflict because we don't have scsi_disk_dma_reqops in
+downstream.
+---
+ hw/scsi-bus.c     |  4 ++--
+ hw/scsi-disk.c    | 13 -------------
+ hw/scsi-generic.c | 13 -------------
+ hw/scsi.h         |  1 -
+ 4 files changed, 2 insertions(+), 29 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/scsi-bus.c     |  4 ++--
+ hw/scsi-disk.c    | 13 -------------
+ hw/scsi-generic.c | 13 -------------
+ hw/scsi.h         |  1 -
+ 4 files changed, 2 insertions(+), 29 deletions(-)
+
+diff --git a/hw/scsi-bus.c b/hw/scsi-bus.c
+index c4488b3..aa82df8 100644
+--- a/hw/scsi-bus.c
++++ b/hw/scsi-bus.c
+@@ -1484,8 +1484,8 @@ void scsi_req_cancel(SCSIRequest *req)
+     scsi_req_ref(req);
+     scsi_req_dequeue(req);
+     req->io_canceled = true;
+-    if (req->ops->cancel_io) {
+-        req->ops->cancel_io(req);
++    if (req->aiocb) {
++        bdrv_aio_cancel(req->aiocb);
+     }
+     if (req->bus->info->cancel) {
+         req->bus->info->cancel(req);
+diff --git a/hw/scsi-disk.c b/hw/scsi-disk.c
+index f4f095c..577d45f 100644
+--- a/hw/scsi-disk.c
++++ b/hw/scsi-disk.c
+@@ -95,18 +95,6 @@ static void scsi_check_condition(SCSIDiskReq *r, SCSISense sense)
+     scsi_req_complete(&r->req, CHECK_CONDITION);
+ }
+ 
+-/* Cancel a pending data transfer.  */
+-static void scsi_cancel_io(SCSIRequest *req)
+-{
+-    SCSIDiskReq *r = DO_UPCAST(SCSIDiskReq, req, req);
+-
+-    DPRINTF("Cancel tag=0x%x\n", req->tag);
+-    if (r->req.aiocb) {
+-        bdrv_aio_cancel(r->req.aiocb);
+-    }
+-    r->req.aiocb = NULL;
+-}
+-
+ static uint32_t scsi_init_iovec(SCSIDiskReq *r, size_t size)
+ {
+     SCSIDiskState *s = DO_UPCAST(SCSIDiskState, qdev, r->req.dev);
+@@ -1792,7 +1780,6 @@ static const SCSIReqOps scsi_disk_reqops = {
+     .send_command = scsi_send_command,
+     .read_data    = scsi_read_data,
+     .write_data   = scsi_write_data,
+-    .cancel_io    = scsi_cancel_io,
+     .get_buf      = scsi_get_buf,
+     .load_request = scsi_disk_load_request,
+     .save_request = scsi_disk_save_request,
+diff --git a/hw/scsi-generic.c b/hw/scsi-generic.c
+index 23f25bb..2752ba6 100644
+--- a/hw/scsi-generic.c
++++ b/hw/scsi-generic.c
+@@ -142,18 +142,6 @@ done:
+     scsi_req_unref(&r->req);
+ }
+ 
+-/* Cancel a pending data transfer.  */
+-static void scsi_cancel_io(SCSIRequest *req)
+-{
+-    SCSIGenericReq *r = DO_UPCAST(SCSIGenericReq, req, req);
+-
+-    DPRINTF("Cancel tag=0x%x\n", req->tag);
+-    if (r->req.aiocb) {
+-        bdrv_aio_cancel(r->req.aiocb);
+-    }
+-    r->req.aiocb = NULL;
+-}
+-
+ static int execute_command(BlockDriverState *bdrv,
+                            SCSIGenericReq *r, int direction,
+ 			   BlockDriverCompletionFunc *complete)
+@@ -478,7 +466,6 @@ const SCSIReqOps scsi_generic_req_ops = {
+     .send_command = scsi_send_command,
+     .read_data    = scsi_read_data,
+     .write_data   = scsi_write_data,
+-    .cancel_io    = scsi_cancel_io,
+     .get_buf      = scsi_get_buf,
+     .load_request = scsi_generic_load_request,
+     .save_request = scsi_generic_save_request,
+diff --git a/hw/scsi.h b/hw/scsi.h
+index 9da76ce..82135ae 100644
+--- a/hw/scsi.h
++++ b/hw/scsi.h
+@@ -105,7 +105,6 @@ struct SCSIReqOps {
+     int32_t (*send_command)(SCSIRequest *req, uint8_t *buf);
+     void (*read_data)(SCSIRequest *req);
+     void (*write_data)(SCSIRequest *req);
+-    void (*cancel_io)(SCSIRequest *req);
+     uint8_t *(*get_buf)(SCSIRequest *req);
+ 
+     void (*save_request)(QEMUFile *f, SCSIRequest *req);
+-- 
+2.1.0
+

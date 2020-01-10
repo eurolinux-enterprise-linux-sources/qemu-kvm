@@ -1,0 +1,69 @@
+From 54a0a81441315a638fc5678cdf27421864840013 Mon Sep 17 00:00:00 2001
+Message-Id: <54a0a81441315a638fc5678cdf27421864840013.1378813438.git.minovotn@redhat.com>
+In-Reply-To: <b80f97e724da8388b544413d6a3dcac35d347d9b.1378813438.git.minovotn@redhat.com>
+References: <b80f97e724da8388b544413d6a3dcac35d347d9b.1378813438.git.minovotn@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Wed, 28 Aug 2013 13:14:52 +0200
+Subject: [PATCH 10/13] block: vpc initialize the uuid footer field
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <5dac6b8aa678128aedfd5b63ffbee5f14a585824.1377694139.git.jcody@redhat.com>
+Patchwork-id: 53845
+O-Subject: [RHEL6.5 qemu-kvm PATCH 10/13] block: vpc initialize the uuid footer field
+Bugzilla: 999779
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Charles Arnold <carnold@suse.com>
+
+Initialize the uuid field in the footer with a generated uuid.
+
+Signed-off-by: Charles Arnold <carnold@suse.com>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 1fe1fa510aa3d4eb1fb4246d4951ef48e4c949c2)
+
+Conflicts:
+	block/vpc.c
+
+RHEL6 Notes:
+    - conflict was due to the head including "migration.h"
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ block/vpc.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vpc.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/block/vpc.c b/block/vpc.c
+index e01364d..4b6a132 100644
+--- a/block/vpc.c
++++ b/block/vpc.c
+@@ -25,6 +25,9 @@
+ #include "qemu-common.h"
+ #include "block_int.h"
+ #include "module.h"
++#if defined(CONFIG_UUID)
++#include <uuid/uuid.h>
++#endif
+ 
+ /**************************************************************/
+ 
+@@ -734,7 +737,9 @@ static int vpc_create(const char *filename, QEMUOptionParameter *options)
+ 
+     footer->type = be32_to_cpu(disk_type);
+ 
+-    /* TODO uuid is missing */
++#if defined(CONFIG_UUID)
++    uuid_generate(footer->uuid);
++#endif
+ 
+     footer->checksum = be32_to_cpu(vpc_checksum(buf, HEADER_SIZE));
+ 
+-- 
+1.7.11.7
+

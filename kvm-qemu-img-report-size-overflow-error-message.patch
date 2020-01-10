@@ -1,0 +1,57 @@
+From 35c3c8bcbd6ddd538cd8a8e0222a49e0afce5f55 Mon Sep 17 00:00:00 2001
+Message-Id: <35c3c8bcbd6ddd538cd8a8e0222a49e0afce5f55.1425657843.git.jen@redhat.com>
+In-Reply-To: <f6cf12f0d166001c7958ddc904eff181f03da5e4.1425657843.git.jen@redhat.com>
+References: <f6cf12f0d166001c7958ddc904eff181f03da5e4.1425657843.git.jen@redhat.com>
+From: liguang <lig.fnst@cn.fujitsu.com>
+Date: Mon, 17 Dec 2012 09:49:23 +0800
+Subject: [CHANGE 03/11] qemu-img: report size overflow error message
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+qemu-img will complain when qcow or qcow2
+size overflow for 64 bits, report the right
+message in this condition.
+
+$./qemu-img create -f qcow2 /tmp/foo 0x10000000000000000
+before change:
+qemu-img: Invalid image size specified! You may use k, M, G or T suffixes for
+qemu-img: kilobytes, megabytes, gigabytes and terabytes.
+
+after change:
+qemu-img: Image size must be less than 8 EiB!
+
+[Resolved conflict with a9300911 goto removal -- Stefan]
+
+Signed-off-by: liguang <lig.fnst@cn.fujitsu.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 7944339726b4582b67fd94085c21c33636e8f973)
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ qemu-img.c | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/qemu-img.c b/qemu-img.c
+index 64fec3c..98176b9 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -361,9 +361,13 @@ static int img_create(int argc, char **argv)
+         char *end;
+         sval = strtosz_suffix(argv[optind++], &end, STRTOSZ_DEFSUFFIX_B);
+         if (sval < 0 || *end) {
+-            error_report("Invalid image size specified! You may use k, M, G or "
+-                  "T suffixes for ");
+-            error_report("kilobytes, megabytes, gigabytes and terabytes.");
++            if (sval == -ERANGE) {
++                error_report("Image size must be less than 8 EiB!");
++            } else {
++                error_report("Invalid image size specified! You may use k, M, "
++                      "G or T suffixes for ");
++                error_report("kilobytes, megabytes, gigabytes and terabytes.");
++            }
+             return 1;
+         }
+         img_size = (uint64_t)sval;
+-- 
+2.1.0
+

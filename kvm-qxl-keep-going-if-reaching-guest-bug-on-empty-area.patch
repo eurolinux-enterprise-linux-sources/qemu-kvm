@@ -1,0 +1,72 @@
+From 94fdeff147cfa786ca031524518d0f6dc2f4d97f Mon Sep 17 00:00:00 2001
+Message-Id: <94fdeff147cfa786ca031524518d0f6dc2f4d97f.1424811078.git.jen@redhat.com>
+In-Reply-To: <daa093cf3b29cc36a29e8aa34d6b64db07eee8be.1424811078.git.jen@redhat.com>
+References: <daa093cf3b29cc36a29e8aa34d6b64db07eee8be.1424811078.git.jen@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Wed, 18 Feb 2015 10:49:22 -0500
+Subject: [CHANGE 3/4] qxl: keep going if reaching guest bug on empty area
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1424256562-19431-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 63889
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 1/1] qxl: keep going if reaching guest bug on empty area
+Bugzilla: 1151363
+RH-Acked-by: Uri Lublin <uril@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+From: Marc-André Lureau <marcandre.lureau@gmail.com>
+
+Xorg server hangs when using xfig and typing a text with space:
+ #0  qxl_wait_for_io_command (qxl=<value optimized out>) at qxl_io.c:47
+ #1  0x00007f826a49a299 in qxl_download_box (surface=0x221d030, x1=231, y1=259,
+     x2=<value optimized out>, y2=<value optimized out>) at qxl_surface.c:143
+
+       while (!(ram_header->int_pending & QXL_INTERRUPT_IO_CMD))
+         usleep (1);
+
+The QXL driver is calling QXL_IO_UPDATE_AREA with an empty area. This
+is a guest bug. The call is async and no ack is sent back on guest
+bug, so the X server will hang. The driver should be improved to avoid
+this situation and also to abort on QXL_INTERRUPT_ERROR. This will be
+a different patch series for the driver. However, it is simple enough
+to keep qemu running on empty areas update, which is what this patch
+provides.
+
+https://bugzilla.redhat.com/show_bug.cgi?id=1151363
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 9e5a25f1c209ff51e4b65124a3b76dd3f1b0fb49)
+---
+ hw/qxl.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/qxl.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/hw/qxl.c b/hw/qxl.c
+index 4c55551..1d1c213 100644
+--- a/hw/qxl.c
++++ b/hw/qxl.c
+@@ -1565,6 +1565,11 @@ async_common:
+             qxl_set_guest_bug(d,
+                     "QXL_IO_UPDATE_AREA: invalid area (%ux%u)x(%ux%u)\n",
+                     update.left, update.top, update.right, update.bottom);
++            if (update.left == update.right || update.top == update.bottom) {
++                /* old drivers may provide empty area, keep going */
++                qxl_clear_guest_bug(d);
++                goto cancel_async;
++            }
+             break;
+         }
+         if (async == QXL_ASYNC) {
+-- 
+2.1.0
+

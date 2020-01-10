@@ -1,0 +1,110 @@
+From c0b8683b4e47fd594b0443f65a89d05fc3bf8d98 Mon Sep 17 00:00:00 2001
+Message-Id: <c0b8683b4e47fd594b0443f65a89d05fc3bf8d98.1376492227.git.minovotn@redhat.com>
+In-Reply-To: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+References: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+From: Asias He <asias@redhat.com>
+Date: Wed, 14 Aug 2013 10:24:07 +0200
+Subject: [PATCH 06/22] aio: Fix qemu_aio_wait() to maintain correct
+ walking_handlers count
+
+RH-Author: Asias He <asias@redhat.com>
+Message-id: <1376475863-27929-2-git-send-email-asias@redhat.com>
+Patchwork-id: 53388
+O-Subject: [RHEL6.5 qemu-kvm PATCH v4 01/17] aio: Fix qemu_aio_wait() to maintain correct walking_handlers count
+Bugzilla: 848070
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Fix qemu_aio_wait() to ensure that registered aio handlers don't get
+deleted when they are still active. This is ensured by maintaning the
+right count of walking_handlers.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Bharata B Rao <bharata@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+
+(cherry picked from commit 00f78533326c5ba2e62fafada16655aa558a5520)
+
+Conflicts:
+  aio.c
+
+  Despite other changes between upstream and RHEL, walking_handlers is
+  used in the same way.
+
+  Apply s/walking_handlers = 1/walking_handlers++/ and
+  s/walking_handlers = 0/walking_handlers--/.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+---
+ aio.c | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ aio.c | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/aio.c b/aio.c
+index f164a47..681c37c 100644
+--- a/aio.c
++++ b/aio.c
+@@ -123,7 +123,7 @@ int qemu_aio_process_queue(void)
+     AioHandler *node;
+     int ret = 0;
+ 
+-    walking_handlers = 1;
++    walking_handlers++;
+ 
+     QLIST_FOREACH(node, &aio_handlers, node) {
+         if (node->io_process_queue) {
+@@ -133,7 +133,7 @@ int qemu_aio_process_queue(void)
+         }
+     }
+ 
+-    walking_handlers = 0;
++    walking_handlers--;
+ 
+     return ret;
+ }
+@@ -157,7 +157,7 @@ void qemu_aio_wait(void)
+         fd_set rdfds, wrfds;
+         int max_fd = -1;
+ 
+-        walking_handlers = 1;
++        walking_handlers++;
+ 
+         FD_ZERO(&rdfds);
+         FD_ZERO(&wrfds);
+@@ -181,7 +181,7 @@ void qemu_aio_wait(void)
+             }
+         }
+ 
+-        walking_handlers = 0;
++        walking_handlers--;
+ 
+         /* No AIO operations?  Get us out of here */
+         if (max_fd == -1)
+@@ -194,7 +194,7 @@ void qemu_aio_wait(void)
+ 
+         /* if we have any readable fds, dispatch event */
+         if (ret > 0) {
+-            walking_handlers = 1;
++            walking_handlers++;
+ 
+             /* we have to walk very carefully in case
+              * qemu_aio_set_fd_handler is called while we're walking */
+@@ -222,7 +222,7 @@ void qemu_aio_wait(void)
+                 }
+             }
+ 
+-            walking_handlers = 0;
++            walking_handlers--;
+         }
+     } while (ret == 0);
+ }
+-- 
+1.7.11.7
+

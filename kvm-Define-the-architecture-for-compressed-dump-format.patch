@@ -1,0 +1,104 @@
+From 5d2b13f5b392bf96790035bf96060334c73dea8c Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Sat, 22 Mar 2014 03:31:10 +0100
+Subject: [PATCH 19/30] Define the architecture for compressed dump format
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1395459071-19118-19-git-send-email-lersek@redhat.com>
+Patchwork-id: 58228
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 18/19] Define the architecture for compressed dump format
+Bugzilla: 1035162
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: qiaonuohan <qiaonuohan@cn.fujitsu.com>
+
+Signed-off-by: Ekaterina Tumanova <tumanova@linux.vnet.ibm.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Qiao Nuohan <qiaonuohan@cn.fujitsu.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 4ab23a918249772458fd330758dc0fad96edce50)
+
+Conflicts:
+	target-i386/cpu.h
+
+Trivial conflict because we don't have upstream e4a09c96
+("target-i386: remove tabs from target-i386/cpu.h").
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ target-i386/cpu.h  | 2 ++
+ target-s390x/cpu.h | 1 +
+ dump.c             | 7 +++++--
+ 3 files changed, 8 insertions(+), 2 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ dump.c             |    7 +++++--
+ target-i386/cpu.h  |    2 ++
+ target-s390x/cpu.h |    1 +
+ 3 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/dump.c b/dump.c
+index f16619d..1b86b83 100644
+--- a/dump.c
++++ b/dump.c
+@@ -37,6 +37,9 @@
+ #ifdef CONFIG_SNAPPY
+ #include <snappy-c.h>
+ #endif
++#ifndef ELF_MACHINE_UNAME
++#define ELF_MACHINE_UNAME "Unknown"
++#endif
+ 
+ static uint16_t cpu_convert_to_target16(uint16_t val, int endian)
+ {
+@@ -817,7 +820,7 @@ static int create_header32(DumpState *s)
+     dh->nr_cpus = cpu_convert_to_target32(s->nr_cpus, endian);
+     bitmap_blocks = DIV_ROUND_UP(s->len_dump_bitmap, block_size) * 2;
+     dh->bitmap_blocks = cpu_convert_to_target32(bitmap_blocks, endian);
+-    memcpy(&(dh->utsname.machine), "i686", 4);
++    strncpy(dh->utsname.machine, ELF_MACHINE_UNAME, sizeof(dh->utsname.machine));
+ 
+     if (s->flag_compress & DUMP_DH_COMPRESSED_ZLIB) {
+         status |= DUMP_DH_COMPRESSED_ZLIB;
+@@ -924,7 +927,7 @@ static int create_header64(DumpState *s)
+     dh->nr_cpus = cpu_convert_to_target32(s->nr_cpus, endian);
+     bitmap_blocks = DIV_ROUND_UP(s->len_dump_bitmap, block_size) * 2;
+     dh->bitmap_blocks = cpu_convert_to_target32(bitmap_blocks, endian);
+-    memcpy(&(dh->utsname.machine), "x86_64", 6);
++    strncpy(dh->utsname.machine, ELF_MACHINE_UNAME, sizeof(dh->utsname.machine));
+ 
+     if (s->flag_compress & DUMP_DH_COMPRESSED_ZLIB) {
+         status |= DUMP_DH_COMPRESSED_ZLIB;
+diff --git a/target-i386/cpu.h b/target-i386/cpu.h
+index 25464e8..6387f61 100644
+--- a/target-i386/cpu.h
++++ b/target-i386/cpu.h
+@@ -38,8 +38,10 @@
+ 
+ #ifdef TARGET_X86_64
+ #define ELF_MACHINE	EM_X86_64
++#define ELF_MACHINE_UNAME "x86_64"
+ #else
+ #define ELF_MACHINE	EM_386
++#define ELF_MACHINE_UNAME "i686"
+ #endif
+ 
+ #define CPUState struct CPUX86State
+diff --git a/target-s390x/cpu.h b/target-s390x/cpu.h
+index 0e75e1c..af69b19 100644
+--- a/target-s390x/cpu.h
++++ b/target-s390x/cpu.h
+@@ -23,6 +23,7 @@
+ #define TARGET_LONG_BITS 64
+ 
+ #define ELF_MACHINE	EM_S390
++#define ELF_MACHINE_UNAME "S390X"
+ 
+ #define CPUState struct CPUS390XState
+ 
+-- 
+1.7.1
+

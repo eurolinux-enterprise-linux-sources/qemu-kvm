@@ -1,0 +1,44 @@
+From 5b0b22350611dcedb147a92311e156e5595d9ab8 Mon Sep 17 00:00:00 2001
+From: Fam Zheng <famz@redhat.com>
+Date: Tue, 29 Jul 2014 11:51:50 -0500
+Subject: [CHANGE 06/11] virtio-scsi: Fix reset callback for virtio-scsi
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1406634711-24976-2-git-send-email-famz@redhat.com>
+Patchwork-id: 60273
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v2 1/2] virtio-scsi: Fix reset callback for virtio-scsi
+Bugzilla: 1123698
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Downstream only.
+
+Add this missing piece in virtio-scsi, which is never noticed since the
+beginning. Only the most reliable machines don't need a reset button. It
+has been one of the kind, until I added ioeventfd.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/virtio-pci.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/hw/virtio-pci.c b/hw/virtio-pci.c
+index 35161c9..2ebbaca 100644
+--- a/hw/virtio-pci.c
++++ b/hw/virtio-pci.c
+@@ -1105,6 +1105,7 @@ static PCIDeviceInfo virtio_info[] = {
+             DEFINE_VIRTIO_SCSI_PROPERTIES(VirtIOPCIProxy, host_features, scsi),
+             DEFINE_PROP_END_OF_LIST(),
+         },
++        .qdev.reset = virtio_pci_reset,
+     },{
+         .qdev.name = "virtio-rng-pci",
+         .qdev.size = sizeof(VirtIOPCIProxy),
+-- 
+1.9.3
+

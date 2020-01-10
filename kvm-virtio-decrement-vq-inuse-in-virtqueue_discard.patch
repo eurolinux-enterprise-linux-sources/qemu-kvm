@@ -1,0 +1,53 @@
+From 938fb488ecd3a1403db32b637e0634dfad17afc4 Mon Sep 17 00:00:00 2001
+Message-Id: <938fb488ecd3a1403db32b637e0634dfad17afc4.1481738366.git.ymankad@redhat.com>
+In-Reply-To: <be7cc66c94d4b6c77f9f1e674d4783c7d1c3efac.1481738366.git.ymankad@redhat.com>
+References: <be7cc66c94d4b6c77f9f1e674d4783c7d1c3efac.1481738366.git.ymankad@redhat.com>
+From: Ladi Prosek <lprosek@redhat.com>
+Date: Mon, 5 Dec 2016 13:57:44 -0500
+Subject: [CHANGE 03/10] virtio: decrement vq->inuse in virtqueue_discard()
+To: ymankad@redhat.com
+
+RH-Author: Ladi Prosek <lprosek@redhat.com>
+Message-id: <1480946267-6514-4-git-send-email-lprosek@redhat.com>
+Patchwork-id: 72985
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 3/6] virtio: decrement vq->inuse in virtqueue_discard()
+Bugzilla: 1392520
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Ladi Prosek <lprosek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@redhat.com>
+
+virtqueue_discard() moves vq->last_avail_idx back so the element can be
+popped again.  It's necessary to decrement vq->inuse to avoid "leaking"
+the element count.
+
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Reviewed-by: Michael S. Tsirkin <mst@redhat.com>
+Reviewed-by: Cornelia Huck <cornelia.huck@de.ibm.com>
+Reviewed-by: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+(cherry picked from commit 58a83c61496eeb0d31571a07a51bc1947e3379ac)
+Signed-off-by: Ladi Prosek <lprosek@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ hw/virtio.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/hw/virtio.c b/hw/virtio.c
+index 3af7a18..eb527d0 100644
+--- a/hw/virtio.c
++++ b/hw/virtio.c
+@@ -261,6 +261,7 @@ void virtqueue_discard(VirtQueue *vq, const VirtQueueElement *elem,
+                        unsigned int len)
+ {
+     vq->last_avail_idx--;
++    vq->inuse--;
+     virtqueue_unmap_sg(vq, elem, len);
+ }
+ 
+-- 
+2.7.4
+

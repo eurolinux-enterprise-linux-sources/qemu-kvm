@@ -1,0 +1,133 @@
+From 663e8a404d0a4f48d1ce41dbae22ce844f8a4b94 Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Sat, 22 Mar 2014 03:30:55 +0100
+Subject: [PATCH 04/30] dump: change cpu_get_note_size to return ssize_t
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1395459071-19118-4-git-send-email-lersek@redhat.com>
+Patchwork-id: 58214
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 03/19] dump: change cpu_get_note_size to return ssize_t
+Bugzilla: 1035162
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+So that it can use the same prototype in both cases.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 4720bd050655a56b4b048d8856a03ae187481a7f)
+
+Conflicts:
+	cpu-all.h
+
+RHEL-6 note:
+
+This ancient, innocent-looking patch for dump.c is actually critically
+important. The idea is that cpu_get_note_size() can fail on some platforms
+(never on RHEL-6), so we should actually check the error value. If we left
+the function call in its original place, and the function failed, then we
+might have to do some extra cleanup. For this reason the upstream patch
+moves the function call higher up too.
+
+This is correct for the patch in isolation, but the "compressed dump"
+series will insert a return statement in the middle of the straddled code
+section. Hence, if we don't pick up this ancient patch, the new return
+statement will leave the function before we get a chance to set
+s->note_size to anything nonzero.
+
+Also, the upstream patch is buggy, because it checks "ret" rather than
+"s->note_size" (which BTW can't currently express a negative value). The
+next patch will fix this.
+
+Also, "cpu-all.h" needs the inclusion of <sys/types.h> for ssize_t.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ cpu-all.h               | 6 ++++--
+ dump.c                  | 9 +++++++--
+ target-i386/arch_dump.c | 2 +-
+ 3 files changed, 12 insertions(+), 5 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ cpu-all.h               |    6 ++++--
+ dump.c                  |    9 +++++++--
+ target-i386/arch_dump.c |    2 +-
+ 3 files changed, 12 insertions(+), 5 deletions(-)
+
+diff --git a/cpu-all.h b/cpu-all.h
+index 689f9a4..ce48351 100644
+--- a/cpu-all.h
++++ b/cpu-all.h
+@@ -19,6 +19,8 @@
+ #ifndef CPU_ALL_H
+ #define CPU_ALL_H
+ 
++#include <sys/types.h>
++
+ #include "qemu-common.h"
+ #include "cpu-common.h"
+ #include "memory_mapping.h"
+@@ -1137,7 +1139,7 @@ struct GuestPhysBlockList; /* memory_mapping.h */
+ int cpu_get_dump_info(ArchDumpInfo *info,
+                       const struct GuestPhysBlockList *guest_phys_blocks);
+ 
+-size_t cpu_get_note_size(int class, int machine, int nr_cpus);
++ssize_t cpu_get_note_size(int class, int machine, int nr_cpus);
+ #else
+ static inline int cpu_write_elf64_note(write_core_dump_function f,
+                                        CPUArchState *env, int cpuid,
+@@ -1172,7 +1174,7 @@ static inline int cpu_get_dump_info(ArchDumpInfo *info, void *ignore)
+     return -1;
+ }
+ 
+-static inline int cpu_get_note_size(int class, int machine, int nr_cpus)
++static inline ssize_t cpu_get_note_size(int class, int machine, int nr_cpus)
+ {
+     return -1;
+ }
+diff --git a/dump.c b/dump.c
+index 9af4bf9..d110d15 100644
+--- a/dump.c
++++ b/dump.c
+@@ -762,6 +762,13 @@ static int dump_init(DumpState *s, int fd, bool paging, bool has_filter,
+         goto cleanup;
+     }
+ 
++    s->note_size = cpu_get_note_size(s->dump_info.d_class,
++                                     s->dump_info.d_machine, nr_cpus);
++    if (ret < 0) {
++        error_set(errp, QERR_UNSUPPORTED);
++        goto cleanup;
++    }
++
+     /* get memory mapping */
+     memory_mapping_list_init(&s->list);
+     if (paging) {
+@@ -796,8 +803,6 @@ static int dump_init(DumpState *s, int fd, bool paging, bool has_filter,
+         }
+     }
+ 
+-    s->note_size = cpu_get_note_size(s->dump_info.d_class,
+-                                     s->dump_info.d_machine, nr_cpus);
+     if (s->dump_info.d_class == ELFCLASS64) {
+         if (s->have_section) {
+             s->memory_offset = sizeof(Elf64_Ehdr) +
+diff --git a/target-i386/arch_dump.c b/target-i386/arch_dump.c
+index 397e087..11c300a 100644
+--- a/target-i386/arch_dump.c
++++ b/target-i386/arch_dump.c
+@@ -416,7 +416,7 @@ int cpu_get_dump_info(ArchDumpInfo *info,
+     return 0;
+ }
+ 
+-size_t cpu_get_note_size(int class, int machine, int nr_cpus)
++ssize_t cpu_get_note_size(int class, int machine, int nr_cpus)
+ {
+     int name_size = 5; /* "CORE" or "QEMU" */
+     size_t elf_note_size = 0;
+-- 
+1.7.1
+

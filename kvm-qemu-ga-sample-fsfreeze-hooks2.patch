@@ -1,0 +1,181 @@
+From b2a6f28d46296b165de140d047e51c6ae8060124 Mon Sep 17 00:00:00 2001
+Message-Id: <b2a6f28d46296b165de140d047e51c6ae8060124.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:27:50 +0200
+Subject: [PATCH 085/114] qemu-ga: sample fsfreeze hooks
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-28-git-send-email-lersek@redhat.com>
+Patchwork-id: 51126
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 27/56] qemu-ga: sample fsfreeze hooks
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Adds sample hook scripts for --fsfreeze-hook option of qemu-ga.
+  - fsfreeze-hook : execute scripts in fsfreeze-hook.d/
+  - fsfreeze-hook.d/mysql-flush.sh.sample : quiesce MySQL before snapshot
+
+Signed-off-by: Tomoki Sekiyama <tomoki.sekiyama.qu@hitachi.com>
+Reviewed-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit 96610da210697a1f33669d8bec0cb7b944d3a516)
+
+Conflicts:
+
+	Makefile
+
+RHEL-6 notes:
+- The RHEL-6 Makefile doesn't use "find" to clean up build files, so we
+  don't have to patch it.
+- Although this patch completes the backports needed for RHBZ#911569,  it
+  doesn't solve the RHBZ. For that the following RH packaging changes are
+  necessary, minimally:
+  - installing the hook script as /usr/libexec/qemu-ga-fsfreeze-hook,
+  - adapting the same to the RHEL-6 filesystem hierarchy,
+  - installing the sample mysql script as
+    /usr/share/qemu-ga/fsfreeze-hook.d/mysql-flush.sh.sample,
+  - introducing FSFREEZE_HOOK_ENABLE=[01] and FSFREEZE_HOOK_PATHNAME="..."
+    in "redhat/qemu-ga.sysconfig",
+  - based on the former, "redhat/qemu-ga.init" must pass "--fsfreeze-hook"
+    at daemon startup.
+  These will be researched & implemented in RHBZ#911569 separately.
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=911569
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ .gitignore                                         |    1 +
+ scripts/qemu-guest-agent/fsfreeze-hook             |   33 ++++++++++++
+ .../fsfreeze-hook.d/mysql-flush.sh.sample          |   56 ++++++++++++++++++++
+ 3 files changed, 90 insertions(+), 0 deletions(-)
+ create mode 100755 scripts/qemu-guest-agent/fsfreeze-hook
+ create mode 100755 scripts/qemu-guest-agent/fsfreeze-hook.d/mysql-flush.sh.sample
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ .gitignore                                         |  1 +
+ scripts/qemu-guest-agent/fsfreeze-hook             | 33 +++++++++++++
+ .../fsfreeze-hook.d/mysql-flush.sh.sample          | 56 ++++++++++++++++++++++
+ 3 files changed, 90 insertions(+)
+ create mode 100755 scripts/qemu-guest-agent/fsfreeze-hook
+ create mode 100755 scripts/qemu-guest-agent/fsfreeze-hook.d/mysql-flush.sh.sample
+
+diff --git a/.gitignore b/.gitignore
+index 4c7f3b6..07868ca 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -48,6 +48,7 @@ qemu-monitor.texi
+ *.tp
+ *.vr
+ *.d
++!scripts/qemu-guest-agent/fsfreeze-hook.d
+ *.o
+ *.swp
+ *.orig
+diff --git a/scripts/qemu-guest-agent/fsfreeze-hook b/scripts/qemu-guest-agent/fsfreeze-hook
+new file mode 100755
+index 0000000..c27b29f
+--- /dev/null
++++ b/scripts/qemu-guest-agent/fsfreeze-hook
+@@ -0,0 +1,33 @@
++#!/bin/sh
++
++# This script is executed when a guest agent receives fsfreeze-freeze and
++# fsfreeze-thaw command, if it is specified in --fsfreeze-hook (-F)
++# option of qemu-ga or placed in default path (/etc/qemu/fsfreeze-hook).
++# When the agent receives fsfreeze-freeze request, this script is issued with
++# "freeze" argument before the filesystem is frozen. And for fsfreeze-thaw
++# request, it is issued with "thaw" argument after filesystem is thawed.
++
++LOGFILE=/var/log/qemu-ga/fsfreeze-hook.log
++FSFREEZE_D=$(dirname -- "$0")/fsfreeze-hook.d
++
++# Check whether file $1 is a backup or rpm-generated file and should be ignored
++is_ignored_file() {
++    case "$1" in
++        *~ | *.bak | *.orig | *.rpmnew | *.rpmorig | *.rpmsave | *.sample)
++            return 0 ;;
++    esac
++    return 1
++}
++
++# Iterate executables in directory "fsfreeze-hook.d" with the specified args
++[ ! -d "$FSFREEZE_D" ] && exit 0
++for file in "$FSFREEZE_D"/* ; do
++    is_ignored_file "$file" && continue
++    [ -x "$file" ] || continue
++    printf "$(date): execute $file $@\n" >>$LOGFILE
++    "$file" "$@" >>$LOGFILE 2>&1
++    STATUS=$?
++    printf "$(date): $file finished with status=$STATUS\n" >>$LOGFILE
++done
++
++exit 0
+diff --git a/scripts/qemu-guest-agent/fsfreeze-hook.d/mysql-flush.sh.sample b/scripts/qemu-guest-agent/fsfreeze-hook.d/mysql-flush.sh.sample
+new file mode 100755
+index 0000000..2b4fa3a
+--- /dev/null
++++ b/scripts/qemu-guest-agent/fsfreeze-hook.d/mysql-flush.sh.sample
+@@ -0,0 +1,56 @@
++#!/bin/sh
++
++# Flush MySQL tables to the disk before the filesystem is frozen.
++# At the same time, this keeps a read lock in order to avoid write accesses
++# from the other clients until the filesystem is thawed.
++
++MYSQL="/usr/bin/mysql"
++MYSQL_OPTS="-uroot" #"-prootpassword"
++FIFO=/var/run/mysql-flush.fifo
++
++# Check mysql is installed and the server running
++[ -x "$MYSQL" ] && "$MYSQL" $MYSQL_OPTS < /dev/null || exit 0
++
++flush_and_wait() {
++    printf "FLUSH TABLES WITH READ LOCK \\G\n"
++    trap 'printf "$(date): $0 is killed\n">&2' HUP INT QUIT ALRM TERM
++    read < $FIFO
++    printf "UNLOCK TABLES \\G\n"
++    rm -f $FIFO
++}
++
++case "$1" in
++    freeze)
++        mkfifo $FIFO || exit 1
++        flush_and_wait | "$MYSQL" $MYSQL_OPTS &
++        # wait until every block is flushed
++        while [ "$(echo 'SHOW STATUS LIKE "Key_blocks_not_flushed"' |\
++                 "$MYSQL" $MYSQL_OPTS | tail -1 | cut -f 2)" -gt 0 ]; do
++            sleep 1
++        done
++        # for InnoDB, wait until every log is flushed
++        INNODB_STATUS=$(mktemp /tmp/mysql-flush.XXXXXX)
++        [ $? -ne 0 ] && exit 2
++        trap "rm -f $INNODB_STATUS; exit 1" HUP INT QUIT ALRM TERM
++        while :; do
++            printf "SHOW ENGINE INNODB STATUS \\G" |\
++                "$MYSQL" $MYSQL_OPTS > $INNODB_STATUS
++            LOG_CURRENT=$(grep 'Log sequence number' $INNODB_STATUS |\
++                          tr -s ' ' | cut -d' ' -f4)
++            LOG_FLUSHED=$(grep 'Log flushed up to' $INNODB_STATUS |\
++                          tr -s ' ' | cut -d' ' -f5)
++            [ "$LOG_CURRENT" = "$LOG_FLUSHED" ] && break
++            sleep 1
++        done
++        rm -f $INNODB_STATUS
++        ;;
++
++    thaw)
++        [ ! -p $FIFO ] && exit 1
++        echo > $FIFO
++        ;;
++
++    *)
++        exit 1
++        ;;
++esac
+-- 
+1.7.11.7
+

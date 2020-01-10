@@ -1,0 +1,121 @@
+From a41552c307248715839aa69c2618d2e972514acf Mon Sep 17 00:00:00 2001
+Message-Id: <a41552c307248715839aa69c2618d2e972514acf.1366117835.git.minovotn@redhat.com>
+In-Reply-To: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+References: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 7 Mar 2013 15:29:17 +0100
+Subject: [PATCH 09/19] qemu-img: find the image end offset during check
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1362670164-15796-6-git-send-email-kwolf@redhat.com>
+Patchwork-id: 49307
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 05/12] qemu-img: find the image end offset during check
+Bugzilla: 888008
+RH-Acked-by: Eric Blake <eblake@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Federico Simoncelli <fsimonce@redhat.com>
+
+This patch adds the support for reporting the image end offset (in
+bytes). This is particularly useful after a conversion (or a rebase)
+where the destination is a block device in order to find the first
+unused byte at the end of the image.
+
+Signed-off-by: Federico Simoncelli <fsimonce@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit c6bb9ad198c2caa9c7c8ba360a07630b5c10e4a8)
+
+Conflicts:
+	tests/qemu-iotests/026
+	tests/qemu-iotests/036
+	tests/qemu-iotests/039
+	tests/qemu-iotests/044.out
+	tests/qemu-iotests/common.rc
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block.h                |  1 +
+ block/qcow2-refcount.c | 10 ++++++++--
+ qemu-img.c             |  4 ++++
+ 3 files changed, 13 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.h                |  1 +
+ block/qcow2-refcount.c | 10 ++++++++--
+ qemu-img.c             |  4 ++++
+ 3 files changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/block.h b/block.h
+index 4f06abf..a4f2a6e 100644
+--- a/block.h
++++ b/block.h
+@@ -213,6 +213,7 @@ typedef struct BdrvCheckResult {
+     int check_errors;
+     int corruptions_fixed;
+     int leaks_fixed;
++    int64_t image_end_offset;
+     BlockFragInfo bfi;
+ } BdrvCheckResult;
+ 
+diff --git a/block/qcow2-refcount.c b/block/qcow2-refcount.c
+index 609754e..69b63dd 100644
+--- a/block/qcow2-refcount.c
++++ b/block/qcow2-refcount.c
+@@ -1086,7 +1086,7 @@ int qcow2_check_refcounts(BlockDriverState *bs, BdrvCheckResult *res,
+                           BdrvCheckMode fix)
+ {
+     BDRVQcowState *s = bs->opaque;
+-    int64_t size, i;
++    int64_t size, i, highest_cluster;
+     int nb_clusters, refcount1, refcount2;
+     QCowSnapshot *sn;
+     uint16_t *refcount_table;
+@@ -1157,7 +1157,7 @@ int qcow2_check_refcounts(BlockDriverState *bs, BdrvCheckResult *res,
+     }
+ 
+     /* compare ref counts */
+-    for(i = 0; i < nb_clusters; i++) {
++    for (i = 0, highest_cluster = 0; i < nb_clusters; i++) {
+         refcount1 = get_refcount(bs, i);
+         if (refcount1 < 0) {
+             fprintf(stderr, "Can't get refcount for cluster %" PRId64 ": %s\n",
+@@ -1167,6 +1167,11 @@ int qcow2_check_refcounts(BlockDriverState *bs, BdrvCheckResult *res,
+         }
+ 
+         refcount2 = refcount_table[i];
++
++        if (refcount1 > 0 || refcount2 > 0) {
++            highest_cluster = i;
++        }
++
+         if (refcount1 != refcount2) {
+ 
+             /* Check if we're allowed to fix the mismatch */
+@@ -1201,6 +1206,7 @@ int qcow2_check_refcounts(BlockDriverState *bs, BdrvCheckResult *res,
+         }
+     }
+ 
++    res->image_end_offset = (highest_cluster + 1) * s->cluster_size;
+     ret = 0;
+ 
+ fail:
+diff --git a/qemu-img.c b/qemu-img.c
+index 6a10db6..abfc663 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -487,6 +487,10 @@ static int img_check(int argc, char **argv)
+         result.bfi.fragmented_clusters * 100.0 / result.bfi.allocated_clusters);
+     }
+ 
++    if (result.image_end_offset > 0) {
++        printf("Image end offset: %" PRId64 "\n", result.image_end_offset);
++    }
++
+     bdrv_delete(bs);
+ 
+     if (ret < 0 || result.check_errors) {
+-- 
+1.7.11.7
+

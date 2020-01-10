@@ -1,0 +1,80 @@
+From 460fae33f0be9932297d53872eae73d2a6bdb88b Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:25 -0500
+Subject: [CHANGE 03/31] block/mirror: Use bdrv_is_allocated_above()
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-4-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60363
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 03/29] block/mirror: Use bdrv_is_allocated_above()
+Bugzilla: 1122992
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+is_any_allocated() provides a subset of the functionality of
+bdrv_is_allocated_above() and there is no reason to keep duplicated
+code. This was added as downstream-only code, upstream mirroring never
+had the local function.
+
+As it happens, is_any_allocated() suffers from the same problem that we
+just fixed in bdrv_is_allocated_above() (returning *pnum == 0 after the
+end of a backing file, causing endless loops), so switching fixes this
+bug in mirroring.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ block/mirror.c | 27 ++-------------------------
+ 1 file changed, 2 insertions(+), 25 deletions(-)
+
+diff --git a/block/mirror.c b/block/mirror.c
+index 202089c..1e482a9 100644
+--- a/block/mirror.c
++++ b/block/mirror.c
+@@ -77,30 +77,6 @@ static int coroutine_fn mirror_populate(BlockDriverState *source,
+     return bdrv_co_writev(target, sector_num, nb_sectors, &qiov);
+ }
+ 
+-static int is_any_allocated(BlockDriverState *bs, int64_t sector_num,
+-                            int nb_sectors, int *pnum)
+-{
+-    BlockDriverState *intermediate;
+-    int ret, n, unalloc = nb_sectors;
+-
+-    intermediate = bs;
+-    while (intermediate) {
+-        ret = bdrv_is_allocated(intermediate, sector_num, nb_sectors, &n);
+-        if (ret < 0) {
+-            return ret;
+-        } else if (ret) {
+-            break;
+-        } else {
+-            unalloc = MIN(unalloc, n);
+-        }
+-
+-        intermediate = intermediate->backing_hd;
+-    }
+-
+-    *pnum = ret ? n : unalloc;
+-    return ret;
+-}
+-
+ static void coroutine_fn mirror_run(void *opaque)
+ {
+     MirrorBlockJob *s = opaque;
+@@ -130,7 +106,8 @@ static void coroutine_fn mirror_run(void *opaque)
+     for (sector_num = 0; sector_num < end; ) {
+         int64_t next = (sector_num | (sectors_per_chunk - 1)) + 1;
+         if (s->full) {
+-            ret = is_any_allocated(bs, sector_num, next - sector_num, &n);
++            ret = bdrv_is_allocated_above(bs, NULL, sector_num,
++                                          next - sector_num, &n);
+         } else {
+             ret = bdrv_is_allocated(bs, sector_num, next - sector_num, &n);
+         }
+-- 
+1.9.3
+

@@ -1,0 +1,61 @@
+From b550a3588655e2950995d021515d6e29783ade0f Mon Sep 17 00:00:00 2001
+Message-Id: <b550a3588655e2950995d021515d6e29783ade0f.1375955382.git.minovotn@redhat.com>
+In-Reply-To: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+References: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+From: Alon Levy <alevy@redhat.com>
+Date: Thu, 1 Aug 2013 11:53:47 +0200
+Subject: [PATCH 28/35] uhci: Don't allow the guest to set port-enabled when
+ there is no dev connected
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Alon Levy <alevy@redhat.com>
+Message-id: <1375358029-12968-29-git-send-email-alevy@redhat.com>
+Patchwork-id: 52918
+O-Subject: [RHEL-6.5 RHEL-6.4.z qemu-kvm v6 28/30] uhci: Don't allow the guest to set port-enabled when there is no dev connected
+Bugzilla: 917860
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+From: Hans de Goede <hdegoede@redhat.com>
+
+It is possible for device disconnect and the guest trying to reset the port
+(because of USB xact errors prior to the disconnect getting signaled) to race,
+when we hit this race, the guest will write the port-control register with its
+pre-disconnect value + the reset bit set, after which we have a disconnected
+device with its port-enabled bit set in its port-control register, which
+is no good :)
+
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+
+upstream: 1cbdde909f70fd15ff85f068a6318b73865c7fa3
+---
+ hw/usb-uhci.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/usb-uhci.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/hw/usb-uhci.c b/hw/usb-uhci.c
+index 65390d0..79f7bed 100644
+--- a/hw/usb-uhci.c
++++ b/hw/usb-uhci.c
+@@ -494,6 +494,10 @@ static void uhci_ioport_writew(void *opaque, uint32_t addr, uint32_t val)
+                 }
+             }
+             port->ctrl &= UHCI_PORT_READ_ONLY;
++            /* enabled may only be set if a device is connected */
++            if (!(port->ctrl & UHCI_PORT_CCS)) {
++                val &= ~UHCI_PORT_EN;
++            }
+             port->ctrl |= (val & ~UHCI_PORT_READ_ONLY);
+             /* some bits are reset when a '1' is written to them */
+             port->ctrl &= ~(val & UHCI_PORT_WRITE_CLEAR);
+-- 
+1.7.11.7
+

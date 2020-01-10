@@ -1,0 +1,233 @@
+From df74584ed12c6b93b823ababb447260e7b52bd6d Mon Sep 17 00:00:00 2001
+From: Max Reitz <mreitz@redhat.com>
+Date: Fri, 2 May 2014 16:58:40 -0500
+Subject: [PATCH 08/26] qcow2: Employ metadata overlap checks
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1399049936-13496-9-git-send-email-mreitz@redhat.com>
+Patchwork-id: 58654
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 08/24] qcow2: Employ metadata overlap checks
+Bugzilla: 1004420
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1004420
+
+The pre-write overlap check function is now called before most of the
+qcow2 writes (aborting it on collision or other error).
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit cf93980e775b709ec8f33f55846e6dcf1c7a612c)
+
+Conflicts:
+	block/qcow2-cluster.c
+	block/qcow2.c
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-cache.c    | 17 +++++++++++++++++
+ block/qcow2-cluster.c  | 22 ++++++++++++++++++++++
+ block/qcow2-snapshot.c | 22 ++++++++++++++++++++++
+ block/qcow2.c          | 26 ++++++++++++++++++++++++++
+ 4 files changed, 87 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-cache.c    |   17 +++++++++++++++++
+ block/qcow2-cluster.c  |   22 ++++++++++++++++++++++
+ block/qcow2-snapshot.c |   22 ++++++++++++++++++++++
+ block/qcow2.c          |   26 ++++++++++++++++++++++++++
+ 4 files changed, 87 insertions(+), 0 deletions(-)
+
+diff --git a/block/qcow2-cache.c b/block/qcow2-cache.c
+index 10ebd7e..1e34387 100644
+--- a/block/qcow2-cache.c
++++ b/block/qcow2-cache.c
+@@ -114,6 +114,23 @@ static int qcow2_cache_entry_flush(BlockDriverState *bs, Qcow2Cache *c, int i)
+     }
+ 
+     if (c == s->refcount_block_cache) {
++        ret = qcow2_pre_write_overlap_check(bs,
++                QCOW2_OL_DEFAULT & ~QCOW2_OL_REFCOUNT_BLOCK,
++                c->entries[i].offset, s->cluster_size);
++    } else if (c == s->l2_table_cache) {
++        ret = qcow2_pre_write_overlap_check(bs,
++                QCOW2_OL_DEFAULT & ~QCOW2_OL_ACTIVE_L2,
++                c->entries[i].offset, s->cluster_size);
++    } else {
++        ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_DEFAULT,
++                c->entries[i].offset, s->cluster_size);
++    }
++
++    if (ret < 0) {
++        return ret;
++    }
++
++    if (c == s->refcount_block_cache) {
+         BLKDBG_EVENT(bs->file, BLKDBG_REFBLOCK_UPDATE_PART);
+     } else if (c == s->l2_table_cache) {
+         BLKDBG_EVENT(bs->file, BLKDBG_L2_UPDATE);
+diff --git a/block/qcow2-cluster.c b/block/qcow2-cluster.c
+index 0d488c4..c921dec 100644
+--- a/block/qcow2-cluster.c
++++ b/block/qcow2-cluster.c
+@@ -72,6 +72,14 @@ int qcow2_grow_l1_table(BlockDriverState *bs, uint64_t min_size)
+         goto fail;
+     }
+ 
++    /* the L1 position has not yet been updated, so these clusters must
++     * indeed be completely free */
++    ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_DEFAULT,
++                                        new_l1_table_offset, new_l1_size2);
++    if (ret < 0) {
++        goto fail;
++    }
++
+     BLKDBG_EVENT(bs->file, BLKDBG_L1_GROW_WRITE_TABLE);
+     for(i = 0; i < s->l1_size; i++)
+         new_l1_table[i] = cpu_to_be64(new_l1_table[i]);
+@@ -139,6 +147,13 @@ static int write_l1_entry(BlockDriverState *bs, int l1_index)
+         buf[i] = cpu_to_be64(s->l1_table[l1_start_index + i]);
+     }
+ 
++    ret = qcow2_pre_write_overlap_check(bs,
++            QCOW2_OL_DEFAULT & ~QCOW2_OL_ACTIVE_L1,
++            s->l1_table_offset + 8 * l1_start_index, sizeof(buf));
++    if (ret < 0) {
++        return ret;
++    }
++
+     BLKDBG_EVENT(bs->file, BLKDBG_L1_UPDATE);
+     ret = bdrv_pwrite_sync(bs->file, s->l1_table_offset + 8 * l1_start_index,
+         buf, sizeof(buf));
+@@ -371,6 +386,13 @@ static int copy_sectors(BlockDriverState *bs, uint64_t start_sect,
+                         s->cluster_data, n, 1,
+                         &s->aes_encrypt_key);
+     }
++
++    ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_DEFAULT,
++            cluster_offset + n_start * BDRV_SECTOR_SIZE, n * BDRV_SECTOR_SIZE);
++    if (ret < 0) {
++        return ret;
++    }
++
+     BLKDBG_EVENT(bs->file, BLKDBG_COW_WRITE);
+     ret = bdrv_write(bs->file, (cluster_offset >> 9) + n_start,
+         s->cluster_data, n);
+diff --git a/block/qcow2-snapshot.c b/block/qcow2-snapshot.c
+index cd99805..917a2e1 100644
+--- a/block/qcow2-snapshot.c
++++ b/block/qcow2-snapshot.c
+@@ -156,6 +156,15 @@ static int qcow2_write_snapshots(BlockDriverState *bs)
+         return offset;
+     }
+ 
++    /* The snapshot list position has not yet been updated, so these clusters
++     * must indeed be completely free */
++    ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_DEFAULT, offset,
++                                        s->snapshots_size);
++    if (ret < 0) {
++        return ret;
++    }
++
++
+     /* Write all snapshots to the new list */
+     for(i = 0; i < s->nb_snapshots; i++) {
+         sn = s->snapshots + i;
+@@ -317,6 +326,12 @@ int qcow2_snapshot_create(BlockDriverState *bs, QEMUSnapshotInfo *sn_info)
+         l1_table[i] = cpu_to_be64(s->l1_table[i]);
+     }
+ 
++    ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_DEFAULT,
++            sn->l1_table_offset, s->l1_size * sizeof(uint64_t));
++    if (ret < 0) {
++        goto fail;
++    }
++
+     ret = bdrv_pwrite(bs->file, sn->l1_table_offset, l1_table,
+                       s->l1_size * sizeof(uint64_t));
+     if (ret < 0) {
+@@ -424,6 +439,13 @@ int qcow2_snapshot_goto(BlockDriverState *bs, const char *snapshot_id)
+         goto fail;
+     }
+ 
++    ret = qcow2_pre_write_overlap_check(bs,
++            QCOW2_OL_DEFAULT & ~QCOW2_OL_ACTIVE_L1,
++            s->l1_table_offset, cur_l1_bytes);
++    if (ret < 0) {
++        goto fail;
++    }
++
+     ret = bdrv_pwrite_sync(bs->file, s->l1_table_offset, sn_l1_table,
+                            cur_l1_bytes);
+     if (ret < 0) {
+diff --git a/block/qcow2.c b/block/qcow2.c
+index f836f64..1b2edad 100644
+--- a/block/qcow2.c
++++ b/block/qcow2.c
+@@ -409,6 +409,8 @@ static int qcow2_open(BlockDriverState *bs, int flags)
+     qcow2_free_snapshots(bs);
+     qcow2_refcount_close(bs);
+     g_free(s->l1_table);
++    /* else pre-write overlap checks in cache_destroy may crash */
++    s->l1_table = NULL;
+     if (s->l2_table_cache) {
+         qcow2_cache_destroy(bs, s->l2_table_cache);
+     }
+@@ -729,6 +731,13 @@ static int qcow2_co_writev(BlockDriverState *bs,
+                 cur_nr_sectors * 512);
+         }
+ 
++        ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_DEFAULT,
++                cluster_offset + index_in_cluster * BDRV_SECTOR_SIZE,
++                cur_nr_sectors * BDRV_SECTOR_SIZE);
++        if (ret < 0) {
++            goto fail;
++        }
++
+         BLKDBG_EVENT(bs->file, BLKDBG_WRITE_AIO);
+         qemu_co_mutex_unlock(&s->lock);
+         ret = bdrv_co_writev(bs->file,
+@@ -767,6 +776,8 @@ static void qcow2_close(BlockDriverState *bs)
+ {
+     BDRVQcowState *s = bs->opaque;
+     g_free(s->l1_table);
++    /* else pre-write overlap checks in cache_destroy may crash */
++    s->l1_table = NULL;
+ 
+     qcow2_cache_flush(bs, s->l2_table_cache);
+     qcow2_cache_flush(bs, s->refcount_block_cache);
+@@ -1314,6 +1325,14 @@ static int qcow2_write_compressed(BlockDriverState *bs, int64_t sector_num,
+ 
+     if (ret != Z_STREAM_END || out_len >= s->cluster_size) {
+         /* could not compress: write normal cluster */
++
++        ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_DEFAULT,
++                sector_num * BDRV_SECTOR_SIZE,
++                s->cluster_sectors * BDRV_SECTOR_SIZE);
++        if (ret < 0) {
++            goto fail;
++        }
++
+         ret = bdrv_write(bs, sector_num, buf, s->cluster_sectors);
+         if (ret < 0) {
+             goto fail;
+@@ -1326,6 +1345,13 @@ static int qcow2_write_compressed(BlockDriverState *bs, int64_t sector_num,
+             goto fail;
+         }
+         cluster_offset &= s->cluster_offset_mask;
++
++        ret = qcow2_pre_write_overlap_check(bs, QCOW2_OL_DEFAULT,
++                cluster_offset, out_len);
++        if (ret < 0) {
++            goto fail;
++        }
++
+         BLKDBG_EVENT(bs->file, BLKDBG_WRITE_COMPRESSED);
+         ret = bdrv_pwrite(bs->file, cluster_offset, out_buf, out_len);
+         if (ret < 0) {
+-- 
+1.7.1
+

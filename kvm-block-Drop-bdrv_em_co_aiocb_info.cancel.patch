@@ -1,0 +1,112 @@
+From e5ca325d34d829fe29c79f6d3ae944e2b104313e Mon Sep 17 00:00:00 2001
+Message-Id: <e5ca325d34d829fe29c79f6d3ae944e2b104313e.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:27 -0500
+Subject: [CHANGE 07/29] block: Drop bdrv_em_co_aiocb_info.cancel
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-8-git-send-email-famz@redhat.com>
+Patchwork-id: 64908
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 07/28] block: Drop bdrv_em_co_aiocb_info.cancel
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Also drop the now unused ->done pointer.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 3acabd685e2d2b153044e5bf472343e7f4c8177b)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	block.c
+The removed block layer code is different because of out of order backport
+(commit 5e78d1e3a block: Improve bdrv_aio_co_cancel_em).
+---
+ block.c | 25 +------------------------
+ 1 file changed, 1 insertion(+), 24 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block.c | 25 +------------------------
+ 1 file changed, 1 insertion(+), 24 deletions(-)
+
+diff --git a/block.c b/block.c
+index 0b1380c..ae86611 100644
+--- a/block.c
++++ b/block.c
+@@ -3944,28 +3944,11 @@ typedef struct BlockDriverAIOCBCoroutine {
+     BlockDriverAIOCB common;
+     BlockRequest req;
+     bool is_write;
+-    bool *done;
+     QEMUBH* bh;
+ } BlockDriverAIOCBCoroutine;
+ 
+-static void bdrv_aio_co_cancel_em(BlockDriverAIOCB *blockacb)
+-{
+-    BlockDriverAIOCBCoroutine *acb =
+-        container_of(blockacb, BlockDriverAIOCBCoroutine, common);
+-    BlockDriverState *bs = blockacb->bs;
+-    bool done = false;
+-
+-    acb->done = &done;
+-    while (!done) {
+-        qemu_co_queue_restart_all(&bs->throttled_reqs[0]);
+-        qemu_co_queue_restart_all(&bs->throttled_reqs[1]);
+-        qemu_aio_wait();
+-    }
+-}
+-
+ static const AIOCBInfo bdrv_em_co_aiocb_info = {
+     .aiocb_size         = sizeof(BlockDriverAIOCBCoroutine),
+-    .cancel             = bdrv_aio_co_cancel_em,
+ };
+ 
+ static void bdrv_co_em_bh(void *opaque)
+@@ -3974,10 +3957,6 @@ static void bdrv_co_em_bh(void *opaque)
+ 
+     acb->common.cb(acb->common.opaque, acb->req.error);
+ 
+-    if (acb->done) {
+-        *acb->done = true;
+-    }
+-
+     qemu_bh_delete(acb->bh);
+     qemu_aio_release(acb);
+ }
+@@ -4016,7 +3995,6 @@ static BlockDriverAIOCB *bdrv_co_aio_rw_vector(BlockDriverState *bs,
+     acb->req.nb_sectors = nb_sectors;
+     acb->req.qiov = qiov;
+     acb->is_write = is_write;
+-    acb->done = NULL;
+ 
+     co = qemu_coroutine_create(bdrv_co_do_rw);
+     qemu_coroutine_enter(co, acb);
+@@ -4043,7 +4021,7 @@ BlockDriverAIOCB *bdrv_aio_flush(BlockDriverState *bs,
+     BlockDriverAIOCBCoroutine *acb;
+ 
+     acb = qemu_aio_get(&bdrv_em_co_aiocb_info, bs, cb, opaque);
+-    acb->done = NULL;
++
+     co = qemu_coroutine_create(bdrv_aio_flush_co_entry);
+     qemu_coroutine_enter(co, acb);
+ 
+@@ -4072,7 +4050,6 @@ BlockDriverAIOCB *bdrv_aio_discard(BlockDriverState *bs,
+     acb = qemu_aio_get(&bdrv_em_co_aiocb_info, bs, cb, opaque);
+     acb->req.sector = sector_num;
+     acb->req.nb_sectors = nb_sectors;
+-    acb->done = NULL;
+     co = qemu_coroutine_create(bdrv_aio_discard_co_entry);
+     qemu_coroutine_enter(co, acb);
+ 
+-- 
+2.1.0
+

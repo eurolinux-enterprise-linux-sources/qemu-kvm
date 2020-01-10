@@ -1,0 +1,47 @@
+From 8a481884fdc5753cd1e091056b3e4929a06c14f3 Mon Sep 17 00:00:00 2001
+From: Amit Shah <amit.shah@redhat.com>
+Date: Fri, 11 Jul 2014 10:47:17 -0500
+Subject: [CHANGE 06/18] tests: vmstate static checker: version mismatch inside
+ a Description
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <25f06877cdda6eca7b19177494752e147b581f8c.1405075344.git.amit.shah@redhat.com>
+Patchwork-id: 59806
+O-Subject: [RHEL6.6 qemu-kvm PATCH 06/18] tests: vmstate static checker: version mismatch inside a Description
+Bugzilla: 1118718
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Acked-by: Juan Quintela <quintela@redhat.com>
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+(cherry picked from commit 4efa6e1d6473dbd775a5dd7eb976fa11501a94d2)
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ tests/vmstate-static-checker-data/dump2.json | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ tests/vmstate-static-checker-data/dump2.json | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/vmstate-static-checker-data/dump2.json b/tests/vmstate-static-checker-data/dump2.json
+index f405534..36a9b4b 100644
+--- a/tests/vmstate-static-checker-data/dump2.json
++++ b/tests/vmstate-static-checker-data/dump2.json
+@@ -829,7 +829,7 @@
+     "minimum_version_id": 2,
+     "Description": {
+       "name": "fdc",
+-      "version_id": 2,
++      "version_id": 1,
+       "minimum_version_id": 2,
+       "Fields": [
+         {
+-- 
+1.9.3
+

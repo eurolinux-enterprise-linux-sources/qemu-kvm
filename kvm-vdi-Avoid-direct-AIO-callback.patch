@@ -1,0 +1,147 @@
+From 34921ae37a632e1d6a2bdfe4893684dec8eafba4 Mon Sep 17 00:00:00 2001
+Message-Id: <34921ae37a632e1d6a2bdfe4893684dec8eafba4.1433306137.git.jen@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Tue, 2 Jun 2015 04:53:48 -0400
+Subject: [CHANGE 1/2] vdi: Avoid direct AIO callback
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <82dceb66a90443f6deed75b2ca5c275d59ac413b.1433220006.git.jcody@redhat.com>
+Patchwork-id: 65244
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 1/2] vdi: Avoid direct AIO callback
+Bugzilla: 1130046
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+bdrv_aio_* must not call the callback before returning to its caller. In vdi,
+this could happen in some error cases. This starts the real requests processing
+in a BH to avoid this situation.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit e67a64a869312eccc1487409aaa03177da4d2f26)
+
+RHEL 6.7 Notes:
+
+Changed qemu_aio_release() calls to qemu_aio_unref(), to match the
+downstream naming.
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ block/vdi.c | 41 ++++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 36 insertions(+), 5 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/vdi.c | 41 ++++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 36 insertions(+), 5 deletions(-)
+
+diff --git a/block/vdi.c b/block/vdi.c
+index e66f278..430c392 100644
+--- a/block/vdi.c
++++ b/block/vdi.c
+@@ -155,6 +155,7 @@ typedef struct {
+     /* Buffer for new allocated block. */
+     void *block_buffer;
+     void *orig_buf;
++    bool is_write;
+     int header_modified;
+     BlockDriverAIOCB *hd_aiocb;
+     struct iovec hd_iov;
+@@ -512,6 +513,8 @@ static VdiAIOCB *vdi_aio_setup(BlockDriverState *bs, int64_t sector_num,
+         acb->hd_aiocb = NULL;
+         acb->sector_num = sector_num;
+         acb->qiov = qiov;
++        acb->is_write = is_write;
++
+         if (qiov->niov > 1) {
+             acb->buf = qemu_blockalign(bs, qiov->size);
+             acb->orig_buf = acb->buf;
+@@ -550,14 +553,20 @@ static int vdi_schedule_bh(QEMUBHFunc *cb, VdiAIOCB *acb)
+ }
+ 
+ static void vdi_aio_read_cb(void *opaque, int ret);
++static void vdi_aio_write_cb(void *opaque, int ret);
+ 
+-static void vdi_aio_read_bh(void *opaque)
++static void vdi_aio_rw_bh(void *opaque)
+ {
+     VdiAIOCB *acb = opaque;
+     logout("\n");
+     qemu_bh_delete(acb->bh);
+     acb->bh = NULL;
+-    vdi_aio_read_cb(opaque, 0);
++
++    if (acb->is_write) {
++        vdi_aio_write_cb(opaque, 0);
++    } else {
++        vdi_aio_read_cb(opaque, 0);
++    }
+ }
+ 
+ static void vdi_aio_read_cb(void *opaque, int ret)
+@@ -605,7 +614,7 @@ static void vdi_aio_read_cb(void *opaque, int ret)
+     if (bmap_entry == VDI_UNALLOCATED) {
+         /* Block not allocated, return zeros, no need to wait. */
+         memset(acb->buf, 0, n_sectors * SECTOR_SIZE);
+-        ret = vdi_schedule_bh(vdi_aio_read_bh, acb);
++        ret = vdi_schedule_bh(vdi_aio_rw_bh, acb);
+         if (ret < 0) {
+             goto done;
+         }
+@@ -637,12 +646,23 @@ static BlockDriverAIOCB *vdi_aio_readv(BlockDriverState *bs,
+         BlockDriverCompletionFunc *cb, void *opaque)
+ {
+     VdiAIOCB *acb;
++    int ret;
++
+     logout("\n");
+     acb = vdi_aio_setup(bs, sector_num, qiov, nb_sectors, cb, opaque, 0);
+     if (!acb) {
+         return NULL;
+     }
+-    vdi_aio_read_cb(acb, 0);
++
++    ret = vdi_schedule_bh(vdi_aio_rw_bh, acb);
++    if (ret < 0) {
++        if (acb->qiov->niov > 1) {
++            qemu_vfree(acb->orig_buf);
++        }
++        qemu_aio_unref(acb);
++        return NULL;
++    }
++
+     return &acb->common;
+ }
+ 
+@@ -792,12 +812,23 @@ static BlockDriverAIOCB *vdi_aio_writev(BlockDriverState *bs,
+         BlockDriverCompletionFunc *cb, void *opaque)
+ {
+     VdiAIOCB *acb;
++    int ret;
++
+     logout("\n");
+     acb = vdi_aio_setup(bs, sector_num, qiov, nb_sectors, cb, opaque, 1);
+     if (!acb) {
+         return NULL;
+     }
+-    vdi_aio_write_cb(acb, 0);
++
++    ret = vdi_schedule_bh(vdi_aio_rw_bh, acb);
++    if (ret < 0) {
++        if (acb->qiov->niov > 1) {
++            qemu_vfree(acb->orig_buf);
++        }
++        qemu_aio_unref(acb);
++        return NULL;
++    }
++
+     return &acb->common;
+ }
+ 
+-- 
+2.1.0
+

@@ -1,0 +1,57 @@
+From d66b16c9217d8153ec3ce06bfba1ce72368b6daa Mon Sep 17 00:00:00 2001
+Message-Id: <d66b16c9217d8153ec3ce06bfba1ce72368b6daa.1474550614.git.jen@redhat.com>
+In-Reply-To: <6f44551fd1c5be7bdb79be79e5859122c966facb.1474550614.git.jen@redhat.com>
+References: <6f44551fd1c5be7bdb79be79e5859122c966facb.1474550614.git.jen@redhat.com>
+From: John Snow <jsnow@redhat.com>
+Date: Tue, 20 Sep 2016 17:31:49 -0500
+Subject: [CHANGE 4/4] atapi: fix halted DMA reset
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: John Snow <jsnow@redhat.com>
+Message-id: <1474392709-555-3-git-send-email-jsnow@redhat.com>
+Patchwork-id: 72391
+O-Subject: [RHEL-6.9 qemu-kvm PATCH v2 2/2] atapi: fix halted DMA reset
+Bugzilla: 1281713
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Followup to 87ac25fd, this time for ATAPI DMA.
+
+Reported-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: John Snow <jsnow@redhat.com>
+Message-id: 1470164128-28158-1-git-send-email-jsnow@redhat.com
+Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: John Snow <jsnow@redhat.com>
+(cherry picked from commit 7f951b2d7765f68ae1e563c2fed44071ca774790)
+Signed-off-by: John Snow <jsnow@redhat.com>
+
+Note: This is a superfluous fix for 0.12, but it mirrors the fixes for
+      other versions of QEMU. This provides a record of the backport/fix
+      for the issue comprehensively.
+
+Conflicts:
+    hw/ide/atapi.c: context and different containing structure for aiocb
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/ide/atapi.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/hw/ide/atapi.c b/hw/ide/atapi.c
+index 406fbeb..7474000 100644
+--- a/hw/ide/atapi.c
++++ b/hw/ide/atapi.c
+@@ -297,6 +297,7 @@ static void ide_atapi_cmd_read_dma_cb(void *opaque, int ret)
+     int data_offset, n;
+ 
+     if (ret < 0) {
++        bm->aiocb = NULL;
+         ide_atapi_io_error(s, ret);
+         goto eot;
+     }
+-- 
+2.7.4
+

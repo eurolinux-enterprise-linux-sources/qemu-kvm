@@ -1,0 +1,140 @@
+From a26ed37993447f856fc7e3ddff55949a94889db6 Mon Sep 17 00:00:00 2001
+Message-Id: <a26ed37993447f856fc7e3ddff55949a94889db6.1425657843.git.jen@redhat.com>
+In-Reply-To: <f6cf12f0d166001c7958ddc904eff181f03da5e4.1425657843.git.jen@redhat.com>
+References: <f6cf12f0d166001c7958ddc904eff181f03da5e4.1425657843.git.jen@redhat.com>
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Tue, 3 Mar 2015 22:56:36 -0500
+Subject: [CHANGE 11/11] block: add null protocol for performance tests
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Stefan Hajnoczi <stefanha@redhat.com>
+Message-id: <1425423396-4039-1-git-send-email-stefanha@redhat.com>
+Patchwork-id: 64127
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2] block: add null protocol for performance tests
+Bugzilla: 1193917
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+Bugzilla: 1193917
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=8803999
+Upstream: Fam's full implementation is merged
+
+This is a partial backport of Fam's null block driver.  The null block
+driver is very useful for debugging and benchmarking high IOPS
+workloads.
+
+I use this for debugging I/O throttling since it allows QEMU to achieve
+maximum IOPS (no actual I/O is being done).
+
+Note that the disk is hard-coded to 8 GB capacity.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+---
+ Makefile.objs |  1 +
+ block/null.c  | 73 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 74 insertions(+)
+ create mode 100644 block/null.c
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ Makefile.objs |  1 +
+ block/null.c  | 73 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 74 insertions(+)
+ create mode 100644 block/null.c
+
+diff --git a/Makefile.objs b/Makefile.objs
+index 4f6840c..329dcec 100644
+--- a/Makefile.objs
++++ b/Makefile.objs
+@@ -28,6 +28,7 @@ block-nested-$(CONFIG_VHDX) += vhdx.o vhdx-endian.o vhdx-log.o
+ block-nested-y += qed-check.o
+ block-nested-y += parallels.o nbd.o blkdebug.o
+ block-nested-y += stream.o mirror.o commit.o
++block-nested-y += null.o
+ block-nested-$(CONFIG_WIN32) += raw-win32.o
+ block-nested-$(CONFIG_POSIX) += raw-posix.o
+ block-nested-$(CONFIG_CURL) += curl.o
+diff --git a/block/null.c b/block/null.c
+new file mode 100644
+index 0000000..91f8ff9
+--- /dev/null
++++ b/block/null.c
+@@ -0,0 +1,73 @@
++/*
++ * Null block driver
++ *
++ * Authors:
++ *  Fam Zheng <famz@redhat.com>
++ *
++ * Copyright (C) 2014 Red Hat, Inc.
++ *
++ * This work is licensed under the terms of the GNU GPL, version 2 or later.
++ * See the COPYING file in the top-level directory.
++ */
++
++#include "qemu-common.h"
++#include "block_int.h"
++#include "module.h"
++
++static int null_file_open(BlockDriverState *bs, const char *filename, int flags)
++{
++    return 0;
++}
++
++/* We have nothing to do for null reopen, stubs just return
++ * success */
++static int null_reopen_prepare(BDRVReopenState *state,
++                              BlockReopenQueue *queue,  Error **errp)
++{
++    return 0;
++}
++
++static int coroutine_fn null_co_readv(BlockDriverState *bs, int64_t sector_num,
++                                     int nb_sectors, QEMUIOVector *qiov)
++{
++    return 0;
++}
++
++static int coroutine_fn null_co_writev(BlockDriverState *bs, int64_t sector_num,
++                                      int nb_sectors, QEMUIOVector *qiov)
++{
++    return 0;
++}
++
++static void null_close(BlockDriverState *bs)
++{
++}
++
++static int64_t null_getlength(BlockDriverState *bs)
++{
++    return 8ULL * 1024 * 1024 * 1024;
++}
++
++static BlockDriver bdrv_null = {
++    .format_name          = "null",
++    .protocol_name        = "null",
++
++    /* It's really 0, but we need to make g_malloc() happy */
++    .instance_size        = 1,
++
++    .bdrv_file_open       = null_file_open,
++    .bdrv_close           = null_close,
++    .bdrv_reopen_prepare  = null_reopen_prepare,
++
++    .bdrv_co_readv        = null_co_readv,
++    .bdrv_co_writev       = null_co_writev,
++
++    .bdrv_getlength       = null_getlength,
++};
++
++static void bdrv_null_init(void)
++{
++    bdrv_register(&bdrv_null);
++}
++
++block_init(bdrv_null_init);
+-- 
+2.1.0
+

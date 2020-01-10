@@ -1,0 +1,73 @@
+From 9a83b480f79e828ee64a065c239968cbb630bc8f Mon Sep 17 00:00:00 2001
+From: Markus Armbruster <armbru@redhat.com>
+Date: Tue, 22 Jul 2014 09:16:04 -0500
+Subject: [CHANGE 15/17] virtio-blk: Treat read/write beyond end as invalid
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1406020565-25364-11-git-send-email-armbru@redhat.com>
+Patchwork-id: 59997
+O-Subject: [PATCH 6.6 qemu-kvm v2 10/11] virtio-blk: Treat read/write beyond end as invalid
+Bugzilla: 1064643
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+The block layer fails such reads and writes just fine.  However, they
+then get treated like valid operations that fail: the error action
+gets executed.  Unwanted; reporting the error to the guest is the only
+sensible action.
+
+Reject them before passing them to the block layer.  This bypasses the
+error action and I/O accounting.
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 3c2daac0b98952a858277878cb11294256b39e43)
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	hw/block/virtio-blk.c
+
+Conflicts only because RHEL-6 has virtio-blk.c still in hw/.  Patch
+applies cleanly there.
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+---
+ hw/virtio-blk.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/virtio-blk.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/hw/virtio-blk.c b/hw/virtio-blk.c
+index 1909a90..298864a 100644
+--- a/hw/virtio-blk.c
++++ b/hw/virtio-blk.c
+@@ -315,12 +315,19 @@ static void virtio_blk_handle_flush(BlockRequest *blkreq, int *num_writes,
+ static bool virtio_blk_sect_range_ok(VirtIOBlock *dev,
+                                      uint64_t sector, size_t size)
+ {
++    uint64_t nb_sectors = size >> BDRV_SECTOR_BITS;
++    uint64_t total_sectors;
++
+     if (sector & dev->sector_mask) {
+         return false;
+     }
+     if (size % dev->conf->logical_block_size) {
+         return false;
+     }
++    bdrv_get_geometry(dev->bs, &total_sectors);
++    if (sector > total_sectors || nb_sectors > total_sectors - sector) {
++        return false;
++    }
+     return true;
+ }
+ 
+-- 
+1.9.3
+

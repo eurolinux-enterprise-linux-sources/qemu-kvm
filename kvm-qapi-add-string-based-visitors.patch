@@ -1,0 +1,440 @@
+From 4c31c2c28046550b08f5e39ad627a61ee2dbe27f Mon Sep 17 00:00:00 2001
+From: Amos Kong <akong@redhat.com>
+Date: Tue, 10 Sep 2013 06:07:46 +0200
+Subject: [PATCH 04/39] qapi: add string-based visitors
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1378793288-3371-5-git-send-email-akong@redhat.com>
+Patchwork-id: 54239
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v3 04/26] qapi: add string-based visitors
+Bugzilla: 786407
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+String based visitors provide a consistent interface for parsing
+strings to C values, as well as consuming C values as strings.
+They will be used to parse command-line options.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(backported from commit a020f9809cff1cfdb99c64348400cf86a0bbe40a)
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+---
+ Makefile.objs                |    2 +-
+ qapi/qapi-visit-core.c       |   50 +++++++++++++++
+ qapi/qapi-visit-core.h       |    4 +
+ qapi/string-input-visitor.c  |  137 ++++++++++++++++++++++++++++++++++++++++++
+ qapi/string-input-visitor.h  |   25 ++++++++
+ qapi/string-output-visitor.c |   88 +++++++++++++++++++++++++++
+ qapi/string-output-visitor.h |   26 ++++++++
+ 7 files changed, 331 insertions(+), 1 deletions(-)
+ create mode 100644 qapi/string-input-visitor.c
+ create mode 100644 qapi/string-input-visitor.h
+ create mode 100644 qapi/string-output-visitor.c
+ create mode 100644 qapi/string-output-visitor.h
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ Makefile.objs                |    2 +-
+ qapi/qapi-visit-core.c       |   50 +++++++++++++++
+ qapi/qapi-visit-core.h       |    4 +
+ qapi/string-input-visitor.c  |  137 ++++++++++++++++++++++++++++++++++++++++++
+ qapi/string-input-visitor.h  |   25 ++++++++
+ qapi/string-output-visitor.c |   88 +++++++++++++++++++++++++++
+ qapi/string-output-visitor.h |   26 ++++++++
+ 7 files changed, 331 insertions(+), 1 deletions(-)
+ create mode 100644 qapi/string-input-visitor.c
+ create mode 100644 qapi/string-input-visitor.h
+ create mode 100644 qapi/string-output-visitor.c
+ create mode 100644 qapi/string-output-visitor.h
+
+diff --git a/Makefile.objs b/Makefile.objs
+index 654bd34..4e574be 100644
+--- a/Makefile.objs
++++ b/Makefile.objs
+@@ -197,7 +197,7 @@ hw-obj-$(CONFIG_QDEV_ADDR) += qdev-addr.o
+ # qapi
+ 
+ qapi-nested-y = qapi-visit-core.o qmp-input-visitor.o qmp-output-visitor.o qapi-dealloc-visitor.o
+-qapi-nested-y += qmp-registry.o qmp-dispatch.o
++qapi-nested-y += qmp-registry.o qmp-dispatch.o string-input-visitor.o string-output-visitor.o
+ 
+ ifeq ($(CONFIG_LIVE_SNAPSHOTS),y)
+ qapi-generated-y += rhev-qapi-visit.o rhev-qapi-types.o rhev-qmp-marshal.o
+diff --git a/qapi/qapi-visit-core.c b/qapi/qapi-visit-core.c
+index 1ae6e16..6cedb65 100644
+--- a/qapi/qapi-visit-core.c
++++ b/qapi/qapi-visit-core.c
+@@ -253,3 +253,53 @@ void visit_type_number(Visitor *v, double *obj, const char *name, Error **errp)
+         v->type_number(v, obj, name, errp);
+     }
+ }
++
++void output_type_enum(Visitor *v, int *obj, const char *strings[],
++                      const char *kind, const char *name,
++                      Error **errp)
++{
++    int i = 0;
++    int value = *obj;
++    char *enum_str;
++
++    assert(strings);
++    while (strings[i++] != NULL);
++    if (value < 0 || value >= i - 1) {
++        error_set(errp, QERR_INVALID_PARAMETER, name ? name : "null");
++        return;
++    }
++
++    enum_str = (char *)strings[value];
++    visit_type_str(v, &enum_str, name, errp);
++}
++
++void input_type_enum(Visitor *v, int *obj, const char *strings[],
++                     const char *kind, const char *name,
++                     Error **errp)
++{
++    int64_t value = 0;
++    char *enum_str;
++
++    assert(strings);
++
++    visit_type_str(v, &enum_str, name, errp);
++    if (error_is_set(errp)) {
++        return;
++    }
++
++    while (strings[value] != NULL) {
++        if (strcmp(strings[value], enum_str) == 0) {
++            break;
++        }
++        value++;
++    }
++
++    if (strings[value] == NULL) {
++        error_set(errp, QERR_INVALID_PARAMETER, enum_str);
++        g_free(enum_str);
++        return;
++    }
++
++    g_free(enum_str);
++    *obj = value;
++}
+diff --git a/qapi/qapi-visit-core.h b/qapi/qapi-visit-core.h
+index a19d70c..d9577dd 100644
+--- a/qapi/qapi-visit-core.h
++++ b/qapi/qapi-visit-core.h
+@@ -89,4 +89,8 @@ void visit_type_bool(Visitor *v, bool *obj, const char *name, Error **errp);
+ void visit_type_str(Visitor *v, char **obj, const char *name, Error **errp);
+ void visit_type_number(Visitor *v, double *obj, const char *name, Error **errp);
+ 
++void input_type_enum(Visitor *v, int *obj, const char *strings[],
++                     const char *kind, const char *name, Error **errp);
++void output_type_enum(Visitor *v, int *obj, const char *strings[],
++                      const char *kind, const char *name, Error **errp);
+ #endif
+diff --git a/qapi/string-input-visitor.c b/qapi/string-input-visitor.c
+new file mode 100644
+index 0000000..4996da9
+--- /dev/null
++++ b/qapi/string-input-visitor.c
+@@ -0,0 +1,137 @@
++/*
++ * String parsing visitor
++ *
++ * Copyright Red Hat, Inc. 2012
++ *
++ * Author: Paolo Bonzini <pbonzini@redhat.com>
++ *
++ * This work is licensed under the terms of the GNU LGPL, version 2.1 or later.
++ * See the COPYING.LIB file in the top-level directory.
++ *
++ */
++
++#include "qapi/string-input-visitor.h"
++#include "qemu-common.h"
++#include "qerror.h"
++
++struct StringInputVisitor
++{
++    Visitor visitor;
++    const char *string;
++};
++
++static void parse_type_int(Visitor *v, int64_t *obj, const char *name,
++                           Error **errp)
++{
++    StringInputVisitor *siv = DO_UPCAST(StringInputVisitor, visitor, v);
++    char *endp = (char *) siv->string;
++    long long val;
++
++    errno = 0;
++    if (siv->string) {
++        val = strtoll(siv->string, &endp, 0);
++    }
++    if (!siv->string || errno || endp == siv->string || *endp) {
++        error_set(errp, QERR_INVALID_PARAMETER_TYPE, name ? name : "null",
++                  "integer");
++        return;
++    }
++
++    *obj = val;
++}
++
++static void parse_type_bool(Visitor *v, bool *obj, const char *name,
++                            Error **errp)
++{
++    StringInputVisitor *siv = DO_UPCAST(StringInputVisitor, visitor, v);
++
++    if (siv->string) {
++        if (!strcasecmp(siv->string, "on") ||
++            !strcasecmp(siv->string, "yes") ||
++            !strcasecmp(siv->string, "true")) {
++            *obj = true;
++            return;
++        }
++        if (!strcasecmp(siv->string, "off") ||
++            !strcasecmp(siv->string, "no") ||
++            !strcasecmp(siv->string, "false")) {
++            *obj = false;
++            return;
++        }
++    }
++
++    error_set(errp, QERR_INVALID_PARAMETER_TYPE, name ? name : "null",
++              "boolean");
++}
++
++static void parse_type_str(Visitor *v, char **obj, const char *name,
++                           Error **errp)
++{
++    StringInputVisitor *siv = DO_UPCAST(StringInputVisitor, visitor, v);
++    if (siv->string) {
++        *obj = g_strdup(siv->string);
++    } else {
++        error_set(errp, QERR_INVALID_PARAMETER_TYPE, name ? name : "null",
++                  "string");
++    }
++}
++
++static void parse_type_number(Visitor *v, double *obj, const char *name,
++                              Error **errp)
++{
++    StringInputVisitor *siv = DO_UPCAST(StringInputVisitor, visitor, v);
++    char *endp = (char *) siv->string;
++    double val;
++
++    errno = 0;
++    if (siv->string) {
++        val = strtod(siv->string, &endp);
++    }
++    if (!siv->string || errno || endp == siv->string || *endp) {
++        error_set(errp, QERR_INVALID_PARAMETER_TYPE, name ? name : "null",
++                  "number");
++        return;
++    }
++
++    *obj = val;
++}
++
++static void parse_start_optional(Visitor *v, bool *present,
++                                 const char *name, Error **errp)
++{
++    StringInputVisitor *siv = DO_UPCAST(StringInputVisitor, visitor, v);
++
++    if (!siv->string) {
++        *present = false;
++        return;
++    }
++
++    *present = true;
++}
++
++Visitor *string_input_get_visitor(StringInputVisitor *v)
++{
++    return &v->visitor;
++}
++
++void string_input_visitor_cleanup(StringInputVisitor *v)
++{
++    g_free(v);
++}
++
++StringInputVisitor *string_input_visitor_new(const char *str)
++{
++    StringInputVisitor *v;
++
++    v = g_malloc0(sizeof(*v));
++
++    v->visitor.type_enum = input_type_enum;
++    v->visitor.type_int = parse_type_int;
++    v->visitor.type_bool = parse_type_bool;
++    v->visitor.type_str = parse_type_str;
++    v->visitor.type_number = parse_type_number;
++    v->visitor.start_optional = parse_start_optional;
++
++    v->string = str;
++    return v;
++}
+diff --git a/qapi/string-input-visitor.h b/qapi/string-input-visitor.h
+new file mode 100644
+index 0000000..f18b237
+--- /dev/null
++++ b/qapi/string-input-visitor.h
+@@ -0,0 +1,25 @@
++/*
++ * String parsing Visitor
++ *
++ * Copyright Red Hat, Inc. 2012
++ *
++ * Author: Paolo Bonzini <pbonzini@redhat.com>
++ *
++ * This work is licensed under the terms of the GNU LGPL, version 2.1 or later.
++ * See the COPYING.LIB file in the top-level directory.
++ *
++ */
++
++#ifndef STRING_INPUT_VISITOR_H
++#define STRING_INPUT_VISITOR_H
++
++#include "qapi/qapi-visit-core.h"
++
++typedef struct StringInputVisitor StringInputVisitor;
++
++StringInputVisitor *string_input_visitor_new(const char *str);
++void string_input_visitor_cleanup(StringInputVisitor *v);
++
++Visitor *string_input_get_visitor(StringInputVisitor *v);
++
++#endif
+diff --git a/qapi/string-output-visitor.c b/qapi/string-output-visitor.c
+new file mode 100644
+index 0000000..b160147
+--- /dev/null
++++ b/qapi/string-output-visitor.c
+@@ -0,0 +1,88 @@
++/*
++ * String printing Visitor
++ *
++ * Copyright Red Hat, Inc. 2012
++ *
++ * Author: Paolo Bonzini <pbonzini@redhat.com>
++ *
++ * This work is licensed under the terms of the GNU LGPL, version 2.1 or later.
++ * See the COPYING.LIB file in the top-level directory.
++ *
++ */
++
++#include "qapi/string-output-visitor.h"
++#include "qemu-common.h"
++#include "qerror.h"
++
++struct StringOutputVisitor
++{
++    Visitor visitor;
++    char *string;
++};
++
++static void string_output_set(StringOutputVisitor *sov, char *string)
++{
++    g_free(sov->string);
++    sov->string = string;
++}
++
++static void print_type_int(Visitor *v, int64_t *obj, const char *name,
++                           Error **errp)
++{
++    StringOutputVisitor *sov = DO_UPCAST(StringOutputVisitor, visitor, v);
++    string_output_set(sov, g_strdup_printf("%lld", (long long) *obj));
++}
++
++static void print_type_bool(Visitor *v, bool *obj, const char *name,
++                            Error **errp)
++{
++    StringOutputVisitor *sov = DO_UPCAST(StringOutputVisitor, visitor, v);
++    string_output_set(sov, g_strdup(*obj ? "true" : "false"));
++}
++
++static void print_type_str(Visitor *v, char **obj, const char *name,
++                           Error **errp)
++{
++    StringOutputVisitor *sov = DO_UPCAST(StringOutputVisitor, visitor, v);
++    string_output_set(sov, g_strdup(*obj ? *obj : ""));
++}
++
++static void print_type_number(Visitor *v, double *obj, const char *name,
++                              Error **errp)
++{
++    StringOutputVisitor *sov = DO_UPCAST(StringOutputVisitor, visitor, v);
++    string_output_set(sov, g_strdup_printf("%f", *obj));
++}
++
++char *string_output_get_string(StringOutputVisitor *sov)
++{
++    char *string = sov->string;
++    sov->string = NULL;
++    return string;
++}
++
++Visitor *string_output_get_visitor(StringOutputVisitor *sov)
++{
++    return &sov->visitor;
++}
++
++void string_output_visitor_cleanup(StringOutputVisitor *sov)
++{
++    g_free(sov->string);
++    g_free(sov);
++}
++
++StringOutputVisitor *string_output_visitor_new(void)
++{
++    StringOutputVisitor *v;
++
++    v = g_malloc0(sizeof(*v));
++
++    v->visitor.type_enum = output_type_enum;
++    v->visitor.type_int = print_type_int;
++    v->visitor.type_bool = print_type_bool;
++    v->visitor.type_str = print_type_str;
++    v->visitor.type_number = print_type_number;
++
++    return v;
++}
+diff --git a/qapi/string-output-visitor.h b/qapi/string-output-visitor.h
+new file mode 100644
+index 0000000..5c06e40
+--- /dev/null
++++ b/qapi/string-output-visitor.h
+@@ -0,0 +1,26 @@
++/*
++ * String printing Visitor
++ *
++ * Copyright Red Hat, Inc. 2012
++ *
++ * Author: Paolo Bonzini <pbonzini@redhat.com>
++ *
++ * This work is licensed under the terms of the GNU LGPL, version 2.1 or later.
++ * See the COPYING.LIB file in the top-level directory.
++ *
++ */
++
++#ifndef STRING_OUTPUT_VISITOR_H
++#define STRING_OUTPUT_VISITOR_H
++
++#include "qapi/qapi-visit-core.h"
++
++typedef struct StringOutputVisitor StringOutputVisitor;
++
++StringOutputVisitor *string_output_visitor_new(void);
++void string_output_visitor_cleanup(StringOutputVisitor *v);
++
++char *string_output_get_string(StringOutputVisitor *v);
++Visitor *string_output_get_visitor(StringOutputVisitor *v);
++
++#endif
+-- 
+1.7.1
+

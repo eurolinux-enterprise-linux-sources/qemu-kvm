@@ -1,0 +1,54 @@
+From 062719c9d78bcd88d7bbced672e97006f2782541 Mon Sep 17 00:00:00 2001
+Message-Id: <062719c9d78bcd88d7bbced672e97006f2782541.1366117835.git.minovotn@redhat.com>
+In-Reply-To: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+References: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 21 Mar 2013 10:24:19 +0100
+Subject: [PATCH 18/19] qemu-img convert: Remove -s from getopt string
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1363861459-8099-1-git-send-email-kwolf@redhat.com>
+Patchwork-id: 49778
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] qemu-img convert: Remove -s from getopt string
+Bugzilla: 924165
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+Bugzilla: 924165
+Upstream status: n/a
+
+This fixes a bug introduced by a bad backport in commit 38d60cb2. RHEL's
+qemu-img doesn't actually have code to implement the -s option (which
+copied out an internal snapshot), but the commit added it to the
+getopt() string, so that qemu-img now accepts and silently ignores the
+option.
+
+Remove it again from the getopt string.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ qemu-img.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-img.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/qemu-img.c b/qemu-img.c
+index a83c9f8..705d18a 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -818,7 +818,7 @@ static int img_convert(int argc, char **argv)
+     out_baseimg = NULL;
+     compress = 0;
+     for(;;) {
+-        c = getopt(argc, argv, "f:O:B:s:hce6o:pS:t:");
++        c = getopt(argc, argv, "f:O:B:hce6o:pS:t:");
+         if (c == -1) {
+             break;
+         }
+-- 
+1.7.11.7
+

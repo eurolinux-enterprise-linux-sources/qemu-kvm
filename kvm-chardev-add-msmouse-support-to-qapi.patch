@@ -1,0 +1,117 @@
+From 641b2106d76c5e31983ee253b3382b6ccc069f4f Mon Sep 17 00:00:00 2001
+Message-Id: <641b2106d76c5e31983ee253b3382b6ccc069f4f.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:06:01 +0200
+Subject: [PATCH 50/65] chardev: add msmouse support to qapi
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-51-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52156
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 50/65] chardev: add msmouse support to qapi
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+This patch adds 'msmouse' support to qapi and also switches over
+the msmouse chardev initialization to the new qapi code path.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit f5a51cab2afd1124f0988081207d506fbec629b4)
+
+Conflicts:
+
+	qemu-char.h
+---
+ hw/msmouse.c     |    7 +++++--
+ qapi-schema.json |    3 ++-
+ qemu-char.c      |    3 +++
+ qemu-char.h      |    4 ++++
+ 4 files changed, 14 insertions(+), 3 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/msmouse.c     | 7 +++++--
+ qapi-schema.json | 3 ++-
+ qemu-char.c      | 3 +++
+ qemu-char.h      | 4 ++++
+ 4 files changed, 14 insertions(+), 3 deletions(-)
+
+diff --git a/hw/msmouse.c b/hw/msmouse.c
+index 56d1561..63d63db 100644
+--- a/hw/msmouse.c
++++ b/hw/msmouse.c
+@@ -26,6 +26,9 @@
+ #include "../qemu-char.h"
+ #include "../console.h"
+ 
++#include "qapi-visit.h"
++#include "qemu-char-qapi.h"
++
+ #define MSMOUSE_LO6(n) ((n) & 0x3f)
+ #define MSMOUSE_HI2(n) (((n) & 0xc0) >> 6)
+ 
+@@ -63,7 +66,7 @@ static void msmouse_chr_close (struct CharDriverState *chr)
+     qemu_free (chr);
+ }
+ 
+-static CharDriverState *qemu_chr_open_msmouse(QemuOpts *opts)
++CharDriverState *qemu_chr_open_msmouse(void)
+ {
+     CharDriverState *chr;
+ 
+@@ -78,7 +81,7 @@ static CharDriverState *qemu_chr_open_msmouse(QemuOpts *opts)
+ 
+ static void register_types(void)
+ {
+-    register_char_driver("msmouse", qemu_chr_open_msmouse);
++    register_char_driver_qapi("msmouse", CHARDEV_BACKEND_KIND_MSMOUSE, NULL);
+ }
+ 
+ machine_init(register_types);
+diff --git a/qapi-schema.json b/qapi-schema.json
+index 682f60f..4891e63 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -481,7 +481,8 @@
+                                        'socket' : 'ChardevSocket',
+                                        'pty'    : 'ChardevDummy',
+                                        'null'   : 'ChardevDummy',
+-                                       'mux'    : 'ChardevMux' } }
++                                       'mux'    : 'ChardevMux',
++                                       'msmouse': 'ChardevDummy' } }
+ 
+ ##
+ # @ChardevReturn:
+diff --git a/qemu-char.c b/qemu-char.c
+index 26be8ad..ac5b23b 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -3259,6 +3259,9 @@ ChardevReturn *qmp_chardev_add(const char *id, ChardevBackend *backend,
+         }
+         chr = qemu_chr_open_mux(base);
+         break;
++    case CHARDEV_BACKEND_KIND_MSMOUSE:
++        chr = qemu_chr_open_msmouse();
++        break;
+     default:
+         error_setg(errp, "unknown chardev backend (%d)", backend->kind);
+         break;
+diff --git a/qemu-char.h b/qemu-char.h
+index de085e5..488a38a 100644
+--- a/qemu-char.h
++++ b/qemu-char.h
+@@ -276,4 +276,8 @@ int qemu_set_fd_handler(int fd,
+                         IOHandler *fd_read,
+                         IOHandler *fd_write,
+                         void *opaque);
++
++/* msmouse */
++CharDriverState *qemu_chr_open_msmouse(void);
++
+ #endif
+-- 
+1.7.11.7
+

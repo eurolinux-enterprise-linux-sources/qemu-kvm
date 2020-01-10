@@ -1,0 +1,51 @@
+From bdbd83268ceac48040f244a7890d408e79dd2110 Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Wed, 9 Apr 2014 15:59:09 +0200
+Subject: [PATCH 47/48] bochs: Fix memory leak in bochs_open() error path
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1397051950-13835-1-git-send-email-kwolf@redhat.com>
+Patchwork-id: n/a
+O-Subject: [RHEL-6.6/6.5.z qemu-kvm PATCH v3 46/45] bochs: Fix
+           memory leak in bochs_open() error path
+Bugzilla: 1079518
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1079518
+Upstream status: Submitted
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+
+Conflicts:
+	block/bochs.c
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/bochs.c |    6 ++++--
+ 1 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/block/bochs.c b/block/bochs.c
+index 610fa5d..23c4da4 100644
+--- a/block/bochs.c
++++ b/block/bochs.c
+@@ -148,10 +148,12 @@ static int bochs_open(BlockDriverState *bs, int flags)
+     s->extent_size = le32_to_cpu(bochs.extent);
+     if (s->extent_size == 0) {
+         qerror_report(QERR_GENERIC_ERROR, "Extent size may not be zero");
+-        return -EINVAL;
++        ret = -EINVAL;
++        goto fail;
+     } else if (s->extent_size > 0x800000) {
+         qerror_report(QERR_GENERIC_ERROR, "Extent size is too large");
+-        return -EINVAL;
++        ret = -EINVAL;
++        goto fail;
+     }
+ 
+     if (s->catalog_size < bs->total_sectors / s->extent_size) {
+-- 
+1.7.1
+

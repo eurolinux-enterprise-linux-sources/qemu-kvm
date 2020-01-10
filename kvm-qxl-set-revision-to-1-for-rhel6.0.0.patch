@@ -1,0 +1,53 @@
+From 69f07de9ed3678198578fe036da202cbbca3f312 Mon Sep 17 00:00:00 2001
+Message-Id: <69f07de9ed3678198578fe036da202cbbca3f312.1367330031.git.minovotn@redhat.com>
+In-Reply-To: <aefb5be5bb2e1e9cff25a846b497bc0d4368f495.1367330031.git.minovotn@redhat.com>
+References: <aefb5be5bb2e1e9cff25a846b497bc0d4368f495.1367330031.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Thu, 4 Apr 2013 10:17:43 +0200
+Subject: [PATCH 2/4] qxl: set revision to 1 for rhel6.0.0
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1365070663-12907-1-git-send-email-kraxel@redhat.com>
+Patchwork-id: 50086
+O-Subject: [RHEL-6.4 qemu-kvm PATCH] qxl: set revision to 1 for rhel6.0.0
+Bugzilla: 893344
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+
+bugzilla: #893344 - info qtree mismatch
+upstream: No (rhel6.0.0 spice code base predates upstream merge,
+              so this compat property isn't relevant there).
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+---
+ hw/pc.c |    8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/pc.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/hw/pc.c b/hw/pc.c
+index bf090ae..29e5e73 100644
+--- a/hw/pc.c
++++ b/hw/pc.c
+@@ -1724,6 +1724,14 @@ static void rhel_common_init(const char *type1_version,
+             .driver   = "virtio-serial-pci",\
+             .property = "flow_control",\
+             .value    = stringify(0),\
++        },{\
++            .driver   = "qxl-vga",\
++            .property = "revision",\
++            .value    = stringify(1),\
++        },{\
++            .driver   = "qxl",\
++            .property = "revision",\
++            .value    = stringify(1),\
+         }
+ 
+ static void pc_rhel630_compat(void)
+-- 
+1.7.11.7
+

@@ -1,0 +1,207 @@
+From dbc0773d1c719444e3fef247ee7a047308c9728b Mon Sep 17 00:00:00 2001
+Message-Id: <dbc0773d1c719444e3fef247ee7a047308c9728b.1369899578.git.minovotn@redhat.com>
+In-Reply-To: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+References: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Wed, 22 May 2013 11:31:07 +0200
+Subject: [PATCH 08/15] introduce a new qom device to deal with panicked event
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1369222273-3298-4-git-send-email-lersek@redhat.com>
+Patchwork-id: 51524
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 3/9] introduce a new qom device to deal with panicked event
+Bugzilla: 833530
+RH-Acked-by: Andrew Jones <drjones@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+pvpanic device is used to send guest panic event from guest to qemu.
+
+When guest panic happens, pvpanic device driver will write a event
+number to IO port 0x505(which is the IO port occupied by pvpanic device,
+by default). On receiving the event, pvpanic device will pause guest
+cpu(s), and send a qmp event QEVENT_GUEST_PANICKED.
+
+Signed-off-by: Wen Congyang <wency@cn.fujitsu.com>
+Signed-off-by: Hu Tao <hutao@cn.fujitsu.com>
+Reviewed-by: Markus Armbruster <armbru@redhat.com>
+Message-id: b66077a40235b3531632a05a6ff373850afc7d2e.1366945969.git.hutao@cn.fujitsu.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+
+RHEL-6 notes:
+
+- qom? What is qom?
+
+- We still live on the near side of the tree reorganization, affecting eg.
+  Makefiles and #include directives.
+
+- No support for log masks, just call qemu_log().
+
+- MemoryRegion? huh?
+
+- Manual port of upstream commit eec3d2adc98dd9ef7352823ce6597f88a51cf7cb,
+  starting with "git show eec3d2a:hw/misc/pvpanic.c >hw/pvpanic.c", and
+  heavily ripping off "testdev.c" (commit
+  c9c58ecd922887b1c5657b8b55665a8141bbfe22 from
+  <git://git.kernel.org/pub/scm/virt/kvm/qemu-kvm.git>). Also consulted
+  "hw/watchdog.c".
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ v2:
+ - PVPANIC_PANICKED and parameter of handle_event() have type "signed
+   int", matching upstream [Paolo Bonzini]
+
+ Makefile.target                    |    1 +
+ hw/pvpanic.c                       |   98 ++++++++++++++++++++++++++++++++++++
+ default-configs/i386-softmmu.mak   |    1 +
+ default-configs/x86_64-softmmu.mak |    1 +
+ 4 files changed, 101 insertions(+), 0 deletions(-)
+ create mode 100644 hw/pvpanic.c
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ Makefile.target                    |  1 +
+ default-configs/i386-softmmu.mak   |  1 +
+ default-configs/x86_64-softmmu.mak |  1 +
+ hw/pvpanic.c                       | 98 ++++++++++++++++++++++++++++++++++++++
+ 4 files changed, 101 insertions(+)
+ create mode 100644 hw/pvpanic.c
+
+diff --git a/Makefile.target b/Makefile.target
+index d38e5f6..4df5ae5 100644
+--- a/Makefile.target
++++ b/Makefile.target
+@@ -279,6 +279,7 @@ obj-i386-$(CONFIG_SPICE) += qxl.o qxl-logger.o qxl-render.o
+ obj-i386-$(CONFIG_VMWARE_VGA) += vmware_vga.o
+ obj-i386-$(CONFIG_VMMOUSE) += vmmouse.o
+ obj-i386-$(CONFIG_VMPORT) += vmport.o
++obj-i386-$(CONFIG_PVPANIC) += pvpanic.o
+ 
+ # shared objects
+ obj-ppc-y = ppc.o ide/core.o ide/atapi.o ide/qdev.o ide/isa.o ide/pci.o ide/macio.o
+diff --git a/default-configs/i386-softmmu.mak b/default-configs/i386-softmmu.mak
+index 243c4bf..0cb1150 100644
+--- a/default-configs/i386-softmmu.mak
++++ b/default-configs/i386-softmmu.mak
+@@ -4,3 +4,4 @@ CONFIG_VMWARE_VGA=y
+ CONFIG_VMPORT=y
+ #NOTE: VMMOUSE depends on VMPORT
+ CONFIG_VMMOUSE=y
++CONFIG_PVPANIC=y
+diff --git a/default-configs/x86_64-softmmu.mak b/default-configs/x86_64-softmmu.mak
+index 7c52ed7..61fa891 100644
+--- a/default-configs/x86_64-softmmu.mak
++++ b/default-configs/x86_64-softmmu.mak
+@@ -4,3 +4,4 @@ CONFIG_VMWARE_VGA=y
+ CONFIG_VMPORT=y
+ #NOTE: VMMOUSE depends on VMPORT
+ CONFIG_VMMOUSE=y
++CONFIG_PVPANIC=y
+diff --git a/hw/pvpanic.c b/hw/pvpanic.c
+new file mode 100644
+index 0000000..918c86f
+--- /dev/null
++++ b/hw/pvpanic.c
+@@ -0,0 +1,98 @@
++/*
++ * QEMU simulated pvpanic device.
++ *
++ * Copyright Red Hat, Inc. 2013
++ * Copyright Fujitsu, Corp. 2013
++ *
++ * Authors:
++ *     Laszlo Ersek <lersek@redhat.com> (RHEL-6 port)
++ *     Wen Congyang <wency@cn.fujitsu.com>
++ *     Hu Tao <hutao@cn.fujitsu.com>
++ *
++ * This work is licensed under the terms of the GNU GPL, version 2 or later.
++ * See the COPYING file in the top-level directory.
++ *
++ */
++
++#include "qobject.h"
++#include "qjson.h"
++#include "monitor.h"
++#include "sysemu.h"
++#include "qemu-log.h"
++
++/* The bit of supported pv event */
++#define PVPANIC_F_PANICKED      0
++
++/* The pv event value */
++#define PVPANIC_PANICKED        (1 << PVPANIC_F_PANICKED)
++
++
++static void panicked_mon_event(const char *action)
++{
++    QObject *data;
++
++    data = qobject_from_jsonf("{ 'action': %s }", action);
++    monitor_protocol_event(QEVENT_GUEST_PANICKED, data);
++    qobject_decref(data);
++}
++
++static void handle_event(int event)
++{
++    static bool logged;
++
++    if (event & ~PVPANIC_PANICKED && !logged) {
++        qemu_log("pvpanic: unknown event %#x.\n", event);
++        logged = true;
++    }
++
++    if (event & PVPANIC_PANICKED) {
++        panicked_mon_event("pause");
++        vm_stop(RUN_STATE_GUEST_PANICKED);
++        return;
++    }
++}
++
++#include "hw/isa.h"
++
++typedef struct PVPanicState {
++    ISADevice isa_dev;
++    uint16_t ioport;
++} PVPanicState;
++
++/* return supported events on read */
++static uint32_t pvpanic_ioport_read(void *opaque, uint32_t address)
++{
++    return PVPANIC_PANICKED;
++}
++
++static void pvpanic_ioport_write(void *opaque, uint32_t address, uint32_t data)
++{
++    handle_event(data);
++}
++
++static int pvpanic_isa_init(ISADevice *dev)
++{
++    PVPanicState *s = DO_UPCAST(PVPanicState, isa_dev, dev);
++
++    register_ioport_read(s->ioport, 1, 1, &pvpanic_ioport_read, s);
++    register_ioport_write(s->ioport, 1, 1, &pvpanic_ioport_write, s);
++    return 0;
++}
++
++static ISADeviceInfo pvpanic_isa_info = {
++    .qdev.name     = "pvpanic",
++    .qdev.size     = sizeof(PVPanicState),
++    .qdev.no_user  = 1,
++    .qdev.props = (Property[]) {
++        DEFINE_PROP_UINT16("ioport", PVPanicState, ioport, 0x505),
++        DEFINE_PROP_END_OF_LIST()
++    },
++    .init          = &pvpanic_isa_init
++};
++
++static void pvpanic_devices(void)
++{
++    isa_qdev_register(&pvpanic_isa_info);
++}
++
++device_init(pvpanic_devices)
+-- 
+1.7.11.7
+

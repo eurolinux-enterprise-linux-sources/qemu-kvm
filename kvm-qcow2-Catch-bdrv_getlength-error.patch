@@ -1,0 +1,57 @@
+From f0ec689972ec025d14f9be53e6fea52fb5dc7cfb Mon Sep 17 00:00:00 2001
+Message-Id: <f0ec689972ec025d14f9be53e6fea52fb5dc7cfb.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:21:52 -0500
+Subject: [CHANGE 09/42] qcow2: Catch bdrv_getlength() error
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-10-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64473
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 09/39] qcow2: Catch bdrv_getlength() error
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1129892
+
+The call to bdrv_getlength() from qcow2_check_refcounts() may result in
+an error. Check this and abort if necessary.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit a49139af77850d64d74f9ffe43cabe7aa4f19de0)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-refcount.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-refcount.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/block/qcow2-refcount.c b/block/qcow2-refcount.c
+index cc7907b..b292068 100644
+--- a/block/qcow2-refcount.c
++++ b/block/qcow2-refcount.c
+@@ -1324,6 +1324,11 @@ int qcow2_check_refcounts(BlockDriverState *bs, BdrvCheckResult *res,
+     int ret;
+ 
+     size = bdrv_getlength(bs->file);
++    if (size < 0) {
++        res->check_errors++;
++        return size;
++    }
++
+     nb_clusters = size_to_clusters(s, size);
+     if (nb_clusters > INT_MAX) {
+         res->check_errors++;
+-- 
+2.1.0
+

@@ -1,0 +1,98 @@
+From 30be55128d5ae984ce3cc74e1cb34967eaa20c4c Mon Sep 17 00:00:00 2001
+Message-Id: <30be55128d5ae984ce3cc74e1cb34967eaa20c4c.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:37:01 +0200
+Subject: [PATCH 46/47] vmdk: store fields of VmdkMetaData in cpu endian
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-47-git-send-email-famz@redhat.com>
+Patchwork-id: 51482
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 46/47] vmdk: store fields of VmdkMetaData in cpu endian
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+Previously VmdkMetaData.offset is stored little endian while other
+fields are cpu endian. This changes offset to cpu endian and convert
+before writing to image.
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit e304e8e5a05bc54c71c5f6fc76abd47410e59857)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 17 ++++++++---------
+ 1 file changed, 8 insertions(+), 9 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 17 ++++++++---------
+ 1 file changed, 8 insertions(+), 9 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 3e47faa..b2f45a8 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -804,14 +804,15 @@ static int get_whole_cluster(BlockDriverState *bs,
+ 
+ static int vmdk_L2update(VmdkExtent *extent, VmdkMetaData *m_data)
+ {
++    uint32_t offset;
++    QEMU_BUILD_BUG_ON(sizeof(offset) != sizeof(m_data->offset));
++    offset = cpu_to_le32(m_data->offset);
+     /* update L2 table */
+     if (bdrv_pwrite_sync(
+                 extent->file,
+                 ((int64_t)m_data->l2_offset * 512)
+                     + (m_data->l2_index * sizeof(m_data->offset)),
+-                &(m_data->offset),
+-                sizeof(m_data->offset)
+-            ) < 0) {
++                &offset, sizeof(offset)) < 0) {
+         return VMDK_ERROR;
+     }
+     /* update backup L2 table */
+@@ -821,8 +822,7 @@ static int vmdk_L2update(VmdkExtent *extent, VmdkMetaData *m_data)
+                     extent->file,
+                     ((int64_t)m_data->l2_offset * 512)
+                         + (m_data->l2_index * sizeof(m_data->offset)),
+-                    &(m_data->offset), sizeof(m_data->offset)
+-                ) < 0) {
++                    &offset, sizeof(offset)) < 0) {
+             return VMDK_ERROR;
+         }
+     }
+@@ -839,7 +839,7 @@ static int get_cluster_offset(BlockDriverState *bs,
+ {
+     unsigned int l1_index, l2_offset, l2_index;
+     int min_index, i, j;
+-    uint32_t min_count, *l2_table, tmp = 0;
++    uint32_t min_count, *l2_table;
+     bool zeroed = false;
+ 
+     if (m_data) {
+@@ -915,8 +915,7 @@ static int get_cluster_offset(BlockDriverState *bs,
+         }
+ 
+         *cluster_offset >>= 9;
+-        tmp = cpu_to_le32(*cluster_offset);
+-        l2_table[l2_index] = tmp;
++        l2_table[l2_index] = cpu_to_le32(*cluster_offset);
+ 
+         /* First of all we write grain itself, to avoid race condition
+          * that may to corrupt the image.
+@@ -929,7 +928,7 @@ static int get_cluster_offset(BlockDriverState *bs,
+         }
+ 
+         if (m_data) {
+-            m_data->offset = tmp;
++            m_data->offset = *cluster_offset;
+             m_data->l1_index = l1_index;
+             m_data->l2_index = l2_index;
+             m_data->l2_offset = l2_offset;
+-- 
+1.7.11.7
+

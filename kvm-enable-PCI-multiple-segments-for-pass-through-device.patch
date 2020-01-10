@@ -1,0 +1,371 @@
+From 775ebc86d8612aaf9326089ff65b543ff965fed7 Mon Sep 17 00:00:00 2001
+From: Michael S. Tsirkin <mst@redhat.com>
+Date: Thu, 1 May 2014 13:23:59 -0500
+Subject: [PATCH 08/20] enable PCI multiple-segments for pass-through device
+
+RH-Author: Michael S. Tsirkin <mst@redhat.com>
+Message-id: <1398950342-7838-1-git-send-email-mst@redhat.com>
+Patchwork-id: 58638
+O-Subject: [PATCH RHEL6.6/RHEL6.5.z] enable PCI multiple-segments for pass-through device
+Bugzilla: 1081451
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Marcel Apfelbaum <marcel.a@redhat.com>
+RH-Acked-by: Alex Williamson <alex.williamson@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: "Zhai, Edwin" <edwin.zhai@intel.com>
+
+Enable optional parameter (default 0) - PCI segment (or domain) besides
+BDF, when assigning PCI device to guest.
+
+Signed-off-by: Zhai Edwin <edwin.zhai@intel.com>
+Acked-by: Chris Wright <chrisw@sous-sol.org>
+Signed-off-by: Marcelo Tosatti <mtosatti@redhat.com>
+
+Upstream commit: 072988a18a5fb6860a9ce24571a4a2ed4d6a2678
+	(in qemu-kvm, applied with many changes)
+Brew build: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7395613
+Bugzilla: 1081451
+Tested: couldn't locate a multi-domain box to test. Tested that
+assignment still works with a single domain.
+
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+---
+ hw/device-assignment.h  |  2 ++
+ hw/pci.h                |  2 +-
+ kvm/include/linux/kvm.h |  3 ++-
+ hw/device-assignment.c  | 60 ++++++++++++++++++++++++++++++++-----------------
+ hw/pci.c                | 40 ++++++++++++++++++++++++++++-----
+ qemu-options.hx         |  2 +-
+ 6 files changed, 79 insertions(+), 30 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/device-assignment.c  |   60 ++++++++++++++++++++++++++++++----------------
+ hw/device-assignment.h  |    2 +
+ hw/pci.c                |   40 ++++++++++++++++++++++++++----
+ hw/pci.h                |    2 +-
+ kvm/include/linux/kvm.h |    3 +-
+ qemu-options.hx         |    2 +-
+ 6 files changed, 79 insertions(+), 30 deletions(-)
+
+diff --git a/hw/device-assignment.c b/hw/device-assignment.c
+index 4cc27a2..3519d2a 100644
+--- a/hw/device-assignment.c
++++ b/hw/device-assignment.c
+@@ -686,8 +686,8 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
+     return 0;
+ }
+ 
+-static int get_real_device(AssignedDevice *pci_dev, uint8_t r_bus,
+-                           uint8_t r_dev, uint8_t r_func)
++static int get_real_device(AssignedDevice *pci_dev, uint16_t r_seg,
++			   uint8_t r_bus, uint8_t r_dev, uint8_t r_func)
+ {
+     char dir[128], name[128];
+     int fd, r = 0;
+@@ -700,8 +700,8 @@ static int get_real_device(AssignedDevice *pci_dev, uint8_t r_bus,
+ 
+     dev->region_number = 0;
+ 
+-    snprintf(dir, sizeof(dir), "/sys/bus/pci/devices/0000:%02x:%02x.%x/",
+-	     r_bus, r_dev, r_func);
++    snprintf(dir, sizeof(dir), "/sys/bus/pci/devices/%04x:%02x:%02x.%x/",
++	     r_seg, r_bus, r_dev, r_func);
+ 
+     snprintf(name, sizeof(name), "%sconfig", dir);
+ 
+@@ -919,9 +919,9 @@ static void free_assigned_device(AssignedDevice *dev)
+     }
+ }
+ 
+-static uint32_t calc_assigned_dev_id(uint8_t bus, uint8_t devfn)
++static uint32_t calc_assigned_dev_id(uint16_t seg, uint8_t bus, uint8_t devfn)
+ {
+-    return (uint32_t)bus << 8 | (uint32_t)devfn;
++    return (uint32_t)seg << 16 | (uint32_t)bus << 8 | (uint32_t)devfn;
+ }
+ 
+ static int assign_device(AssignedDevice *dev)
+@@ -929,9 +929,20 @@ static int assign_device(AssignedDevice *dev)
+     struct kvm_assigned_pci_dev assigned_dev_data;
+     int r;
+ 
++#ifdef KVM_CAP_PCI_SEGMENT
++    /* Only pass non-zero PCI segment to capable module */
++    if (!kvm_check_extension(kvm_state, KVM_CAP_PCI_SEGMENT) &&
++        dev->h_segnr) {
++        fprintf(stderr, "Can't assign device inside non-zero PCI segment "
++                "as this KVM module doesn't support it.\n");
++        return -ENODEV;
++    }
++#endif
++
+     memset(&assigned_dev_data, 0, sizeof(assigned_dev_data));
+     assigned_dev_data.assigned_dev_id  =
+-	calc_assigned_dev_id(dev->h_busnr, dev->h_devfn);
++	calc_assigned_dev_id(dev->h_segnr, dev->h_busnr, dev->h_devfn);
++    assigned_dev_data.segnr = dev->h_segnr;
+     assigned_dev_data.busnr = dev->h_busnr;
+     assigned_dev_data.devfn = dev->h_devfn;
+ 
+@@ -977,7 +988,7 @@ static int assign_irq(AssignedDevice *dev)
+ 
+     memset(&assigned_irq_data, 0, sizeof(assigned_irq_data));
+     assigned_irq_data.assigned_dev_id =
+-        calc_assigned_dev_id(dev->h_busnr, dev->h_devfn);
++        calc_assigned_dev_id(dev->h_segnr, dev->h_busnr, dev->h_devfn);
+     assigned_irq_data.guest_irq = irq;
+     assigned_irq_data.host_irq = dev->real_device.irq;
+ #ifdef KVM_CAP_ASSIGN_DEV_IRQ
+@@ -1021,7 +1032,7 @@ static void deassign_device(AssignedDevice *dev)
+ 
+     memset(&assigned_dev_data, 0, sizeof(assigned_dev_data));
+     assigned_dev_data.assigned_dev_id  =
+-	calc_assigned_dev_id(dev->h_busnr, dev->h_devfn);
++	calc_assigned_dev_id(dev->h_segnr, dev->h_busnr, dev->h_devfn);
+ 
+     r = kvm_deassign_pci_device(kvm_context, &assigned_dev_data);
+     if (r < 0)
+@@ -1077,7 +1088,7 @@ static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
+ 
+     memset(&assigned_irq_data, 0, sizeof assigned_irq_data);
+     assigned_irq_data.assigned_dev_id  =
+-        calc_assigned_dev_id(assigned_dev->h_busnr,
++        calc_assigned_dev_id(assigned_dev->h_segnr, assigned_dev->h_busnr,
+                 (uint8_t)assigned_dev->h_devfn);
+ 
+     /* Some guests gratuitously disable MSI even if they're not using it,
+@@ -1224,7 +1235,7 @@ static int assigned_dev_update_msix_mmio(PCIDevice *pci_dev)
+         return 0;
+     }
+ 
+-    msix_nr.assigned_dev_id = calc_assigned_dev_id(adev->h_busnr,
++    msix_nr.assigned_dev_id = calc_assigned_dev_id(adev->h_segnr, adev->h_busnr,
+                                           (uint8_t)adev->h_devfn);
+     msix_nr.entry_nr = entries_nr;
+     r = kvm_assign_set_msix_nr(kvm_context, &msix_nr);
+@@ -1292,7 +1303,7 @@ static void assigned_dev_update_msix(PCIDevice *pci_dev, unsigned int ctrl_pos)
+ 
+     memset(&assigned_irq_data, 0, sizeof assigned_irq_data);
+     assigned_irq_data.assigned_dev_id  =
+-            calc_assigned_dev_id(assigned_dev->h_busnr,
++            calc_assigned_dev_id(assigned_dev->h_segnr, assigned_dev->h_busnr,
+                     (uint8_t)assigned_dev->h_devfn);
+ 
+     /* Some guests gratuitously disable MSIX even if they're not using it,
+@@ -1892,8 +1903,8 @@ static void reset_assigned_device(DeviceState *dev)
+     }
+ 
+     snprintf(reset_file, sizeof(reset_file),
+-             "/sys/bus/pci/devices/0000:%02x:%02x.%01x/reset",
+-             adev->host.bus, adev->host.dev, adev->host.func);
++             "/sys/bus/pci/devices/%04x:%02x:%02x.%01x/reset",
++             adev->host.seg, adev->host.bus, adev->host.dev, adev->host.func);
+ 
+     /*
+      * Issue a device reset via pci-sysfs.  Note that we use write(2) here
+@@ -1950,12 +1961,13 @@ static int assigned_initfn(struct PCIDevice *pci_dev)
+         }
+     }
+ 
+-    if (!dev->host.bus && !dev->host.dev && !dev->host.func) {
++    if (!dev->host.seg && !dev->host.bus && !dev->host.dev && !dev->host.func) {
+         error_report("pci-assign: error: no host device specified");
+         return -1;
+     }
+ 
+-    if (get_real_device(dev, dev->host.bus, dev->host.dev, dev->host.func)) {
++    if (get_real_device(dev, dev->host.seg, dev->host.bus,
++			dev->host.dev, dev->host.func)) {
+         error_report("pci-assign: Error: Couldn't get real device (%s)!",
+                      dev->dev.qdev.id);
+         goto out;
+@@ -1973,6 +1985,7 @@ static int assigned_initfn(struct PCIDevice *pci_dev)
+     dev->intpin = e_intx;
+     dev->run = 0;
+     dev->girq = -1;
++    dev->h_segnr = dev->host.seg;
+     dev->h_busnr = dev->host.bus;
+     dev->h_devfn = PCI_DEVFN(dev->host.dev, dev->host.func);
+ 
+@@ -2040,7 +2053,7 @@ static int parse_hostaddr(DeviceState *dev, Property *prop, const char *str)
+     PCIHostDevice *ptr = qdev_get_prop_ptr(dev, prop);
+     int rc;
+ 
+-    rc = pci_parse_host_devaddr(str, &ptr->bus, &ptr->dev, &ptr->func);
++    rc = pci_parse_host_devaddr(str, &ptr->seg, &ptr->bus, &ptr->dev, &ptr->func);
+     if (rc != 0)
+         return -1;
+     return 0;
+@@ -2050,7 +2063,12 @@ static int print_hostaddr(DeviceState *dev, Property *prop, char *dest, size_t l
+ {
+     PCIHostDevice *ptr = qdev_get_prop_ptr(dev, prop);
+ 
+-    return snprintf(dest, len, "%02x:%02x.%x", ptr->bus, ptr->dev, ptr->func);
++    if (ptr->seg) {
++        return snprintf(dest, len, "%04x:%02x:%02x.%x", ptr->seg, ptr->bus,
++                        ptr->dev, ptr->func);
++    } else {
++        return snprintf(dest, len, "%02x:%02x.%x", ptr->bus, ptr->dev, ptr->func);
++    }
+ }
+ 
+ PropertyInfo qdev_prop_hostaddr = {
+@@ -2093,7 +2111,7 @@ device_init(assign_register_devices)
+ /*
+  * Syntax to assign device:
+  *
+- * -pcidevice host=bus:dev.func[,dma=none][,name=Foo]
++ * -pcidevice host=[seg:]bus:dev.func[,dma=none][,name=Foo]
+  *
+  * Example:
+  * -pcidevice host=00:13.0,dma=pvdma
+@@ -2170,8 +2188,8 @@ static void assigned_dev_load_option_rom(AssignedDevice *dev)
+         return;
+ 
+     snprintf(rom_file, sizeof(rom_file),
+-             "/sys/bus/pci/devices/0000:%02x:%02x.%01x/rom",
+-             dev->host.bus, dev->host.dev, dev->host.func);
++             "/sys/bus/pci/devices/%04x:%02x:%02x.%01x/rom",
++             dev->host.seg, dev->host.bus, dev->host.dev, dev->host.func);
+ 
+     if (stat(rom_file, &st)) {
+         return;
+diff --git a/hw/device-assignment.h b/hw/device-assignment.h
+index cf67673..935b1d5 100644
+--- a/hw/device-assignment.h
++++ b/hw/device-assignment.h
+@@ -37,6 +37,7 @@
+ #define PCI_DEVFN(slot, func)   ((((slot) & 0x1f) << 3) | ((func) & 0x07))
+ 
+ typedef struct PCIHostDevice {
++    int seg;
+     int bus;
+     int dev;
+     int func;
+@@ -97,6 +98,7 @@ typedef struct AssignedDevice {
+     PCIDevRegions real_device;
+     int run;
+     int girq;
++    unsigned int h_segnr;
+     unsigned char h_busnr;
+     unsigned int h_devfn;
+     int irq_requested_type;
+diff --git a/hw/pci.c b/hw/pci.c
+index 0c9d1a5..e68b4ef 100644
+--- a/hw/pci.c
++++ b/hw/pci.c
+@@ -484,21 +484,48 @@ static int pci_parse_devaddr(const char *addr, int *domp, int *busp, unsigned *s
+ }
+ 
+ /*
+- * Parse device bdf in device assignment command:
++ * Parse device seg and bdf in device assignment command:
+  *
+- * -pcidevice host=bus:dev.func
++ * -pcidevice host=[seg:]bus:dev.func
+  *
+- * Parse <bus>:<slot>.<func> return -1 on error
++ * Parse [seg:]<bus>:<slot>.<func> return -1 on error
+  */
+-int pci_parse_host_devaddr(const char *addr, int *busp,
++int pci_parse_host_devaddr(const char *addr, int *segp, int *busp,
+                            int *slotp, int *funcp)
+ {
+     const char *p;
+     char *e;
+     int val;
+-    int bus = 0, slot = 0, func = 0;
++    int seg = 0, bus = 0, slot = 0, func = 0;
+ 
++    /* parse optional seg */
+     p = addr;
++    val = 0;
++    while (1) {
++        p = strchr(p, ':');
++        if (p) {
++            val++;
++            p++;
++        } else
++            break;
++    }
++    if (val <= 0 || val > 2)
++        return -1;
++
++    p = addr;
++    if (val == 2) {
++        val = strtoul(p, &e, 16);
++        if (e == p)
++            return -1;
++        if (*e == ':') {
++            seg = val;
++            p = e + 1;
++        }
++    } else
++        seg = 0;
++
++
++    /* parse bdf */
+     val = strtoul(p, &e, 16);
+     if (e == p)
+ 	return -1;
+@@ -520,12 +547,13 @@ int pci_parse_host_devaddr(const char *addr, int *busp,
+     } else
+ 	return -1;
+ 
+-    if (bus > 0xff || slot > 0x1f || func > 0x7)
++    if (seg > 0xffff || bus > 0xff || slot > 0x1f || func > 0x7)
+ 	return -1;
+ 
+     if (*e)
+ 	return -1;
+ 
++    *segp = seg;
+     *busp = bus;
+     *slotp = slot;
+     *funcp = func;
+diff --git a/hw/pci.h b/hw/pci.h
+index f4d7c59..8be7d98 100644
+--- a/hw/pci.h
++++ b/hw/pci.h
+@@ -266,7 +266,7 @@ PCIBus *pci_get_bus_devfn(int *devfnp, const char *devaddr);
+ int pci_read_devaddr(Monitor *mon, const char *addr, int *domp, int *busp,
+                      unsigned *slotp);
+ 
+-int pci_parse_host_devaddr(const char *addr, int *busp,
++int pci_parse_host_devaddr(const char *addr, int *segp, int *busp,
+                            int *slotp, int *funcp);
+ 
+ void pci_info(Monitor *mon);
+diff --git a/kvm/include/linux/kvm.h b/kvm/include/linux/kvm.h
+index 4484c47..f9c7561 100644
+--- a/kvm/include/linux/kvm.h
++++ b/kvm/include/linux/kvm.h
+@@ -737,8 +737,9 @@ struct kvm_assigned_pci_dev {
+ 	__u32 busnr;
+ 	__u32 devfn;
+ 	__u32 flags;
++	__u32 segnr;
+ 	union {
+-		__u32 reserved[12];
++		__u32 reserved[11];
+ 	};
+ };
+ 
+diff --git a/qemu-options.hx b/qemu-options.hx
+index f6d83dd..6cf4316 100644
+--- a/qemu-options.hx
++++ b/qemu-options.hx
+@@ -2250,7 +2250,7 @@ DEF("no-kvm-pit-reinjection", 0, QEMU_OPTION_no_kvm_pit_reinjection,
+     "-no-kvm-pit-reinjection disable KVM kernel mode PIT interrupt reinjection\n")
+ #if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(TARGET_IA64) || defined(__linux__)
+ DEF("pcidevice", HAS_ARG, QEMU_OPTION_pcidevice,
+-    "-pcidevice host=bus:dev.func[,dma=none][,name=string]\n"
++    "-pcidevice host=[seg:]bus:dev.func[,dma=none][,name=string]\n"
+     "                expose a PCI device to the guest OS.\n"
+     "                dma=none: don't perform any dma translations (default is to use an iommu)\n"
+     "                'string' is used in log output.\n")
+-- 
+1.7.1
+

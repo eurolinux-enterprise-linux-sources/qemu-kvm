@@ -1,0 +1,36 @@
+From b41ef1aa82f68e077a4825e0f4e625a84424fc18 Mon Sep 17 00:00:00 2001
+Message-Id: <b41ef1aa82f68e077a4825e0f4e625a84424fc18.1484342411.git.ymankad@redhat.com>
+In-Reply-To: <df26b13347392089e5699a6be872de7806a36a8c.1484342411.git.ymankad@redhat.com>
+References: <df26b13347392089e5699a6be872de7806a36a8c.1484342411.git.ymankad@redhat.com>
+From: Yash Mankad <ymankad@redhat.com>
+Date: Fri, 13 Jan 2017 15:54:57 -0500
+Subject: [CHANGE 3/8] Revert "iotests: Disable 086"
+To: ymankad@redhat.com
+
+This reverts commit 064660d17ae33fb9a297b30b6cd72f46f2845996.
+
+This is to revert Max's patch series that fix BZ#1405882 as
+they did not have the 6.9 release flag set and could not be
+justified as exceptions / blockers. Will be moved to 6.10.
+
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ tests/qemu-iotests/group | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/qemu-iotests/group b/tests/qemu-iotests/group
+index 9b65057..3f185ee 100644
+--- a/tests/qemu-iotests/group
++++ b/tests/qemu-iotests/group
+@@ -92,7 +92,7 @@
+ 083 rw auto
+ 084 img auto quick
+ 085 rw auto
+-# 086 rw auto quick -- unstable because of progress output
++086 rw auto quick
+ # 087 rw auto quick -- requires blockdev-add
+ 088 rw auto quick
+ # 089 rw auto quick -- requires json: pseudo-protocol
+-- 
+2.7.4
+

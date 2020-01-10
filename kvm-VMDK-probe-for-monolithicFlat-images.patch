@@ -1,0 +1,101 @@
+From 7f9f56476df0148722daefd71bd7cce3a8816aab Mon Sep 17 00:00:00 2001
+Message-Id: <7f9f56476df0148722daefd71bd7cce3a8816aab.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:21 +0200
+Subject: [PATCH 06/47] VMDK: probe for monolithicFlat images
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-7-git-send-email-famz@redhat.com>
+Patchwork-id: 51442
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 06/47] VMDK: probe for monolithicFlat images
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Fam Zheng <famcool@gmail.com>
+
+Probe as the same behavior as VMware does.
+Recognize image as monolithicFlat descriptor file when the file is text
+and the first effective line (not '#' leaded comment or space line) is
+either 'version=1' or 'version=2'. No space or upper case charactors
+accepted.
+
+Signed-off-by: Fam Zheng <famcool@gmail.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 01fc99d6a8f56c8dc4a7466476d6dcb0ad91f589)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 45 +++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 43 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 45 +++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 43 insertions(+), 2 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 10b0f01..17dd8cd 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -104,10 +104,51 @@ static int vmdk_probe(const uint8_t *buf, int buf_size, const char *filename)
+         return 0;
+     magic = be32_to_cpu(*(uint32_t *)buf);
+     if (magic == VMDK3_MAGIC ||
+-        magic == VMDK4_MAGIC)
++        magic == VMDK4_MAGIC) {
+         return 100;
+-    else
++    } else {
++        const char *p = (const char *)buf;
++        const char *end = p + buf_size;
++        while (p < end) {
++            if (*p == '#') {
++                /* skip comment line */
++                while (p < end && *p != '\n') {
++                    p++;
++                }
++                p++;
++                continue;
++            }
++            if (*p == ' ') {
++                while (p < end && *p == ' ') {
++                    p++;
++                }
++                /* skip '\r' if windows line endings used. */
++                if (p < end && *p == '\r') {
++                    p++;
++                }
++                /* only accept blank lines before 'version=' line */
++                if (p == end || *p != '\n') {
++                    return 0;
++                }
++                p++;
++                continue;
++            }
++            if (end - p >= strlen("version=X\n")) {
++                if (strncmp("version=1\n", p, strlen("version=1\n")) == 0 ||
++                    strncmp("version=2\n", p, strlen("version=2\n")) == 0) {
++                    return 100;
++                }
++            }
++            if (end - p >= strlen("version=X\r\n")) {
++                if (strncmp("version=1\r\n", p, strlen("version=1\r\n")) == 0 ||
++                    strncmp("version=2\r\n", p, strlen("version=2\r\n")) == 0) {
++                    return 100;
++                }
++            }
++            return 0;
++        }
+         return 0;
++    }
+ }
+ 
+ #define CHECK_CID 1
+-- 
+1.7.11.7
+

@@ -1,0 +1,211 @@
+From 91ef5baeb948fe27cc734d3493d67d9d266e0c91 Mon Sep 17 00:00:00 2001
+Message-Id: <91ef5baeb948fe27cc734d3493d67d9d266e0c91.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:21:59 -0500
+Subject: [CHANGE 16/42] qcow2: Check L1/L2/reftable entries for alignment
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-17-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64479
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 16/39] qcow2: Check L1/L2/reftable entries for alignment
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1129892
+
+Offsets taken from the L1, L2 and refcount tables are generally assumed
+to be correctly aligned. However, this cannot be guaranteed if the image
+has been written to by something different than qemu, thus check all
+offsets taken from these tables for correct cluster alignment.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Message-id: 1409926039-29044-5-git-send-email-mreitz@redhat.com
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit a97c67ee6c1546b985c1048c7a1f9e4fc13d9ee1)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	block/qcow2-cluster.c
+	block/qcow2-refcount.c
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-cluster.c  | 36 ++++++++++++++++++++++++++++++++++++
+ block/qcow2-refcount.c | 45 +++++++++++++++++++++++++++++++++++++++++++--
+ 2 files changed, 79 insertions(+), 2 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-cluster.c  | 36 ++++++++++++++++++++++++++++++++++++
+ block/qcow2-refcount.c | 45 +++++++++++++++++++++++++++++++++++++++++++--
+ 2 files changed, 79 insertions(+), 2 deletions(-)
+
+diff --git a/block/qcow2-cluster.c b/block/qcow2-cluster.c
+index 73c9bf3..111908a 100644
+--- a/block/qcow2-cluster.c
++++ b/block/qcow2-cluster.c
+@@ -481,6 +481,13 @@ int qcow2_get_cluster_offset(BlockDriverState *bs, uint64_t offset,
+         goto out;
+     }
+ 
++    if (offset_into_cluster(s, l2_offset)) {
++        qcow2_signal_corruption(bs, true, -1, -1, "L2 table offset %#" PRIx64
++                                " unaligned (L1 index: %#" PRIx64 ")",
++                                l2_offset, l1_index);
++        return -EIO;
++    }
++
+     /* load the l2 table in memory */
+ 
+     ret = l2_load(bs, l2_offset, &l2_table);
+@@ -511,6 +518,14 @@ int qcow2_get_cluster_offset(BlockDriverState *bs, uint64_t offset,
+         c = count_contiguous_clusters(nb_clusters, s->cluster_size,
+                 &l2_table[l2_index], 0, QCOW_OFLAG_COMPRESSED);
+         *cluster_offset &= L2E_OFFSET_MASK;
++        if (offset_into_cluster(s, *cluster_offset)) {
++            qcow2_signal_corruption(bs, true, -1, -1, "Data cluster offset %#"
++                                    PRIx64 " unaligned (L2 offset: %#" PRIx64
++                                    ", L2 index: %#x)", *cluster_offset,
++                                    l2_offset, l2_index);
++            ret = -EIO;
++            goto fail;
++        }
+         break;
+     }
+ 
+@@ -525,6 +540,10 @@ out:
+     *num = nb_available - index_in_cluster;
+ 
+     return ret;
++
++fail:
++    qcow2_cache_put(bs, s->l2_table_cache, (void **)&l2_table);
++    return ret;
+ }
+ 
+ /*
+@@ -561,6 +580,12 @@ static int get_cluster_table(BlockDriverState *bs, uint64_t offset,
+ 
+     assert(l1_index < s->l1_size);
+     l2_offset = s->l1_table[l1_index] & L1E_OFFSET_MASK;
++    if (offset_into_cluster(s, l2_offset)) {
++        qcow2_signal_corruption(bs, true, -1, -1, "L2 table offset %#" PRIx64
++                                " unaligned (L1 index: %#" PRIx64 ")",
++                                l2_offset, l1_index);
++        return -EIO;
++    }
+ 
+     /* seek the l2 table of the given l2 offset */
+ 
+@@ -817,6 +842,17 @@ again:
+ 
+     cluster_offset = be64_to_cpu(l2_table[l2_index]);
+ 
++    if (!(cluster_offset & QCOW_OFLAG_COMPRESSED) &&
++        offset_into_cluster(s, cluster_offset & L2E_OFFSET_MASK))
++    {
++        qcow2_signal_corruption(bs, true, -1, -1, "Data cluster offset %#llx "
++                                "unaligned (guest offset: %#" PRIx64 ")",
++                                cluster_offset & L2E_OFFSET_MASK, offset);
++
++        qcow2_cache_put(bs, s->l2_table_cache, (void **)&l2_table);
++        return -EIO;
++    }
++
+     /* We keep all QCOW_OFLAG_COPIED clusters */
+ 
+     if (cluster_offset & QCOW_OFLAG_COPIED) {
+diff --git a/block/qcow2-refcount.c b/block/qcow2-refcount.c
+index 164e728..e1bbc8b 100644
+--- a/block/qcow2-refcount.c
++++ b/block/qcow2-refcount.c
+@@ -102,6 +102,13 @@ static int get_refcount(BlockDriverState *bs, int64_t cluster_index)
+     if (!refcount_block_offset)
+         return 0;
+ 
++    if (offset_into_cluster(s, refcount_block_offset)) {
++        qcow2_signal_corruption(bs, true, -1, -1, "Refblock offset %#" PRIx64
++                                " unaligned (reftable index: %#" PRIx64 ")",
++                                refcount_block_offset, refcount_table_index);
++        return -EIO;
++    }
++
+     ret = qcow2_cache_get(bs, s->refcount_block_cache, refcount_block_offset,
+         (void**) &refcount_block);
+     if (ret < 0) {
+@@ -175,6 +182,14 @@ static int alloc_refcount_block(BlockDriverState *bs,
+ 
+         /* If it's already there, we're done */
+         if (refcount_block_offset) {
++            if (offset_into_cluster(s, refcount_block_offset)) {
++                qcow2_signal_corruption(bs, true, -1, -1, "Refblock offset %#"
++                                        PRIx64 " unaligned (reftable index: "
++                                        "%#x)", refcount_block_offset,
++                                        refcount_table_index);
++                return -EIO;
++            }
++
+              return load_refcount_block(bs, refcount_block_offset,
+                  (void**) refcount_block);
+         }
+@@ -680,8 +695,14 @@ void qcow2_free_any_clusters(BlockDriverState *bs,
+         }
+         break;
+     case QCOW2_CLUSTER_NORMAL:
+-        qcow2_free_clusters(bs, l2_entry & L2E_OFFSET_MASK,
+-                            nb_clusters << s->cluster_bits);
++        if (offset_into_cluster(s, l2_entry & L2E_OFFSET_MASK)) {
++            qcow2_signal_corruption(bs, false, -1, -1,
++                                    "Cannot free unaligned cluster %#llx",
++                                    l2_entry & L2E_OFFSET_MASK);
++        } else {
++            qcow2_free_clusters(bs, l2_entry & L2E_OFFSET_MASK,
++                                nb_clusters << s->cluster_bits);
++        }
+         break;
+     case QCOW2_CLUSTER_UNALLOCATED:
+         break;
+@@ -766,6 +787,14 @@ int qcow2_update_snapshot_refcount(BlockDriverState *bs,
+             old_l2_offset = l2_offset;
+             l2_offset &= L1E_OFFSET_MASK;
+ 
++            if (offset_into_cluster(s, l2_offset)) {
++                qcow2_signal_corruption(bs, true, -1, -1, "L2 table offset %#"
++                                        PRIx64 " unaligned (L1 index: %#x)",
++                                        l2_offset, i);
++                ret = -EIO;
++                goto fail;
++            }
++
+             ret = qcow2_cache_get(bs, s->l2_table_cache, l2_offset,
+                 (void**) &l2_table);
+             if (ret < 0) {
+@@ -797,6 +826,18 @@ int qcow2_update_snapshot_refcount(BlockDriverState *bs,
+                         refcount = 2;
+                     } else {
+                         uint64_t cluster_index = (offset & L2E_OFFSET_MASK) >> s->cluster_bits;
++
++                        if (offset_into_cluster(s, offset & L2E_OFFSET_MASK)) {
++                            qcow2_signal_corruption(bs, true, -1, -1, "Data "
++                                                    "cluster offset %#llx "
++                                                    "unaligned (L2 offset: %#"
++                                                    PRIx64 ", L2 index: %#x)",
++                                                    offset & L2E_OFFSET_MASK,
++                                                    l2_offset, j);
++                            ret = -EIO;
++                            goto fail;
++                        }
++
+                         if (addend != 0) {
+                             refcount = update_cluster_refcount(bs, cluster_index, addend);
+                         } else {
+-- 
+2.1.0
+

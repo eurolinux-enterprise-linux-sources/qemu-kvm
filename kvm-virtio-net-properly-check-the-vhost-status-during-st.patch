@@ -1,0 +1,65 @@
+From 3351a61f3d3d17e088298983ea624dd8995fb1a5 Mon Sep 17 00:00:00 2001
+Message-Id: <3351a61f3d3d17e088298983ea624dd8995fb1a5.1375709547.git.minovotn@redhat.com>
+From: Xiao Wang <jasowang@redhat.com>
+Date: Tue, 16 Jul 2013 09:39:46 +0200
+Subject: [PATCH 1/4] virtio-net: properly check the vhost status during
+ status set
+
+RH-Author: Xiao Wang <jasowang@redhat.com>
+Message-id: <1373967586-15075-1-git-send-email-jasowang@redhat.com>
+Patchwork-id: 52527
+O-Subject: [PATCH RHEL6.5 qemu-kvm] virtio-net: properly check the vhost status during status set
+Bugzilla: 957319
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=957319
+Upstream: manually cherry-picked from d7108d90100d5bac5965abef5ed73f2602adae14
+Test status: Test by myself
+Brew Build: https://brewweb.devel.redhat.com/taskinfo?taskID=6041474
+
+Commit 32993698 (vhost: disable on tap link down) tries to disable the vhost
+also when the peer's link is down. But the check was not done properly, the
+vhost were only started when:
+
+1) peer's link is not down
+2) virtio-net has already been started.
+
+Since == have a higher precedence than &&, place a brace to make sure both the
+conditions were met then does the check. This fixes the crash when doing a savem
+after set the link off which let qemu crash and complains:
+
+virtio_net_save: Assertion `!n->vhost_started' failed.
+
+Cc: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Jason Wang <jasowang@redhat.com>
+Message-id: 1366972060-21606-1-git-send-email-jasowang@redhat.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+---
+ hw/virtio-net.c |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/virtio-net.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/hw/virtio-net.c b/hw/virtio-net.c
+index e56f6fc..4a3eb50 100644
+--- a/hw/virtio-net.c
++++ b/hw/virtio-net.c
+@@ -116,8 +116,8 @@ static void virtio_net_vhost_status(VirtIONet *n, uint8_t status)
+     if (!tap_get_vhost_net(n->nic->nc.peer)) {
+         return;
+     }
+-    if (!!n->vhost_started == virtio_net_started(n, status) &&
+-                              !n->nic->nc.peer->link_down) {
++    if (!!n->vhost_started ==
++        (virtio_net_started(n, status) && !n->nic->nc.peer->link_down)) {
+         return;
+     }
+     if (!n->vhost_started) {
+-- 
+1.7.11.7
+

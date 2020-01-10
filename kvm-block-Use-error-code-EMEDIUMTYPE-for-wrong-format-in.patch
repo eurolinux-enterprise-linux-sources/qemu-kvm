@@ -1,0 +1,65 @@
+From b237b3fa41bdaba08541b8fcbb62e0de0d05c43c Mon Sep 17 00:00:00 2001
+Message-Id: <b237b3fa41bdaba08541b8fcbb62e0de0d05c43c.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:54 +0200
+Subject: [PATCH 39/47] block: Use error code EMEDIUMTYPE for wrong format in
+ some block drivers
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-40-git-send-email-famz@redhat.com>
+Patchwork-id: 51475
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 39/47] block: Use error code EMEDIUMTYPE for wrong format in some block drivers
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Stefan Weil <sw@weilnetz.de>
+
+This improves error reports for bochs, cow, qcow, qcow2, qed and vmdk
+when a file with the wrong format is selected.
+
+Signed-off-by: Stefan Weil <sw@weilnetz.de>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 15bac0d54f78adb5e255155a69e56ab7f6d8c8ea)
+
+Picked vmdk only.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index a4ced38..5c14928 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -614,7 +614,7 @@ static int vmdk_open_sparse(BlockDriverState *bs,
+             return vmdk_open_vmdk4(bs, file, flags);
+             break;
+         default:
+-            return -EINVAL;
++            return -EMEDIUMTYPE;
+             break;
+     }
+ }
+@@ -716,7 +716,7 @@ static int vmdk_open_desc_file(BlockDriverState *bs, int flags,
+     }
+     buf[2047] = '\0';
+     if (vmdk_parse_description(buf, "createType", ct, sizeof(ct))) {
+-        return -EINVAL;
++        return -EMEDIUMTYPE;
+     }
+     if (strcmp(ct, "monolithicFlat") &&
+         strcmp(ct, "twoGbMaxExtentSparse") &&
+-- 
+1.7.11.7
+

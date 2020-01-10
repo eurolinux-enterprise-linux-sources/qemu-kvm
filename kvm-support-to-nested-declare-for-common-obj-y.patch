@@ -1,0 +1,47 @@
+From 563ef1653a20473b9a543bbf3ff25215f059a25e Mon Sep 17 00:00:00 2001
+From: Amos Kong <akong@redhat.com>
+Date: Tue, 10 Sep 2013 06:07:45 +0200
+Subject: [PATCH 03/39] support to nested declare for common-obj-y
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1378793288-3371-4-git-send-email-akong@redhat.com>
+Patchwork-id: 54238
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v3 03/26] support to nested declare for common-obj-y
+Bugzilla: 786407
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+We already changed the rules.mak to support to declare by
+separate makefiles, this patch makes the nested rule works
+for common-obj-y variable.
+
+Upstream changed this in two commits:
+  99100dc3b55126fc60fbbfb854d5aab25ab5dafd
+  7f07b9cbc51066ddaa133b29389e225612aaced2
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+---
+ Makefile.objs |    4 ++++
+ 1 files changed, 4 insertions(+), 0 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ Makefile.objs |    4 ++++
+ 1 files changed, 4 insertions(+), 0 deletions(-)
+
+diff --git a/Makefile.objs b/Makefile.objs
+index 3cdb9ce..654bd34 100644
+--- a/Makefile.objs
++++ b/Makefile.objs
+@@ -228,3 +228,7 @@ vl.o: QEMU_CFLAGS+=$(SDL_CFLAGS)
+ 
+ all: $(HWLIB)
+ QEMU_CFLAGS+=$(GLIB_CFLAGS)
++
++nested-vars += \
++        common-obj-y
++dummy := $(call unnest-vars)
+-- 
+1.7.1
+

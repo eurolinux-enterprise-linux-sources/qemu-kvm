@@ -1,0 +1,68 @@
+From bbfa9ca875497aee194a8084bdcd5d8a198d8cd6 Mon Sep 17 00:00:00 2001
+From: Thomas Huth <thuth@redhat.com>
+Date: Thu, 9 Jul 2015 18:39:08 -0400
+Subject: [PATCH 2/9] qga/commands-posix: Fix bug in guest-fstrim
+
+RH-Author: Thomas Huth <thuth@redhat.com>
+Message-id: <1436467148-8041-2-git-send-email-thuth@redhat.com>
+Patchwork-id: 66896
+O-Subject: [RHEL-6.8 qemu-kvm PATCH 1/1] qga/commands-posix: Fix bug in guest-fstrim
+Bugzilla: 1213236
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: David Gibson <dgibson@redhat.com>
+
+From: Justin Ossevoort <justin@quarantainenet.nl>
+
+The FITRIM ioctl updates the fstrim_range structure it receives. This
+way the caller can determine how many bytes were trimmed. The
+guest-fstrim logic reuses the same fstrim_range for each filesystem,
+effectively limiting each filesystem to trim at most as much as the
+previous was able to trim.
+
+If a previous filesystem would have trimmed 0 bytes, than the next
+filesystem would report an error 'Invalid argument' because a FITRIM
+request with length 0 is not valid.
+
+This change resets the fstrim_range structure for each filesystem.
+
+Signed-off-by: Justin Ossevoort <justin@quarantainenet.nl>
+Reviewed-by: Thomas Huth <thuth@redhat.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit 73a652a1b08445e8d91e50cdbb2da50e571c61b3)
+Signed-off-by: Thomas Huth <thuth@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ qga/commands-posix.c | 9 ++++-----
+ 1 file changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index d31213c..b5d1d6c 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -861,11 +861,7 @@ void qmp_guest_fstrim(bool has_minimum, int64_t minimum, Error **err)
+     struct FsMount *mount;
+     int fd;
+     Error *local_err = NULL;
+-    struct fstrim_range r = {
+-        .start = 0,
+-        .len = -1,
+-        .minlen = has_minimum ? minimum : 0,
+-    };
++    struct fstrim_range r;
+ 
+     slog("guest-fstrim called");
+ 
+@@ -889,6 +885,9 @@ void qmp_guest_fstrim(bool has_minimum, int64_t minimum, Error **err)
+          * error means an unexpected error, so return it in those cases.  In
+          * some other cases ENOTTY will be reported (e.g. CD-ROMs).
+          */
++        r.start = 0;
++        r.len = -1;
++        r.minlen = has_minimum ? minimum : 0;
+         ret = ioctl(fd, FITRIM, &r);
+         if (ret == -1) {
+             if (errno != ENOTTY && errno != EOPNOTSUPP) {
+-- 
+2.1.0
+

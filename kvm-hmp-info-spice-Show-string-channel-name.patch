@@ -1,0 +1,77 @@
+From 14201b27b990437d029fa5df186141d8b0bcd739 Mon Sep 17 00:00:00 2001
+Message-Id: <14201b27b990437d029fa5df186141d8b0bcd739.1426386477.git.jen@redhat.com>
+From: Cole Robinson <crobinso@redhat.com>
+Date: Wed, 4 Mar 2015 15:52:27 -0500
+Subject: [CHANGE 1/2] hmp: info spice: Show string channel name
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Cole Robinson <crobinso@redhat.com>
+Message-id: <8341201d36d3a9a42587386813297b9495ba8620.1425484238.git.crobinso@redhat.com>
+Patchwork-id: 64134
+O-Subject: [RHEL-6.7 qemu-kvm PATCH] hmp: info spice: Show string channel name
+Bugzilla: 822418
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=822418
+Brew build: https://brewweb.devel.redhat.com/taskinfo?taskID=8808421
+
+Based on soon-to-be-upstream commits:
+22fa7da0005c939c940634da069ecb9bbb199a2a
+7c6044a94e52db8aef9a71d616c7a0914adb71ab
+
+Signed-off-by: Cole Robinson <crobinso@redhat.com>
+---
+ ui/spice-core.c | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ ui/spice-core.c | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/ui/spice-core.c b/ui/spice-core.c
+index 582123d..3ecf4f6 100644
+--- a/ui/spice-core.c
++++ b/ui/spice-core.c
+@@ -450,6 +450,20 @@ static void info_spice_iter(QObject *obj, void *opaque)
+ {
+     QDict *client;
+     Monitor *mon = opaque;
++    int channel_type;
++    const char *channel_name = "unknown";
++    const char * const channel_names[] = {
++        [SPICE_CHANNEL_MAIN] = "main",
++        [SPICE_CHANNEL_DISPLAY] = "display",
++        [SPICE_CHANNEL_INPUTS] = "inputs",
++        [SPICE_CHANNEL_CURSOR] = "cursor",
++        [SPICE_CHANNEL_PLAYBACK] = "playback",
++        [SPICE_CHANNEL_RECORD] = "record",
++        [SPICE_CHANNEL_TUNNEL] = "tunnel",
++        [SPICE_CHANNEL_SMARTCARD] = "smartcard",
++        [SPICE_CHANNEL_USBREDIR] = "usbredir",
++        [SPICE_CHANNEL_PORT] = "port",
++    };
+ 
+     client = qobject_to_qdict(obj);
+     monitor_printf(mon, "Channel:\n");
+@@ -462,6 +476,14 @@ static void info_spice_iter(QObject *obj, void *opaque)
+     monitor_printf(mon, "     channel: %d:%d\n",
+                    (int)qdict_get_int(client, "channel-type"),
+                    (int)qdict_get_int(client, "channel-id"));
++
++    channel_type = (int)qdict_get_int(client, "channel-type");
++    if (channel_type > 0 &&
++        channel_type < ARRAY_SIZE(channel_names) &&
++        channel_names[channel_type]) {
++        channel_name = channel_names[channel_type];
++    }
++    monitor_printf(mon, "     channel name: %s\n", channel_name);
+ }
+ 
+ void do_info_spice_print(Monitor *mon, const QObject *data)
+-- 
+2.1.0
+

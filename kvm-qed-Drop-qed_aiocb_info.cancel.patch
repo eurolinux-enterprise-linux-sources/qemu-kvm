@@ -1,0 +1,95 @@
+From 688afa0cca1b95c7ed410d79195de936f429d135 Mon Sep 17 00:00:00 2001
+Message-Id: <688afa0cca1b95c7ed410d79195de936f429d135.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:34 -0500
+Subject: [CHANGE 14/29] qed: Drop qed_aiocb_info.cancel
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-15-git-send-email-famz@redhat.com>
+Patchwork-id: 64915
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 14/28] qed: Drop qed_aiocb_info.cancel
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Also drop the now unused ->finished field.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 533ffb17a5b023fe531477732b71d97267012863)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	block/qed.c
+Removed function is slightly different.
+---
+ block/qed.c | 20 --------------------
+ 1 file changed, 20 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qed.c | 20 --------------------
+ 1 file changed, 20 deletions(-)
+
+diff --git a/block/qed.c b/block/qed.c
+index 697a0da..ddf30ae 100644
+--- a/block/qed.c
++++ b/block/qed.c
+@@ -19,21 +19,8 @@
+ #include "qerror.h"
+ #include "migration.h"
+ 
+-static void qed_aio_cancel(BlockDriverAIOCB *blockacb)
+-{
+-    QEDAIOCB *acb = (QEDAIOCB *)blockacb;
+-    bool finished = false;
+-
+-    /* Wait for the request to finish */
+-    acb->finished = &finished;
+-    while (!finished) {
+-        qemu_aio_wait();
+-    }
+-}
+-
+ static const AIOCBInfo qed_aiocb_info = {
+     .aiocb_size         = sizeof(QEDAIOCB),
+-    .cancel             = qed_aio_cancel,
+ };
+ 
+ static int bdrv_qed_probe(const uint8_t *buf, int buf_size,
+@@ -884,18 +871,12 @@ static void qed_aio_complete_bh(void *opaque)
+     BlockDriverCompletionFunc *cb = acb->common.cb;
+     void *user_opaque = acb->common.opaque;
+     int ret = acb->bh_ret;
+-    bool *finished = acb->finished;
+ 
+     qemu_bh_delete(acb->bh);
+     qemu_aio_release(acb);
+ 
+     /* Invoke callback */
+     cb(user_opaque, ret);
+-
+-    /* Signal cancel completion */
+-    if (finished) {
+-        *finished = true;
+-    }
+ }
+ 
+ static void qed_aio_complete(QEDAIOCB *acb, int ret)
+@@ -1361,7 +1342,6 @@ static BlockDriverAIOCB *qed_aio_setup(BlockDriverState *bs,
+                         opaque, flags);
+ 
+     acb->flags = flags;
+-    acb->finished = NULL;
+     acb->qiov = qiov;
+     acb->qiov_offset = 0;
+     acb->cur_pos = (uint64_t)sector_num * BDRV_SECTOR_SIZE;
+-- 
+2.1.0
+

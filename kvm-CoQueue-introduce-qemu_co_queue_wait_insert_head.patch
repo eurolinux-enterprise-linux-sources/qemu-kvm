@@ -1,0 +1,72 @@
+From 3c357a74f54723d4077bc3920fd78f930a5b985c Mon Sep 17 00:00:00 2001
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 21 Jun 2013 06:19:58 +0200
+Subject: [PATCH 02/21] CoQueue: introduce qemu_co_queue_wait_insert_head
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1371795611-7208-3-git-send-email-famz@redhat.com>
+Patchwork-id: 52076
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 02/15] CoQueue: introduce qemu_co_queue_wait_insert_head
+Bugzilla: 956825
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Zhi Yong Wu <wuzhy@linux.vnet.ibm.com>
+
+Signed-off-by: Zhi Yong Wu <wuzhy@linux.vnet.ibm.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit e9e6295b28b331762e67d466f77ba07a349edbbc)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ qemu-coroutine-lock.c | 8 ++++++++
+ qemu-coroutine.h      | 6 ++++++
+ 2 files changed, 14 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ qemu-coroutine-lock.c |    8 ++++++++
+ qemu-coroutine.h      |    6 ++++++
+ 2 files changed, 14 insertions(+), 0 deletions(-)
+
+diff --git a/qemu-coroutine-lock.c b/qemu-coroutine-lock.c
+index 107478b..85d3cc4 100644
+--- a/qemu-coroutine-lock.c
++++ b/qemu-coroutine-lock.c
+@@ -60,6 +60,14 @@ void coroutine_fn qemu_co_queue_wait(CoQueue *queue)
+     assert(qemu_in_coroutine());
+ }
+ 
++void coroutine_fn qemu_co_queue_wait_insert_head(CoQueue *queue)
++{
++    Coroutine *self = qemu_coroutine_self();
++    QTAILQ_INSERT_HEAD(&queue->entries, self, co_queue_next);
++    qemu_coroutine_yield();
++    assert(qemu_in_coroutine());
++}
++
+ bool qemu_co_queue_next(CoQueue *queue)
+ {
+     Coroutine *next;
+diff --git a/qemu-coroutine.h b/qemu-coroutine.h
+index 0d4068a..b1c21d9 100644
+--- a/qemu-coroutine.h
++++ b/qemu-coroutine.h
+@@ -119,6 +119,12 @@ void qemu_co_queue_init(CoQueue *queue);
+ void coroutine_fn qemu_co_queue_wait(CoQueue *queue);
+ 
+ /**
++ * Adds the current coroutine to the head of the CoQueue and transfers control to the
++ * caller of the coroutine.
++ */
++void coroutine_fn qemu_co_queue_wait_insert_head(CoQueue *queue);
++
++/**
+  * Restarts the next coroutine in the CoQueue and removes it from the queue.
+  *
+  * Returns true if a coroutine was restarted, false if the queue is empty.
+-- 
+1.7.1
+

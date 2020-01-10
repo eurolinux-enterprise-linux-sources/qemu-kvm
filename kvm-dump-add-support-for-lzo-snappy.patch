@@ -1,0 +1,144 @@
+From 883aafe6bde1e6b45653c5b5b407877fb54a0a69 Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Sat, 22 Mar 2014 03:31:02 +0100
+Subject: [PATCH 11/30] dump: add support for lzo/snappy
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1395459071-19118-11-git-send-email-lersek@redhat.com>
+Patchwork-id: 58221
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 10/19] dump: add support for lzo/snappy
+Bugzilla: 1035162
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: qiaonuohan <qiaonuohan@cn.fujitsu.com>
+
+kdump-compressed format supports three compression format, zlib/lzo/snappy.
+Currently, only zlib is available. This patch is used to support lzo/snappy.
+'--enable-lzo/--enable-snappy' is needed to be specified with configure to make
+lzo/snappy available for qemu
+
+Signed-off-by: Qiao Nuohan <qiaonuohan@cn.fujitsu.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 607dacd0a082a4ea73a7a16a1c70406f37ebacdb)
+
+Conflicts:
+	configure
+
+RHEL-6 note: this is actually a manual reimplementation disguised as
+conflict resolution, but I kept the cherry-picked line to satisfy Jeff's
+git-backport-diff script.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ configure | 52 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 52 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ configure |   52 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 files changed, 52 insertions(+), 0 deletions(-)
+
+diff --git a/configure b/configure
+index 25a6d16..d72ea4f 100755
+--- a/configure
++++ b/configure
+@@ -292,6 +292,8 @@ io_throttling="yes"
+ usb_redir=""
+ virtio_blk_data_plane=""
+ glusterfs=""
++lzo="no"
++snappy="no"
+ 
+ # OS specific
+ if check_define __linux__ ; then
+@@ -723,6 +725,10 @@ for opt do
+   ;;
+   --enable-glusterfs) glusterfs="yes"
+   ;;
++  --enable-lzo) lzo="yes"
++  ;;
++  --enable-snappy) snappy="yes"
++  ;;
+   *) echo "ERROR: unknown option $opt"; show_help="yes"
+   ;;
+   esac
+@@ -911,6 +917,8 @@ echo "  --disable-rhev-features  disable RHEV-only features"
+ echo "  --enable-rhev-features   enable RHEV-only features"
+ echo "  --enable-glusterfs       enable GlusterFS backend"
+ echo "  --disable-glusterfs      disable GlusterFS backend"
++echo "  --enable-lzo             enable the support of lzo compression library"
++echo "  --enable-snappy          enable the support of snappy compression library"
+ echo ""
+ echo "NOTE: The object files are built at the place where configure is launched"
+ exit 1
+@@ -1832,6 +1840,40 @@ EOF
+   fi
+ fi
+ 
++##########################################
++# lzo check
++
++if test "$lzo" != "no" ; then
++    cat > $TMPC << EOF
++#include <lzo/lzo1x.h>
++int main(void) { lzo_version(); return 0; }
++EOF
++    if compile_prog "" "-llzo2" ; then
++        :
++    else
++        feature_not_found "lzo"
++    fi
++
++    libs_softmmu="$libs_softmmu -llzo2"
++fi
++
++##########################################
++# snappy check
++
++if test "$snappy" != "no" ; then
++    cat > $TMPC << EOF
++#include <snappy-c.h>
++int main(void) { snappy_max_compressed_length(4096); return 0; }
++EOF
++    if compile_prog "" "-lsnappy" ; then
++        :
++    else
++        feature_not_found "snappy"
++    fi
++
++    libs_softmmu="$libs_softmmu -lsnappy"
++fi
++
+ #
+ # Check for xxxat() functions when we are building linux-user
+ # emulator.  This is done because older glibc versions don't
+@@ -2383,6 +2425,8 @@ echo "xfsctl support    $xfs"
+ echo "usb net redir     $usb_redir"
+ echo "virtio-blk-data-plane $virtio_blk_data_plane"
+ echo "GlusterFS support $glusterfs"
++echo "lzo support       $lzo"
++echo "snappy support    $snappy"
+ 
+ if test $sdl_too_old = "yes"; then
+ echo "-> Your SDL version is too old - please upgrade to have SDL support"
+@@ -2675,6 +2719,14 @@ if test "$glusterfs" = "yes" ; then
+   echo "CONFIG_GLUSTERFS=y" >> $config_host_mak
+ fi
+ 
++if test "$lzo" = "yes" ; then
++  echo "CONFIG_LZO=y" >> $config_host_mak
++fi
++
++if test "$snappy" = "yes" ; then
++  echo "CONFIG_SNAPPY=y" >> $config_host_mak
++fi
++
+ # USB host support
+ case "$usb" in
+ linux)
+-- 
+1.7.1
+

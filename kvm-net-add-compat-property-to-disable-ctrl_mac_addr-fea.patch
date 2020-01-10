@@ -1,0 +1,56 @@
+From 130fd32426a6f19c70d293066b4c966696ff586e Mon Sep 17 00:00:00 2001
+Message-Id: <130fd32426a6f19c70d293066b4c966696ff586e.1376572530.git.minovotn@redhat.com>
+In-Reply-To: <1ab1cadd348058496d2f900c3d4ac4b7c325d3e6.1376572530.git.minovotn@redhat.com>
+References: <1ab1cadd348058496d2f900c3d4ac4b7c325d3e6.1376572530.git.minovotn@redhat.com>
+From: Amos Kong <akong@redhat.com>
+Date: Wed, 14 Aug 2013 09:25:08 +0200
+Subject: [PATCH 07/11] net: add compat property to disable ctrl_mac_addr
+ feature
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1376472309-26844-4-git-send-email-akong@redhat.com>
+Patchwork-id: 53357
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v3 3/4] net: add compat property to disable ctrl_mac_addr feature
+Bugzilla: 904927
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Vlad Yasevich <vyasevic@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Upstream: redhat only
+
+Old qemu doesn't support to change macaddr by vq command,
+the ctrl_mac_addr feature should be disabled for them.
+This patch adds a backwards-compatibility property for
+6.4 and earlier machines.
+
+Conflicts:
+    hw/pc.c
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+---
+ hw/pc.c |    4 ++++
+ 1 files changed, 4 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/pc.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/hw/pc.c b/hw/pc.c
+index 83c2b5d..64312c7 100644
+--- a/hw/pc.c
++++ b/hw/pc.c
+@@ -1632,6 +1632,10 @@ static void rhel_common_init(const char *type1_version,
+             .driver   = "virtio-net-pci",\
+             .property = "ctrl_guest_offloads",\
+             .value    = "off",\
++        }, {\
++            .driver   = "virtio-net-pci",\
++            .property = "ctrl_mac_addr",\
++            .value    = "off",      \
+         }
+ 
+ #define PC_RHEL6_3_COMPAT \
+-- 
+1.7.11.7
+

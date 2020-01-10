@@ -1,0 +1,150 @@
+From 6337c8f0fa3defc2115a74a055a1c206a0f13049 Mon Sep 17 00:00:00 2001
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Fri, 28 Feb 2014 19:02:59 +0100
+Subject: [PATCH] block: Pass filename to bdrv_get_full_backing_filename()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <38864625eb0b9eab7854303d40fdc286bb743621.1393613946.git.jcody@redhat.com>
+Patchwork-id: 57947
+O-Subject: [RHEL6.6 qemu-kvm PATCH] block: Pass filename to bdrv_get_full_backing_filename()
+Bugzilla: 1067576
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+
+This is an interim fix for a regression introduced by:
+
+    commit 387ea7cb8345bdcc900ffe145cbcdcf65da91257
+    qemu-img: make "info" backing file output correct and easier to use
+
+In that commit, bdrv_get_full_backing_filename() was introduced,
+which replaced calling path_combine() manually.  The difference
+is that rather than using the filename string as passed to
+bdrv_open(), it uses the filename string attached to the BDS.
+
+Both the backing_file and filename strings in the BDS are limited
+to 1024 characters.  The backing_file string built up in bdrv_open(),
+however, has a limit of PATH_MAX, which is 4096 under Linux.
+
+This difference comes into play when using an image chain that has
+a medium-to-large number of images, all of which have relative-pathed
+backing file references to the parent directory.
+
+For instance, consider the following backing chain:
+
+tstA
+├── base.qcow2
+├── sn1.qcow2   (backing file ../tstA/base.qcow2)
+├── sn2.qcow2   (backing file ../tstA/sn1.qcow2)
+└── sn3.qcow2   (backing file ../tstA/sn2.qcow2)
+
+The backing filename string is built up with the relative paths intact,
+like so:
+
+    base.qcow2:  ../tstA../tstA../tstA/base.qcow2
+
+The backing filename is then passed into the bdrv_open() call to open
+the backing file.
+
+When using lv volume names, the snapshot and pathname ends up longer,
+and after ~23 snapshots we have hit or exceeded the 1024 byte limit
+for the BDS filename.
+
+If the filename is run through the BDS, it is truncated at 1024
+characters.  Then the open for the backing file fails, as we are
+building the filename from a truncated string.
+
+By passing the filename directly to bdrv_get_full_backing_filename(),
+we can support a built-up string size of 4096 bytes.
+
+This is not a long-term solution, because a character limit of 4096
+bytes will be hit with additional images.  The proper long-term
+solution should happen upstream first, and consist of:
+
+1) dynamically allocated filename strings in the BDS
+2) flattening redundant relative pathname strings
+
+But as this is a customer-reported regression issue that they are running
+into, a temporary z-stream solution will provide similar behavior to
+RHEL6.4.
+
+Since this is not the final solution, and the fix really is relevant
+just to undo a regression, the fix is downstream only.  It will be
+replaced by the final upstream fix, once complete.
+
+BZ 1067576
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7124797
+---
+ block.c    | 7 ++++---
+ block.h    | 2 +-
+ qemu-img.c | 2 +-
+ 3 files changed, 6 insertions(+), 5 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block.c    |    7 ++++---
+ block.h    |    2 +-
+ qemu-img.c |    2 +-
+ 3 files changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/block.c b/block.c
+index d6a407b..b97e2ff 100644
+--- a/block.c
++++ b/block.c
+@@ -262,12 +262,13 @@ void path_combine(char *dest, int dest_size,
+     }
+ }
+ 
+-void bdrv_get_full_backing_filename(BlockDriverState *bs, char *dest, size_t sz)
++void bdrv_get_full_backing_filename(BlockDriverState *bs, const char *filename,
++                                    char *dest, size_t sz)
+ {
+     if (bs->backing_file[0] == '\0' || path_has_protocol(bs->backing_file)) {
+         pstrcpy(dest, sz, bs->backing_file);
+     } else {
+-        path_combine(dest, sz, bs->filename, bs->backing_file);
++        path_combine(dest, sz, filename, bs->backing_file);
+     }
+ }
+ 
+@@ -762,7 +763,7 @@ int bdrv_open(BlockDriverState *bs, const char *filename, int flags,
+         BlockDriver *back_drv = NULL;
+ 
+         bs->backing_hd = bdrv_new("");
+-        bdrv_get_full_backing_filename(bs, backing_filename,
++        bdrv_get_full_backing_filename(bs, filename, backing_filename,
+                                        sizeof(backing_filename));
+ 
+         if (bs->backing_format[0] != '\0') {
+diff --git a/block.h b/block.h
+index d6764a5..e60a0cf 100644
+--- a/block.h
++++ b/block.h
+@@ -361,7 +361,7 @@ int bdrv_get_info(BlockDriverState *bs, BlockDriverInfo *bdi);
+ const char *bdrv_get_encrypted_filename(BlockDriverState *bs);
+ void bdrv_get_backing_filename(BlockDriverState *bs,
+                                char *filename, int filename_size);
+-void bdrv_get_full_backing_filename(BlockDriverState *bs,
++void bdrv_get_full_backing_filename(BlockDriverState *bs, const char *filename,
+                                     char *dest, size_t sz);
+ int bdrv_can_snapshot(BlockDriverState *bs);
+ int bdrv_is_snapshot(BlockDriverState *bs);
+diff --git a/qemu-img.c b/qemu-img.c
+index 9c4ac0e..b2c78af 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -1319,7 +1319,7 @@ static void collect_image_info(BlockDriverState *bs,
+     if (backing_filename[0] != '\0') {
+         info->backing_filename = g_strdup(backing_filename);
+         info->has_backing_filename = true;
+-        bdrv_get_full_backing_filename(bs, backing_filename2,
++        bdrv_get_full_backing_filename(bs, filename, backing_filename2,
+                                        sizeof(backing_filename2));
+ 
+         if (strcmp(backing_filename, backing_filename2) != 0) {
+-- 
+1.7.1
+

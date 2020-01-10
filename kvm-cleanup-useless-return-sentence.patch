@@ -1,0 +1,90 @@
+From 743101ce0b9f4f8bb93820b4db472e61a069814f Mon Sep 17 00:00:00 2001
+Message-Id: <743101ce0b9f4f8bb93820b4db472e61a069814f.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:27:34 +0200
+Subject: [PATCH 069/114] cleanup useless return sentence
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-12-git-send-email-lersek@redhat.com>
+Patchwork-id: 51110
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 11/56] cleanup useless return sentence
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+This patch cleans up return sentences in the end of void functions.
+
+Reported-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Amos Kong <akong@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@gmail.com>
+(cherry picked from commit 4d5b97da35ecbfdad6fe1cbe7fdd7d71ef735602)
+
+Conflicts:
+
+	hw/9pfs/virtio-9p.c
+	hw/device-hotplug.c
+	hw/exynos4210_combiner.c
+	hw/exynos4210_gic.c
+	hw/exynos4210_mct.c
+	hw/ivshmem.c
+	hw/megasas.c
+	hw/msix.c
+	hw/scsi-disk.c
+	hw/usb/dev-uas.c
+	hw/usb/hcd-ohci.c
+	hw/usb/hcd-xhci.c
+	libcacard/vcard.c
+	libcacard/vreader.c
+	os-posix.c
+	savevm.c
+	slirp/ip_input.c
+	slirp/udp.c
+	target-unicore32/translate.c
+	ui/vnc-auth-sasl.c
+	xen-all.c
+
+RHEL-6 note: only hunks for "qga/commands-*.c" are backported
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qga/commands-posix.c |    2 --
+ qga/commands-win32.c |    2 --
+ 2 files changed, 0 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qga/commands-posix.c | 2 --
+ qga/commands-win32.c | 2 --
+ 2 files changed, 4 deletions(-)
+
+diff --git a/qga/commands-posix.c b/qga/commands-posix.c
+index 183a505..8270017 100644
+--- a/qga/commands-posix.c
++++ b/qga/commands-posix.c
+@@ -989,8 +989,6 @@ int64_t qmp_guest_fsfreeze_thaw(Error **err)
+ void qmp_guest_fstrim(bool has_minimum, int64_t minimum, Error **err)
+ {
+     error_set(err, QERR_UNSUPPORTED);
+-
+-    return;
+ }
+ #endif
+ 
+diff --git a/qga/commands-win32.c b/qga/commands-win32.c
+index 54bc546..5bd8fb2 100644
+--- a/qga/commands-win32.c
++++ b/qga/commands-win32.c
+@@ -180,8 +180,6 @@ int64_t qmp_guest_fsfreeze_thaw(Error **err)
+ void qmp_guest_fstrim(bool has_minimum, int64_t minimum, Error **err)
+ {
+     error_set(err, QERR_UNSUPPORTED);
+-
+-    return;
+ }
+ 
+ typedef enum {
+-- 
+1.7.11.7
+

@@ -1,0 +1,94 @@
+From 5acb4fcf9d5df643cec1fdb859ce7ce9a4c87975 Mon Sep 17 00:00:00 2001
+From: Markus Armbruster <armbru@redhat.com>
+Date: Tue, 22 Jul 2014 09:15:59 -0500
+Subject: [CHANGE 10/17] scsi-disk: introduce check_lba_range
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1406020565-25364-6-git-send-email-armbru@redhat.com>
+Patchwork-id: 59998
+O-Subject: [PATCH 6.6 qemu-kvm v2 05/11] scsi-disk: introduce check_lba_range
+Bugzilla: 1064643
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Abstract the test for an out-of-range (starting block, block count)
+pair.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 444bc908611ccaf4512dc37c33ac3b54d873a62b)
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	hw/scsi-disk.c
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+---
+ hw/scsi-disk.c | 21 +++++++++++++++------
+ 1 file changed, 15 insertions(+), 6 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/scsi-disk.c | 21 +++++++++++++++------
+ 1 file changed, 15 insertions(+), 6 deletions(-)
+
+diff --git a/hw/scsi-disk.c b/hw/scsi-disk.c
+index be09211..ee48f53 100644
+--- a/hw/scsi-disk.c
++++ b/hw/scsi-disk.c
+@@ -1207,6 +1207,18 @@ static int scsi_disk_emulate_start_stop(SCSIDiskReq *r)
+     return 0;
+ }
+ 
++static inline bool check_lba_range(SCSIDiskState *s,
++                                   uint64_t sector_num, uint32_t nb_sectors)
++{
++    /*
++     * The first line tests that no overflow happens when computing the last
++     * sector.  The second line tests that the last accessed sector is in
++     * range.
++     */
++    return (sector_num <= sector_num + nb_sectors &&
++            sector_num + nb_sectors - 1 <= s->qdev.max_lba);
++}
++
+ static int scsi_disk_emulate_command(SCSIDiskReq *r)
+ {
+     SCSIRequest *req = &r->req;
+@@ -1495,8 +1507,7 @@ static int32_t scsi_send_command(SCSIRequest *req, uint8_t *buf)
+         if (r->req.cmd.buf[1] & 0xe0) {
+             goto illegal_request;
+         }
+-        if (r->req.cmd.lba > r->req.cmd.lba + len ||
+-            r->req.cmd.lba + len - 1 > s->qdev.max_lba) {
++        if (!check_lba_range(s, r->req.cmd.lba, len)) {
+             goto illegal_lba;
+         }
+         r->sector = r->req.cmd.lba * (s->qdev.blocksize / 512);
+@@ -1524,8 +1535,7 @@ static int32_t scsi_send_command(SCSIRequest *req, uint8_t *buf)
+         if (r->req.cmd.buf[1] & 0xe0) {
+             goto illegal_request;
+         }
+-        if (r->req.cmd.lba > r->req.cmd.lba + len ||
+-            r->req.cmd.lba + len - 1 > s->qdev.max_lba) {
++        if (!check_lba_range(s, r->req.cmd.lba, len)) {
+             goto illegal_lba;
+         }
+         r->sector = r->req.cmd.lba * (s->qdev.blocksize / 512);
+@@ -1563,8 +1573,7 @@ static int32_t scsi_send_command(SCSIRequest *req, uint8_t *buf)
+             scsi_check_condition(r, SENSE_CODE(WRITE_PROTECTED));
+             return 0;
+         }
+-        if (r->req.cmd.lba > r->req.cmd.lba + len ||
+-            r->req.cmd.lba + len - 1 > s->qdev.max_lba) {
++        if (!check_lba_range(s, r->req.cmd.lba, len)) {
+             goto illegal_lba;
+         }
+ 
+-- 
+1.9.3
+

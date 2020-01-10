@@ -1,0 +1,142 @@
+From 6cb2b7828ab4ecfe8c1b7a3dab02ca0547344193 Mon Sep 17 00:00:00 2001
+Message-Id: <6cb2b7828ab4ecfe8c1b7a3dab02ca0547344193.1365434988.git.minovotn@redhat.com>
+From: Xiao Wang <jasowang@redhat.com>
+Date: Thu, 7 Feb 2013 05:23:30 +0100
+Subject: [PATCH 1/2] e1000: fix link down handling with auto negotiation
+
+RH-Author: Xiao Wang <jasowang@redhat.com>
+Message-id: <1360214611-11202-1-git-send-email-jasowang@redhat.com>
+Patchwork-id: 48249
+O-Subject: [RHEL6.4z/RHEL6.5 PATCH V2 1/2] e1000: fix link down handling with auto negotiation
+Bugzilla: 907716
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+
+From: Michael S. Tsirkin <mst@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=907716
+Brew Build: https://brewweb.devel.redhat.com/taskinfo?taskID=5367557
+Upstream: post
+Test status: Test by me and QE.
+
+Fixes a couple of regression bugs introduced by
+b9d03e352cb6b31a66545763f6a1e20c9abf0c2c and related to
+auto-negotiation:
+-   Auto-negotiation currently sets link up even if it was
+    forced down from the monitor.
+-   If Auto-negotiation was in progress during migration,
+    link will never come up.
+
+As a fix, don't touch NC link_down field at all,
+instead add code on receive path to check
+guest link status.
+
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Jason Wang <jasowang@redhat.com>
+---
+ hw/e1000.c |   41 +++++++++++++++++++++++++++++++++++------
+ 1 files changed, 35 insertions(+), 6 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/e1000.c | 41 +++++++++++++++++++++++++++++++++++------
+ 1 file changed, 35 insertions(+), 6 deletions(-)
+
+diff --git a/hw/e1000.c b/hw/e1000.c
+index f1665a4..32f63d9 100644
+--- a/hw/e1000.c
++++ b/hw/e1000.c
+@@ -167,7 +167,6 @@ static void
+ set_phy_ctrl(E1000State *s, int index, uint16_t val)
+ {
+     if ((val & MII_CR_AUTO_NEG_EN) && (val & MII_CR_RESTART_AUTO_NEG)) {
+-        s->nic->nc.link_down = true;
+         e1000_link_down(s);
+         s->phy_reg[PHY_STATUS] &= ~MII_SR_AUTONEG_COMPLETE;
+         DBGOUT(PHY, "Start link auto negotiation\n");
+@@ -179,8 +178,9 @@ static void
+ e1000_autoneg_timer(void *opaque)
+ {
+     E1000State *s = opaque;
+-    s->nic->nc.link_down = false;
+-    e1000_link_up(s);
++    if (!s->nic->nc.link_down) {
++        e1000_link_up(s);
++    }
+     s->phy_reg[PHY_STATUS] |= MII_SR_AUTONEG_COMPLETE;
+     DBGOUT(PHY, "Auto negotiation is completed\n");
+ }
+@@ -751,7 +751,8 @@ e1000_can_receive(VLANClientState *nc)
+ {
+     E1000State *s = DO_UPCAST(NICState, nc, nc)->opaque;
+ 
+-    return (s->mac_reg[RCTL] & E1000_RCTL_EN) && e1000_has_rxbufs(s, 1);
++    return (s->mac_reg[STATUS] & E1000_STATUS_LU) &&
++        (s->mac_reg[RCTL] & E1000_RCTL_EN) && e1000_has_rxbufs(s, 1);
+ }
+ 
+ static ssize_t
+@@ -768,8 +769,13 @@ e1000_receive(VLANClientState *nc, const uint8_t *buf, size_t size)
+     size_t desc_size;
+     uint8_t min_buf[MIN_BUF_SIZE];
+ 
+-    if (!(s->mac_reg[RCTL] & E1000_RCTL_EN))
++    if (!(s->mac_reg[STATUS] & E1000_STATUS_LU)) {
+         return -1;
++    }
++
++    if (!(s->mac_reg[RCTL] & E1000_RCTL_EN)) {
++        return -1;
++    }
+ 
+     /* Pad to minimum Ethernet frame length */
+     if (size < sizeof(min_buf)) {
+@@ -1062,13 +1068,35 @@ static bool is_version_1(void *opaque, int version_id)
+     return version_id == 1;
+ }
+ 
++static void e1000_pre_save(void *opaque)
++{
++    E1000State *s = opaque;
++    /*
++     * If link is down and auto-negotiation is ongoing, complete
++     * auto-negotiation immediately.  This allows is to look at
++     * MII_SR_AUTONEG_COMPLETE to infer link status on load.
++     */
++    if (s->nic->nc.link_down &&
++        s->phy_reg[PHY_CTRL] & MII_CR_AUTO_NEG_EN &&
++        s->phy_reg[PHY_CTRL] & MII_CR_RESTART_AUTO_NEG) {
++         s->phy_reg[PHY_STATUS] |= MII_SR_AUTONEG_COMPLETE;
++    }
++}
++
+ static int e1000_post_load(void *opaque, int version_id)
+ {
+     E1000State *s = opaque;
+ 
+     /* nc.link_down can't be migrated, so infer link_down according
+-     * to link status bit in mac_reg[STATUS] */
++     * to link status bit in mac_reg[STATUS].
++     * Alternatively, restart link negotiation if it was in progress. */
+     s->nic->nc.link_down = (s->mac_reg[STATUS] & E1000_STATUS_LU) == 0;
++    if (s->phy_reg[PHY_CTRL] & MII_CR_AUTO_NEG_EN &&
++        s->phy_reg[PHY_CTRL] & MII_CR_RESTART_AUTO_NEG &&
++        !(s->phy_reg[PHY_STATUS] & MII_SR_AUTONEG_COMPLETE)) {
++        s->nic->nc.link_down = false;
++        qemu_mod_timer(s->autoneg_timer, qemu_get_clock(vm_clock) + 500000000);
++    }
+ 
+     return 0;
+ }
+@@ -1078,6 +1106,7 @@ static const VMStateDescription vmstate_e1000 = {
+     .version_id = 2,
+     .minimum_version_id = 1,
+     .minimum_version_id_old = 1,
++    .pre_save = e1000_pre_save,
+     .post_load = e1000_post_load,
+     .fields      = (VMStateField []) {
+         VMSTATE_PCI_DEVICE(dev, E1000State),
+-- 
+1.7.11.7
+

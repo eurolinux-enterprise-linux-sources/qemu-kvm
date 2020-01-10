@@ -1,0 +1,47 @@
+From 7694600745794156a3a61a8e4e3b0bd72bf879c3 Mon Sep 17 00:00:00 2001
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 11 Nov 2013 07:09:45 +0100
+Subject: [PATCH 3/3] vmdk: fix VMFS extent parsing
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1384153785-3385-3-git-send-email-famz@redhat.com>
+Patchwork-id: 55649
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 2/2] vmdk: fix VMFS extent parsing
+Bugzilla: 1028252
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+
+The VMFS extent line in description file doesn't have start offset as
+FLAT lines does, and it should be defaulted to 0. The flat_offset
+variable is initialized to -1, so we need to set it in this case.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit dbbcaa8d4358fdf3c42bf01e9e2d687300e84770)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ block/vmdk.c |    2 ++
+ 1 files changed, 2 insertions(+), 0 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index a955d1d..bb1809b 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -713,6 +713,8 @@ static int vmdk_parse_extents(const char *desc, BlockDriverState *bs,
+             if (ret != 5 || flat_offset < 0) {
+                 return -EINVAL;
+             }
++        } else if (!strcmp(type, "VMFS")) {
++            flat_offset = 0;
+         } else if (ret != 4) {
+             return -EINVAL;
+         }
+-- 
+1.7.1
+

@@ -1,0 +1,47 @@
+From 823d94e906b2aeecd2c60bc9f19ca8948a756f27 Mon Sep 17 00:00:00 2001
+Message-Id: <823d94e906b2aeecd2c60bc9f19ca8948a756f27.1376408877.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 30 Jul 2013 11:35:19 +0200
+Subject: [PATCH 01/18] qemu-socket: zero-initialize SocketAddress
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1375184130-11076-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52779
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 01/12] qemu-socket: zero-initialize SocketAddress
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Michael Tokarev <mjt@tls.msk.ru>
+(cherry picked from commit afde3f8b9923892d21a735993f533e5d8b60e0b0)
+---
+ qemu-sockets.c |    4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-sockets.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/qemu-sockets.c b/qemu-sockets.c
+index 046ffbb..e97f6af 100644
+--- a/qemu-sockets.c
++++ b/qemu-sockets.c
+@@ -852,9 +852,9 @@ int unix_nonblocking_connect(const char *path,
+ 
+ SocketAddress *socket_parse(const char *str, Error **errp)
+ {
+-    SocketAddress *addr = NULL;
++    SocketAddress *addr;
+ 
+-    addr = g_new(SocketAddress, 1);
++    addr = g_new0(SocketAddress, 1);
+     if (strstart(str, "unix:", NULL)) {
+         if (str[5] == '\0') {
+             error_setg(errp, "invalid Unix socket address\n");
+-- 
+1.7.11.7
+

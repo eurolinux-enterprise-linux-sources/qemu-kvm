@@ -1,0 +1,96 @@
+From d8fce08f96b0205fa6f62e62b3b5e975b4963166 Mon Sep 17 00:00:00 2001
+Message-Id: <d8fce08f96b0205fa6f62e62b3b5e975b4963166.1369841886.git.minovotn@redhat.com>
+In-Reply-To: <9db4fbc10d733a88102ef99acaf6eb5d54153495.1369841886.git.minovotn@redhat.com>
+References: <9db4fbc10d733a88102ef99acaf6eb5d54153495.1369841886.git.minovotn@redhat.com>
+From: Marc-Andr Lureau <marcandre.lureau@redhat.com>
+Date: Wed, 29 May 2013 14:34:54 +0200
+Subject: [PATCH 06/14] hda-audio: register different device depending on
+ mixemu config
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Marc-André Lureau <marcandre.lureau@redhat.com>
+Message-id: <1369838102-26064-6-git-send-email-marcandre.lureau@redhat.com>
+Patchwork-id: 51676
+O-Subject: [RHEL-6.5 qemu-kvm PATCHv3 05/13] hda-audio: register different device depending on mixemu config
+Bugzilla: 884253
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+---
+ Makefile.target         |    4 +++-
+ hw/hda-audio-nomixemu.c |    6 ++++++
+ hw/hda-audio.c          |   13 ++++++++++---
+ 3 files changed, 19 insertions(+), 4 deletions(-)
+ create mode 100644 hw/hda-audio-nomixemu.c
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ Makefile.target         |  4 +++-
+ hw/hda-audio-nomixemu.c |  6 ++++++
+ hw/hda-audio.c          | 13 ++++++++++---
+ 3 files changed, 19 insertions(+), 4 deletions(-)
+ create mode 100644 hw/hda-audio-nomixemu.c
+
+diff --git a/Makefile.target b/Makefile.target
+index fec7253..d38e5f6 100644
+--- a/Makefile.target
++++ b/Makefile.target
+@@ -222,6 +222,8 @@ obj-$(CONFIG_HAVE_GET_MEMORY_MAPPING) += arch_memory_mapping.o
+ obj-$(CONFIG_HAVE_CORE_DUMP) += arch_dump.o
+ LIBS+=-lz
+ 
++hda-audio-nomixemu.o: hda-audio.c
++
+ sound-obj-y =
+ sound-obj-$(CONFIG_SB16) += sb16.o
+ sound-obj-$(CONFIG_ES1370) += es1370.o
+@@ -229,7 +231,7 @@ sound-obj-$(CONFIG_AC97) += ac97.o
+ sound-obj-$(CONFIG_ADLIB) += fmopl.o adlib.o
+ sound-obj-$(CONFIG_GUS) += gus.o gusemu_hal.o gusemu_mixer.o
+ sound-obj-$(CONFIG_CS4231A) += cs4231a.o
+-sound-obj-y += intel-hda.o hda-audio.o
++sound-obj-y += intel-hda.o hda-audio.o hda-audio-nomixemu.o
+ 
+ adlib.o fmopl.o: QEMU_CFLAGS += -DBUILD_Y8950=0
+ 
+diff --git a/hw/hda-audio-nomixemu.c b/hw/hda-audio-nomixemu.c
+new file mode 100644
+index 0000000..68c70d9
+--- /dev/null
++++ b/hw/hda-audio-nomixemu.c
+@@ -0,0 +1,6 @@
++#include "audio/audio.h"
++
++#ifdef CONFIG_MIXEMU
++# undef CONFIG_MIXEMU
++# include "hda-audio.c"
++#endif
+diff --git a/hw/hda-audio.c b/hw/hda-audio.c
+index 8cffcae..21b5a9d 100644
+--- a/hw/hda-audio.c
++++ b/hw/hda-audio.c
+@@ -1082,8 +1082,15 @@ static HDACodecDeviceInfo hda_audio_info_micro = {
+ 
+ static void hda_audio_register(void)
+ {
+-    hda_codec_register(&hda_audio_info_output);
+-    hda_codec_register(&hda_audio_info_duplex);
+-    hda_codec_register(&hda_audio_info_micro);
++#ifdef CONFIG_MIXEMU
++    if (!get_mixemu_disabled())
++#else
++    if (get_mixemu_disabled())
++#endif
++    {
++        hda_codec_register(&hda_audio_info_output);
++        hda_codec_register(&hda_audio_info_duplex);
++        hda_codec_register(&hda_audio_info_micro);
++    }
+ }
+ device_init(hda_audio_register);
+-- 
+1.7.11.7
+

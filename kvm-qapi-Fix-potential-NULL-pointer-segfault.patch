@@ -1,0 +1,53 @@
+From 15cc057b8beec9e5f1ed80fb99203b0b9dc6a269 Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Sat, 22 Mar 2014 03:30:54 +0100
+Subject: [PATCH 03/30] qapi: Fix potential NULL pointer segfault
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1395459071-19118-3-git-send-email-lersek@redhat.com>
+Patchwork-id: 58213
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 02/19] qapi: Fix potential NULL pointer segfault
+Bugzilla: 1035162
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Stefan Weil <sw@weilnetz.de>
+
+Report from smatch:
+
+qapi-visit.c:1640 visit_type_BlockdevAction(8) error:
+ we previously assumed 'obj' could be null (see line 1639)
+qapi-visit.c:2432 visit_type_NetClientOptions(8) error:
+ we previously assumed 'obj' could be null (see line 2431)
+
+Signed-off-by: Stefan Weil <sw@weilnetz.de>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit 227ccf6bff234c29974c2c18ecd3a29e6b965e3d)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ scripts/qapi-visit.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ scripts/qapi-visit.py |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/scripts/qapi-visit.py b/scripts/qapi-visit.py
+index e98f7a5..1a58d99 100644
+--- a/scripts/qapi-visit.py
++++ b/scripts/qapi-visit.py
+@@ -157,7 +157,7 @@ void visit_type_%(name)s(Visitor *m, %(name)s ** obj, const char *name, Error **
+     if (!error_is_set(errp)) {
+         visit_start_struct(m, (void **)obj, "%(name)s", name, sizeof(%(name)s), &err);
+         if (!err) {
+-            if (!obj || *obj) {
++            if (obj && *obj) {
+                 visit_type_%(name)sKind(m, &(*obj)->kind, "type", &err);
+                 if (!err) {
+                     switch ((*obj)->kind) {
+-- 
+1.7.1
+

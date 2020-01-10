@@ -1,0 +1,75 @@
+From a8cc29420a1a712f1e08b69ef7e96dcbeafca5fb Mon Sep 17 00:00:00 2001
+Message-Id: <a8cc29420a1a712f1e08b69ef7e96dcbeafca5fb.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:53 +0200
+Subject: [PATCH 42/65] qemu-char: move spice registration to
+ spice-qemu-char.c
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-43-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52122
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 42/65] qemu-char: move spice registration to spice-qemu-char.c
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Message-id: 49a8d12eeb117e5530b2fab02af7681b54f9245c.1362505276.git.amit.shah@redhat.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 26c60614524f41bc9016cbe27eaefe59473d3461)
+
+Conflicts:
+
+	spice-qemu-char.c
+---
+ qemu-char.c       |    6 ------
+ spice-qemu-char.c |    7 +++++++
+ 2 files changed, 7 insertions(+), 6 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c       | 6 ------
+ spice-qemu-char.c | 7 +++++++
+ 2 files changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index e545dee..577014c 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -3248,12 +3248,6 @@ static void register_types(void)
+     register_char_driver("parallel", qemu_chr_open_pp);
+     register_char_driver("parport", qemu_chr_open_pp);
+ #endif
+-#ifdef CONFIG_SPICE
+-    register_char_driver("spicevmc", qemu_chr_open_spice);
+-#if SPICE_SERVER_VERSION >= 0x000c02
+-    register_char_driver("spiceport", qemu_chr_open_spice_port);
+-#endif
+-#endif
+ }
+ 
+ machine_init(register_types);
+diff --git a/spice-qemu-char.c b/spice-qemu-char.c
+index b1d6e43..35c800d 100644
+--- a/spice-qemu-char.c
++++ b/spice-qemu-char.c
+@@ -269,3 +269,10 @@ CharDriverState *qemu_chr_open_spice(QemuOpts *opts)
+ 
+     return chr;
+ }
++
++static void register_types(void)
++{
++    register_char_driver("spicevmc", qemu_chr_open_spice);
++}
++
++machine_init(register_types);
+-- 
+1.7.11.7
+

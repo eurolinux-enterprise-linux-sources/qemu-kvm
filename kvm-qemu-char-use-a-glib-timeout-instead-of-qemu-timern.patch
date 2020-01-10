@@ -1,0 +1,162 @@
+From e4a80041e157c2df28342d300712ae1cec30da35 Mon Sep 17 00:00:00 2001
+Message-Id: <e4a80041e157c2df28342d300712ae1cec30da35.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:15 +0200
+Subject: [PATCH 41/65] qemu-char: use a glib timeout instead of qemu-timer
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <8d8fcbed7ccb1836a0173f5c9ae5eacd3938435a.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50819
+O-Subject: [RHEL6.5 qemu-kvm PATCH 41/65] qemu-char: use a glib timeout instead of qemu-timer
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Message-id: 05a883ce5a98275b976bf0124610599859c2b7da.1362505276.git.amit.shah@redhat.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 8aa33cafc41a0fe8549d1dbcc65b75c31112dea8)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	qemu-char.c
+
+    * we don't have the _ms variants of the timer functions
+---
+ qemu-char.c | 68 ++++++++++++++++++++++++++++++++++++++++---------------------
+ 1 file changed, 45 insertions(+), 23 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 68 ++++++++++++++++++++++++++++++++++++++++---------------------
+ 1 file changed, 45 insertions(+), 23 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index ccf3a37..142d285 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -980,12 +980,50 @@ typedef struct {
+     int connected;
+     int polling;
+     int read_bytes;
+-    QEMUTimer *timer;
++    guint timer_tag;
+ } PtyCharDriver;
+ 
+ static void pty_chr_update_read_handler(CharDriverState *chr);
+ static void pty_chr_state(CharDriverState *chr, int connected);
+ 
++static gboolean pty_chr_timer(gpointer opaque)
++{
++    struct CharDriverState *chr = opaque;
++    PtyCharDriver *s = chr->opaque;
++
++    if (s->connected) {
++        goto out;
++    }
++    if (s->polling) {
++        /* If we arrive here without polling being cleared due
++         * read returning -EIO, then we are (re-)connected */
++        pty_chr_state(chr, 1);
++        goto out;
++    }
++
++    /* Next poll ... */
++    pty_chr_update_read_handler(chr);
++
++out:
++    return FALSE;
++}
++
++static void pty_chr_rearm_timer(CharDriverState *chr, int ms)
++{
++    PtyCharDriver *s = chr->opaque;
++
++    if (s->timer_tag) {
++        g_source_remove(s->timer_tag);
++        s->timer_tag = 0;
++    }
++
++    if (ms == 1000) {
++        s->timer_tag = g_timeout_add_seconds(1, pty_chr_timer, chr);
++    } else {
++        s->timer_tag = g_timeout_add(ms, pty_chr_timer, chr);
++    }
++}
++
+ static int pty_chr_write(CharDriverState *chr, const uint8_t *buf, int len)
+ {
+     PtyCharDriver *s = chr->opaque;
+@@ -1055,7 +1093,7 @@ static void pty_chr_update_read_handler(CharDriverState *chr)
+      * timeout to the normal (much longer) poll interval before the
+      * timer triggers.
+      */
+-    qemu_mod_timer(s->timer, qemu_get_clock(rt_clock) + 10);
++    pty_chr_rearm_timer(chr, 10);
+ }
+ 
+ static void pty_chr_state(CharDriverState *chr, int connected)
+@@ -1070,7 +1108,7 @@ static void pty_chr_state(CharDriverState *chr, int connected)
+         /* (re-)connect poll interval for idle guests: once per second.
+          * We check more frequently in case the guests sends data to
+          * the virtual device linked to our pty. */
+-        qemu_mod_timer(s->timer, qemu_get_clock(rt_clock) + 1000);
++        pty_chr_rearm_timer(chr, 1000);
+     } else {
+         if (!s->connected)
+             qemu_chr_generic_open(chr);
+@@ -1078,23 +1116,6 @@ static void pty_chr_state(CharDriverState *chr, int connected)
+     }
+ }
+ 
+-static void pty_chr_timer(void *opaque)
+-{
+-    struct CharDriverState *chr = opaque;
+-    PtyCharDriver *s = chr->opaque;
+-
+-    if (s->connected)
+-        return;
+-    if (s->polling) {
+-        /* If we arrive here without polling being cleared due
+-         * read returning -EIO, then we are (re-)connected */
+-        pty_chr_state(chr, 1);
+-        return;
+-    }
+-
+-    /* Next poll ... */
+-    pty_chr_update_read_handler(chr);
+-}
+ 
+ static void pty_chr_close(struct CharDriverState *chr)
+ {
+@@ -1107,8 +1128,9 @@ static void pty_chr_close(struct CharDriverState *chr)
+     fd = g_io_channel_unix_get_fd(s->fd);
+     g_io_channel_unref(s->fd);
+     close(fd);
+-    qemu_del_timer(s->timer);
+-    qemu_free_timer(s->timer);
++    if (s->timer_tag) {
++        g_source_remove(s->timer_tag);
++    }
+     g_free(s);
+     qemu_chr_be_event(chr, CHR_EVENT_CLOSED);
+ }
+@@ -1153,7 +1175,7 @@ static CharDriverState *qemu_chr_open_pty(QemuOpts *opts)
+     chr->chr_add_watch = pty_chr_add_watch;
+ 
+     s->fd = io_channel_from_fd(master_fd);
+-    s->timer = qemu_new_timer(rt_clock, pty_chr_timer, chr);
++    s->timer_tag = 0;
+ 
+     return chr;
+ }
+-- 
+1.7.11.7
+

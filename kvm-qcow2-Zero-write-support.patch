@@ -1,0 +1,83 @@
+From 87e2654e4328ebf61e47f306acc5cf2cfbc2f26a Mon Sep 17 00:00:00 2001
+Message-Id: <87e2654e4328ebf61e47f306acc5cf2cfbc2f26a.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Tue, 28 Apr 2015 16:25:41 -0500
+Subject: [CHANGE 29/29] qcow2: Zero write support
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <607c604ce4e92269b7a466113cce411efdbbf389.1430235071.git.jcody@redhat.com>
+Patchwork-id: 64947
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2] qcow2: Zero write support
+Bugzilla: 1130014
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 621f058940ea9f1ef3d8774ef3203544f1228df1)
+
+RHEL6 Notes: QCOW2 changes not applied, we are interested only in
+             the block.c parts.
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1130014
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=9061391
+
+ block.c | 14 +++++++++++---
+ 1 file changed, 11 insertions(+), 3 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block.c | 14 +++++++++++---
+ 1 file changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/block.c b/block.c
+index 628eb50..d77ccd8 100644
+--- a/block.c
++++ b/block.c
+@@ -80,6 +80,8 @@ static BlockDriverAIOCB *bdrv_co_aio_rw_vector(BlockDriverState *bs,
+                                                void *opaque,
+                                                bool is_write);
+ static void coroutine_fn bdrv_co_do_rw(void *opaque);
++static int coroutine_fn bdrv_co_do_write_zeroes(BlockDriverState *bs,
++    int64_t sector_num, int nb_sectors);
+ 
+ static QTAILQ_HEAD(, BlockDriverState) bdrv_states =
+     QTAILQ_HEAD_INITIALIZER(bdrv_states);
+@@ -2182,8 +2184,8 @@ static int coroutine_fn bdrv_co_do_copy_on_readv(BlockDriverState *bs,
+ 
+     if (drv->bdrv_co_write_zeroes &&
+         buffer_is_zero(bounce_buffer, iov.iov_len)) {
+-        ret = drv->bdrv_co_write_zeroes(bs, cluster_sector_num,
+-                                        cluster_nb_sectors);
++        ret = bdrv_co_do_write_zeroes(bs, cluster_sector_num,
++                                      cluster_nb_sectors);
+     } else {
+         ret = drv->bdrv_co_writev(bs, cluster_sector_num, cluster_nb_sectors,
+                                   &bounce_qiov);
+@@ -2321,9 +2323,15 @@ static int coroutine_fn bdrv_co_do_write_zeroes(BlockDriverState *bs,
+     struct iovec iov;
+     int ret;
+ 
++    /* TODO Emulate only part of misaligned requests instead of letting block
++     * drivers return -ENOTSUP and emulate everything */
++
+     /* First try the efficient write zeroes operation */
+     if (drv->bdrv_co_write_zeroes) {
+-        return drv->bdrv_co_write_zeroes(bs, sector_num, nb_sectors);
++        ret = drv->bdrv_co_write_zeroes(bs, sector_num, nb_sectors);
++        if (ret != -ENOTSUP) {
++            return ret;
++        }
+     }
+ 
+     /* Fall back to bounce buffer if write zeroes is unsupported */
+-- 
+2.1.0
+

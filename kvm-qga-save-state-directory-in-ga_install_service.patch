@@ -1,0 +1,99 @@
+From d013faa7efad1340df61aa0645b5b6d2dcde2b52 Mon Sep 17 00:00:00 2001
+Message-Id: <d013faa7efad1340df61aa0645b5b6d2dcde2b52.1372244120.git.minovotn@redhat.com>
+In-Reply-To: <24977988cb53a0f50e2996977c2221c5a358a4b8.1372244120.git.minovotn@redhat.com>
+References: <24977988cb53a0f50e2996977c2221c5a358a4b8.1372244120.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Fri, 7 Jun 2013 12:23:58 +0200
+Subject: [PATCH 06/12] qga: save state directory in ga_install_service()
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1370607840-30295-7-git-send-email-lersek@redhat.com>
+Patchwork-id: 51779
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 6/8] qga: save state directory in ga_install_service()
+Bugzilla: 962669
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Gal Hammer <ghammer@redhat.com>
+RH-Acked-by: Michal Novotny <minovotn@redhat.com>
+
+If the user selects a non-default state directory at service installation
+time, we should remember it in the registered service.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit a839ee77c786a8200c76ca92f697eebf6bcc9aa3)
+---
+ qga/service-win32.h |    3 ++-
+ qemu-ga.c           |   11 ++++++++++-
+ qga/service-win32.c |    6 +++++-
+ 3 files changed, 17 insertions(+), 3 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-ga.c           | 11 ++++++++++-
+ qga/service-win32.c |  6 +++++-
+ qga/service-win32.h |  3 ++-
+ 3 files changed, 17 insertions(+), 3 deletions(-)
+
+diff --git a/qemu-ga.c b/qemu-ga.c
+index 6777c9e..b3a3f74 100644
+--- a/qemu-ga.c
++++ b/qemu-ga.c
+@@ -1022,7 +1022,16 @@ int main(int argc, char **argv)
+         case 's':
+             service = optarg;
+             if (strcmp(service, "install") == 0) {
+-                return ga_install_service(path, log_filepath);
++                const char *fixed_state_dir;
++
++                /* If the user passed the "-t" option, we save that state dir
++                 * in the service. Otherwise we let the service fetch the state
++                 * dir from the environment when it starts.
++                 */
++                fixed_state_dir = (state_dir == dfl_pathnames.state_dir) ?
++                                  NULL :
++                                  state_dir;
++                return ga_install_service(path, log_filepath, fixed_state_dir);
+             } else if (strcmp(service, "uninstall") == 0) {
+                 return ga_uninstall_service();
+             } else {
+diff --git a/qga/service-win32.c b/qga/service-win32.c
+index 8a5de8a..02926ab 100644
+--- a/qga/service-win32.c
++++ b/qga/service-win32.c
+@@ -35,7 +35,8 @@ static int printf_win_error(const char *text)
+     return n;
+ }
+ 
+-int ga_install_service(const char *path, const char *logfile)
++int ga_install_service(const char *path, const char *logfile,
++                       const char *state_dir)
+ {
+     SC_HANDLE manager;
+     SC_HANDLE service;
+@@ -56,6 +57,9 @@ int ga_install_service(const char *path, const char *logfile)
+     if (logfile) {
+         g_string_append_printf(cmdline, " -l %s -v", logfile);
+     }
++    if (state_dir) {
++        g_string_append_printf(cmdline, " -t %s", state_dir);
++    }
+ 
+     g_debug("service's cmdline: %s", cmdline->str);
+ 
+diff --git a/qga/service-win32.h b/qga/service-win32.h
+index 99dfc53..3b9e870 100644
+--- a/qga/service-win32.h
++++ b/qga/service-win32.h
+@@ -24,7 +24,8 @@ typedef struct GAService {
+     SERVICE_STATUS_HANDLE status_handle;
+ } GAService;
+ 
+-int ga_install_service(const char *path, const char *logfile);
++int ga_install_service(const char *path, const char *logfile,
++                       const char *state_dir);
+ int ga_uninstall_service(void);
+ 
+ #endif
+-- 
+1.7.11.7
+

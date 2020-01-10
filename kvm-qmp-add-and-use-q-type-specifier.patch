@@ -1,0 +1,72 @@
+From e86064b76d024ba5977f61609115aaab67eceab1 Mon Sep 17 00:00:00 2001
+Message-Id: <e86064b76d024ba5977f61609115aaab67eceab1.1374754301.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:22 +0200
+Subject: [PATCH 11/65] qmp: add and use q type specifier
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-12-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52109
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 11/65] qmp: add and use q type specifier
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+"O" is being used by the transaction and qom-set commands to mean "any
+QObject", but it really means "do not validate the argument list".
+Add a new specifier with the correct meaning.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Reviewed-by: Anthony Liguori <aliguori@us.ibm.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit b9f8978cc428559c684df88ed69b709e33ba17dc)
+
+Conflicts:
+
+	qmp-commands.hx
+---
+ monitor.c       |    3 +++
+ qemu-monitor.hx |    2 +-
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ monitor.c       | 3 +++
+ qemu-monitor.hx | 2 +-
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/monitor.c b/monitor.c
+index a2433c1..5bcaa41 100644
+--- a/monitor.c
++++ b/monitor.c
+@@ -4718,6 +4718,9 @@ static int check_client_args_type(const QDict *client_args,
+         case 'O':
+             assert(flags & QMP_ACCEPT_UNKNOWNS);
+             break;
++        case 'q':
++            /* Any QObject can be passed.  */
++            break;
+         case '/':
+         case '.':
+             /*
+diff --git a/qemu-monitor.hx b/qemu-monitor.hx
+index be47357..d22da85 100644
+--- a/qemu-monitor.hx
++++ b/qemu-monitor.hx
+@@ -1549,7 +1549,7 @@ ETEXI
+ #ifdef CONFIG_LIVE_SNAPSHOTS
+     {
+         .name       = "transaction",
+-        .args_type  = "actions:O",
++        .args_type  = "actions:q",
+         .user_print = monitor_user_noop,
+         .mhandler.cmd_new = qmp_marshal_input_transaction,
+     },
+-- 
+1.7.11.7
+

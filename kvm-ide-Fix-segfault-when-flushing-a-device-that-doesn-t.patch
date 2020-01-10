@@ -1,0 +1,78 @@
+From 5df0992de2a48aa2ed6f972ff5cfe58e3007a47c Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Wed, 20 Aug 2014 08:48:13 -0500
+Subject: [CHANGE 2/2] ide: Fix segfault when flushing a device that doesn't
+ exist
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1408524493-6522-1-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60636
+O-Subject: [RHEL-6.6 qemu-kvm PATCH] ide: Fix segfault when flushing a device that doesn't exist
+Bugzilla: 1120541
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Marcel Apfelbaum <marcel.a@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1120541
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=7857845
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit f7f3ff1da0c451befc8d32f977f9c352d1303f40)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	tests/ide-test.c
+
+No qtest on RHEL 6, so dropped that part.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+
+=== git-compile-check output ===
+
+Performing a test compile on 1 patches
+
+1/1: compiling: a647e4f: ide: Fix segfault when flushing a device that doesn't exist
+
+All patches in rhel6/master..HEAD compiled successfully!
+
+=== git-backport-diff output ===
+
+Key:
+[----] : patches are identical
+[####] : number of functional differences between upstream/downstream patch
+[down] : patch is downstream-only
+The flags [FC] indicate (F)unctional and (C)ontextual differences, respectively
+
+001/1:[0014] [FC] 'ide: Fix segfault when flushing a device that doesn't exist'
+
+---
+ hw/ide/core.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/ide/core.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/hw/ide/core.c b/hw/ide/core.c
+index 0b7340b..dd4b4c3 100644
+--- a/hw/ide/core.c
++++ b/hw/ide/core.c
+@@ -877,7 +877,9 @@ static void ide_flush_cb(void *opaque, int ret)
+         }
+     }
+ 
+-    bdrv_acct_done(s->bs, &s->acct);
++    if (s->bs) {
++        bdrv_acct_done(s->bs, &s->acct);
++    }
+     s->status = READY_STAT | SEEK_STAT;
+     ide_set_irq(s->bus);
+ }
+-- 
+1.9.3
+

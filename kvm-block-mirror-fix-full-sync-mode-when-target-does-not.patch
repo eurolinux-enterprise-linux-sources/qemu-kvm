@@ -1,0 +1,88 @@
+From fd88c7aceb5370a956def4f678a6c43fc85375e4 Mon Sep 17 00:00:00 2001
+Message-Id: <fd88c7aceb5370a956def4f678a6c43fc85375e4.1455839186.git.jen@redhat.com>
+In-Reply-To: <424485de2fd4c66d4ba936809475676fe696319f.1455839186.git.jen@redhat.com>
+References: <424485de2fd4c66d4ba936809475676fe696319f.1455839186.git.jen@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Wed, 10 Feb 2016 15:16:42 -0500
+Subject: [CHANGE 2/2] block: mirror - fix full sync mode when target does not
+ support zero init
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <0fe45f0ef46611f3e1ff304a394414d0682fa957.1455117317.git.jcody@redhat.com>
+Patchwork-id: 69148
+O-Subject: [RHEL-6.8 qemu-kvm-rhev v2 1/1] block: mirror - fix full sync mode when target does not support zero init
+Bugzilla: 971312
+RH-Acked-by: Thomas Huth <thuth@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+During mirror, if the target device does not support zero init, a
+mirror may result in a corrupted image for sync="full" mode.
+
+This is due to how the initial dirty bitmap is set up prior to copying
+data - we did not mark sectors as dirty that are unallocated.  This
+means those unallocated sectors are skipped over on the target, and for
+a device without zero init, invalid data may reside in those holes.
+
+If both of the following conditions are true, then we will explicitly
+mark all sectors as dirty:
+
+    1.) sync = "full"
+    2.) bdrv_has_zero_init(target) == false
+
+If the target does support zero init, but a target image is passed in
+with data already present (i.e. an "existing" image), it is assumed the
+data present in the existing image is valid data for those sectors.
+
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: 91ed4bc5bda7e2b09eb508b07c83f4071fe0b3c9.1443705220.git.jcody@redhat.com
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+(cherry picked from commit 5279efebcf8f8fbf2ed2feed63cdb9d375c7cd07)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	block/mirror.c
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+
+Change v1->v2: Move mark_all_dirty init to outside the loop (thanks Stefan)
+
+BZ: 1136382
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=10464130
+
+ block/mirror.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/mirror.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/block/mirror.c b/block/mirror.c
+index 1e482a9..110add3 100644
+--- a/block/mirror.c
++++ b/block/mirror.c
+@@ -103,6 +103,8 @@ static void coroutine_fn mirror_run(void *opaque)
+     buf = qemu_blockalign(bs, s->granularity);
+ 
+     /* First part, loop on the sectors and initialize the dirty bitmap.  */
++    bool mark_all_dirty = s->full && !bdrv_has_zero_init(s->target);
++
+     for (sector_num = 0; sector_num < end; ) {
+         int64_t next = (sector_num | (sectors_per_chunk - 1)) + 1;
+         if (s->full) {
+@@ -115,7 +117,7 @@ static void coroutine_fn mirror_run(void *opaque)
+             break;
+         }
+ 
+-        if (ret == 1) {
++        if (ret == 1 || mark_all_dirty) {
+             bdrv_set_dirty(bs, sector_num, n);
+             sector_num = next;
+         } else {
+-- 
+2.1.0
+

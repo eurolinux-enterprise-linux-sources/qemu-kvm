@@ -1,0 +1,51 @@
+From c2638c83162894dcf334a6b24e54a3f5c6f3fa33 Mon Sep 17 00:00:00 2001
+From: Amit Shah <amit.shah@redhat.com>
+Date: Fri, 11 Jul 2014 10:47:21 -0500
+Subject: [CHANGE 10/18] tests: vmstate static checker: remove last field in a
+ struct
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <0353c51eab6d9d8f85e4b3638a7acece1260b1fc.1405075344.git.amit.shah@redhat.com>
+Patchwork-id: 59810
+O-Subject: [RHEL6.6 qemu-kvm PATCH 10/18] tests: vmstate static checker: remove last field in a struct
+Bugzilla: 1118718
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Reviewed-by: Juan Quintela <quintela@redhat.com>
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+(cherry picked from commit fd52ffb9bfa3cb9adc4d7578209ec95eba47b45f)
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ tests/vmstate-static-checker-data/dump2.json | 6 ------
+ 1 file changed, 6 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ tests/vmstate-static-checker-data/dump2.json | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/tests/vmstate-static-checker-data/dump2.json b/tests/vmstate-static-checker-data/dump2.json
+index f6b52d0..34bfbf6 100644
+--- a/tests/vmstate-static-checker-data/dump2.json
++++ b/tests/vmstate-static-checker-data/dump2.json
+@@ -637,12 +637,6 @@
+                 "version_id": 0,
+                 "field_exists": false,
+                 "size": 256
+-              },
+-              {
+-                "field": "irq_state",
+-                "version_id": 2,
+-                "field_exists": false,
+-                "size": 16
+               }
+             ]
+           }
+-- 
+1.9.3
+

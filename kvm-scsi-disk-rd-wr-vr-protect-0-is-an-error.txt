@@ -1,0 +1,83 @@
+From 14450d872da647f123c2cceb3e64c79add126fdf Mon Sep 17 00:00:00 2001
+From: Markus Armbruster <armbru@redhat.com>
+Date: Tue, 22 Jul 2014 09:15:55 -0500
+Subject: [CHANGE 06/17] scsi-disk: rd/wr/vr-protect !=0 is an error
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Markus Armbruster <armbru@redhat.com>
+Message-id: <1406020565-25364-2-git-send-email-armbru@redhat.com>
+Patchwork-id: 59993
+O-Subject: [PATCH 6.6 qemu-kvm v2 01/11] scsi-disk: rd/wr/vr-protect !=0 is an error
+Bugzilla: 1064643
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Ronnie Sahlberg <ronniesahlberg@gmail.com>
+
+The QEMU SCSI emulation does not support protection information,
+so any READ/WRITE/VERIFY commands that has the protect bits set to
+non-zero should fail with ILLEGAL_REQUEST/INVALID_FIELD_IN_CDB
+
+>From SCSI SBC :
+If the logical unit does not support protection information,
+then the device server should terminate the command with CHECK CONDITION
+status with the sense key set to ILLEGAL REQUEST and the additional sense
+code set to INVALID FIELD IN CDB.
+
+Signed-off-by: Ronnie Sahlberg <ronniesahlberg@gmail.com>
+[ Rebase after scsi_dma_reqops introduction - Paolo ]
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+
+(cherry picked from commit 96bdbbab55976b106f9db2b61042ebf5f0493e5a)
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	hw/scsi-disk.c
+
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+---
+ hw/scsi-disk.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/scsi-disk.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/hw/scsi-disk.c b/hw/scsi-disk.c
+index bbbe016..4e5e55e 100644
+--- a/hw/scsi-disk.c
++++ b/hw/scsi-disk.c
+@@ -1492,6 +1492,9 @@ static int32_t scsi_send_command(SCSIRequest *req, uint8_t *buf)
+     case READ_16:
+         len = r->req.cmd.xfer / s->qdev.blocksize;
+         DPRINTF("Read (sector %" PRId64 ", count %d)\n", r->req.cmd.lba, len);
++        if (r->req.cmd.buf[1] & 0xe0) {
++            goto illegal_request;
++        }
+         if (r->req.cmd.lba > s->qdev.max_lba) {
+             goto illegal_lba;
+         }
+@@ -1517,6 +1520,9 @@ static int32_t scsi_send_command(SCSIRequest *req, uint8_t *buf)
+         DPRINTF("Write %s(sector %" PRId64 ", count %d)\n",
+                 (command & 0xe) == 0xe ? "And Verify " : "",
+                 r->req.cmd.lba, len);
++        if (r->req.cmd.buf[1] & 0xe0) {
++            goto illegal_request;
++        }
+         if (r->req.cmd.lba > s->qdev.max_lba) {
+             goto illegal_lba;
+         }
+@@ -1576,6 +1582,7 @@ static int32_t scsi_send_command(SCSIRequest *req, uint8_t *buf)
+         scsi_check_condition(r, SENSE_CODE(INVALID_OPCODE));
+         return 0;
+     fail:
++    illegal_request:
+         scsi_check_condition(r, SENSE_CODE(INVALID_FIELD));
+         return 0;
+     illegal_lba:
+-- 
+1.9.3
+

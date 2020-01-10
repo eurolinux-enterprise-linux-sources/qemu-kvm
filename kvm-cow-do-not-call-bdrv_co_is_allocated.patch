@@ -1,0 +1,37 @@
+From 38e889607fa438121b82a3ad81365fa113c1a279 Mon Sep 17 00:00:00 2001
+Message-Id: <38e889607fa438121b82a3ad81365fa113c1a279.1379425497.git.minovotn@redhat.com>
+In-Reply-To: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+References: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Fri, 6 Sep 2013 18:12:29 +0200
+Subject: [PATCH 09/25] cow: do not call bdrv_co_is_allocated
+
+As we change bdrv_is_allocated to gather more information from bs and
+bs->file, it will become a bit slower.  It is still appropriate for online
+jobs, but not for reads/writes.  Call the internal function instead.
+
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit e641c1e81e54fc14908ff6785ef7d51e42c2e1bb)
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/cow.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/block/cow.c b/block/cow.c
+index 9cebe44..be86a62 100644
+--- a/block/cow.c
++++ b/block/cow.c
+@@ -212,7 +212,7 @@ static int coroutine_fn cow_read(BlockDriverState *bs, int64_t sector_num,
+     int ret, n;
+ 
+     while (nb_sectors > 0) {
+-        if (bdrv_co_is_allocated(bs, sector_num, nb_sectors, &n)) {
++        if (cow_co_is_allocated(bs, sector_num, nb_sectors, &n)) {
+             ret = bdrv_pread(bs->file,
+                         s->cow_sectors_offset + sector_num * 512,
+                         buf, n * 512);
+-- 
+1.7.11.7
+

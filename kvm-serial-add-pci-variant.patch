@@ -1,0 +1,181 @@
+From 4c765449c7ac81a666f678c6e404ad4de4dd6630 Mon Sep 17 00:00:00 2001
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:23:16 +0200
+Subject: [PATCH 16/21] serial: add pci variant
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372058597-15860-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52175
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 1/2] serial: add pci variant
+Bugzilla: 872015
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Michal Novotny <minovotn@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+
+So we get a hot-pluggable 16550 uart.
+
+bugzilla: #872015 - A Windows VM can only see 2 of 4 assigned COM ports
+upstream: 419ad67208a37367932a5bf88d3860f85e06282c
+
+rhel6:
+  * put the bits directly into serial.c instead of serial-pci.c
+  * adapt to pre-memory-api and pre-qom qemu.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+---
+ hw/pci.h     |    3 ++
+ hw/pci_ids.h |    1 +
+ hw/serial.c  |   87 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 91 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ hw/pci.h     |    3 ++
+ hw/pci_ids.h |    1 +
+ hw/serial.c  |   87 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 91 insertions(+), 0 deletions(-)
+
+diff --git a/hw/pci.h b/hw/pci.h
+index 6002492..7d06f40 100644
+--- a/hw/pci.h
++++ b/hw/pci.h
+@@ -78,6 +78,9 @@ extern target_phys_addr_t pci_mem_base;
+ #define PCI_DEVICE_ID_VIRTIO_CONSOLE     0x1003
+ #define PCI_DEVICE_ID_VIRTIO_SCSI        0x1004
+ 
++#define PCI_VENDOR_ID_REDHAT             0x1b36
++#define PCI_DEVICE_ID_REDHAT_SERIAL      0x0002
++
+ typedef uint64_t pcibus_t;
+ #define FMT_PCIBUS                      PRIx64
+ 
+diff --git a/hw/pci_ids.h b/hw/pci_ids.h
+index 62dc9c0..2eb976a 100644
+--- a/hw/pci_ids.h
++++ b/hw/pci_ids.h
+@@ -35,6 +35,7 @@
+ #define PCI_CLASS_BRIDGE_PCI             0x0604
+ #define PCI_CLASS_BRIDGE_OTHER           0x0680
+ 
++#define PCI_CLASS_COMMUNICATION_SERIAL   0x0700
+ #define PCI_CLASS_COMMUNICATION_OTHER    0x0780
+ 
+ #define PCI_CLASS_PROCESSOR_CO           0x0b40
+diff --git a/hw/serial.c b/hw/serial.c
+index 940bc01..9bdc4d3 100644
+--- a/hw/serial.c
++++ b/hw/serial.c
+@@ -25,6 +25,8 @@
+ #include "hw.h"
+ #include "qemu-char.h"
+ #include "isa.h"
++#include "pci.h"
++#include "pci_ids.h"
+ #include "pc.h"
+ #include "qemu-timer.h"
+ #include "sysemu.h"
+@@ -736,6 +738,12 @@ static void serial_init_core(SerialState *s)
+                           serial_event, s);
+ }
+ 
++static void serial_exit_core(SerialState *s)
++{
++    qemu_chr_add_handlers(s->chr, NULL, NULL, NULL, NULL);
++    qemu_unregister_reset(serial_reset, s);
++}
++
+ /* Change the main reference oscillator frequency. */
+ void serial_set_frequency(SerialState *s, uint32_t frequency)
+ {
+@@ -916,9 +924,88 @@ static ISADeviceInfo serial_isa_info = {
+     },
+ };
+ 
++typedef struct PCISerialState {
++    PCIDevice dev;
++    pcibus_t addr;
++    SerialState state;
++} PCISerialState;
++
++static void serial_pci_map(PCIDevice *pci_dev, int region_num,
++                           pcibus_t addr, pcibus_t size, int type)
++{
++    PCISerialState *pci = DO_UPCAST(PCISerialState, dev, pci_dev);
++    SerialState *s = &pci->state;
++
++    if (pci->addr) {
++        isa_unassign_ioport(pci->addr, 8);
++        pci->addr = 0;
++    }
++    register_ioport_write(addr, 8, 1, serial_ioport_write, s);
++    register_ioport_read(addr, 8, 1, serial_ioport_read, s);
++    pci->addr = addr;
++}
++
++static int serial_pci_init(PCIDevice *dev)
++{
++    PCISerialState *pci = DO_UPCAST(PCISerialState, dev, dev);
++    SerialState *s = &pci->state;
++
++    s->baudbase = 115200;
++    serial_init_core(s);
++
++    pci_config_set_vendor_id(pci->dev.config, PCI_VENDOR_ID_REDHAT);
++    pci_config_set_device_id(pci->dev.config, PCI_DEVICE_ID_REDHAT_SERIAL);
++    pci_config_set_class(pci->dev.config, PCI_CLASS_COMMUNICATION_SERIAL);
++    pci->dev.config[PCI_REVISION_ID] = 0x01;
++    pci->dev.config[PCI_INTERRUPT_PIN] = 0x01;
++    s->irq = pci->dev.irq[0];
++
++    pci_register_bar(&pci->dev, 0, 8, PCI_BASE_ADDRESS_SPACE_IO, serial_pci_map);
++    return 0;
++}
++
++static int serial_pci_exit(PCIDevice *dev)
++{
++    PCISerialState *pci = DO_UPCAST(PCISerialState, dev, dev);
++    SerialState *s = &pci->state;
++
++    if (pci->addr) {
++        isa_unassign_ioport(pci->addr, 8);
++        pci->addr = 0;
++    }
++    serial_exit_core(s);
++    return 0;
++}
++
++static const VMStateDescription vmstate_pci_serial = {
++    .name = "pci-serial",
++    .version_id = 1,
++    .minimum_version_id = 1,
++    .fields      = (VMStateField[]) {
++        VMSTATE_PCI_DEVICE(dev, PCISerialState),
++        VMSTATE_STRUCT(state, PCISerialState, 0, vmstate_serial, SerialState),
++        VMSTATE_END_OF_LIST()
++    }
++};
++
++static Property serial_pci_properties[] = {
++    DEFINE_PROP_CHR("chardev",  PCISerialState, state.chr),
++    DEFINE_PROP_END_OF_LIST(),
++};
++
++static PCIDeviceInfo serial_pci_info = {
++    .qdev.name    = "pci-serial",
++    .qdev.size    = sizeof(PCISerialState),
++    .qdev.vmsd    = &vmstate_pci_serial,
++    .init         = serial_pci_init,
++    .exit         = serial_pci_exit,
++    .qdev.props   = serial_pci_properties,
++};
++
+ static void serial_register_devices(void)
+ {
+     isa_qdev_register(&serial_isa_info);
++    pci_qdev_register(&serial_pci_info);
+ }
+ 
+ device_init(serial_register_devices)
+-- 
+1.7.1
+

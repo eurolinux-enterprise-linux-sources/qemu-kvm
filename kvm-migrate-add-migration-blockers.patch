@@ -1,0 +1,115 @@
+From c345e2832073940a34662a696abefc2c4b8bfa79 Mon Sep 17 00:00:00 2001
+Message-Id: <c345e2832073940a34662a696abefc2c4b8bfa79.1378999677.git.minovotn@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Thu, 12 Sep 2013 03:10:44 +0200
+Subject: [PATCH 1/5] migrate: add migration blockers
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <e6c059fe6366debf2050eade74845e34ae4a7602.1378954963.git.jcody@redhat.com>
+Patchwork-id: 54299
+O-Subject: [RHEL6.5 qemu-kvm PATCH 1/5] migrate: add migration blockers
+Bugzilla: 999779
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Orit Wasserman <owasserm@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+This lets different subsystems register an Error that is thrown whenever
+migration is attempted.  This works nicely because it gracefully supports
+things like hotplug.
+
+Right now, if multiple errors are registered, only one of them is reported.
+I expect that for 1.1, we'll extend query-migrate to return all of the reasons
+why migration is disabled at any given point in time.
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit fa2756b71b73e8cd94f7d8964ad5e2aca4d2691c)
+
+Conflicts:
+	migration.c
+	migration.h
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ migration.c | 18 ++++++++++++++++++
+ migration.h | 15 +++++++++++++++
+ 2 files changed, 33 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ migration.c | 18 ++++++++++++++++++
+ migration.h | 15 +++++++++++++++
+ 2 files changed, 33 insertions(+)
+
+diff --git a/migration.c b/migration.c
+index 07c3d96..0400edb 100644
+--- a/migration.c
++++ b/migration.c
+@@ -90,6 +90,18 @@ void process_incoming_migration(QEMUFile *f)
+     }
+ }
+ 
++static GSList *migration_blockers;
++
++void migrate_add_blocker(Error *reason)
++{
++    migration_blockers = g_slist_prepend(migration_blockers, reason);
++}
++
++void migrate_del_blocker(Error *reason)
++{
++    migration_blockers = g_slist_remove(migration_blockers, reason);
++}
++
+ int do_migrate(Monitor *mon, const QDict *qdict, QObject **ret_data)
+ {
+     MigrationState *s = NULL;
+@@ -111,6 +123,12 @@ int do_migrate(Monitor *mon, const QDict *qdict, QObject **ret_data)
+         return -1;
+     }
+ 
++    if (migration_blockers) {
++        Error *err = migration_blockers->data;
++        qerror_report_err(err);
++        return -1;
++    }
++
+     START_MIGRATION_CLOCK();
+     start_time = qemu_get_clock(rt_clock);
+ 
+diff --git a/migration.h b/migration.h
+index c6e1ca7..7eb3bad 100644
+--- a/migration.h
++++ b/migration.h
+@@ -18,6 +18,7 @@
+ #include "qemu-common.h"
+ #include "notify.h"
+ #include "qerror.h"
++#include "error.h"
+ 
+ #define MIG_STATE_ERROR		-1
+ #define MIG_STATE_COMPLETED	0
+@@ -144,4 +145,18 @@ void add_migration_state_change_notifier(Notifier *notify);
+ void remove_migration_state_change_notifier(Notifier *notify);
+ int get_migration_state(void);
+ 
++/**
++ * @migrate_add_blocker - prevent migration from proceeding
++ *
++ * @reason - an error to be returned whenever migration is attempted
++ */
++void migrate_add_blocker(Error *reason);
++
++/**
++ * @migrate_del_blocker - remove a blocking error from migration
++ *
++ * @reason - the error blocking migration
++ */
++void migrate_del_blocker(Error *reason);
++
+ #endif
+-- 
+1.7.11.7
+

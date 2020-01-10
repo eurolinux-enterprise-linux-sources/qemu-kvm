@@ -1,0 +1,56 @@
+From f0018c54e1bf4c697c1a0b6b08a981910e07ec27 Mon Sep 17 00:00:00 2001
+Message-Id: <f0018c54e1bf4c697c1a0b6b08a981910e07ec27.1369899578.git.minovotn@redhat.com>
+In-Reply-To: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+References: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Wed, 22 May 2013 08:33:59 +0200
+Subject: [PATCH 05/15] block: fix qcow2_co_flush deadlock
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1369211639-16057-1-git-send-email-kwolf@redhat.com>
+Patchwork-id: 51518
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] block: fix qcow2_co_flush deadlock
+Bugzilla: 962378
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Dong Xu Wang <wdongxu@linux.vnet.ibm.com>
+
+Bugzilla: 962378
+
+If qcow2_cache_flush failed, s->lock will not be unlock.
+
+Signed-off-by: Dong Xu Wang <wdongxu@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit c95de7e2c40da4235ceda6d134ae069dae80157e)
+---
+ block/qcow2.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/qcow2.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/block/qcow2.c b/block/qcow2.c
+index be2d433..05fd31d 100644
+--- a/block/qcow2.c
++++ b/block/qcow2.c
+@@ -1323,11 +1323,13 @@ static int qcow2_co_flush(BlockDriverState *bs)
+     qemu_co_mutex_lock(&s->lock);
+     ret = qcow2_cache_flush(bs, s->l2_table_cache);
+     if (ret < 0) {
++        qemu_co_mutex_unlock(&s->lock);
+         return ret;
+     }
+ 
+     ret = qcow2_cache_flush(bs, s->refcount_block_cache);
+     if (ret < 0) {
++        qemu_co_mutex_unlock(&s->lock);
+         return ret;
+     }
+     qemu_co_mutex_unlock(&s->lock);
+-- 
+1.7.11.7
+

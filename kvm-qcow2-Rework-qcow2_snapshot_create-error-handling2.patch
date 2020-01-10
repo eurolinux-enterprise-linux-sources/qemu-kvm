@@ -1,0 +1,143 @@
+From 7258c7e8ce1c9605191d03194ec87851aaf8eebb Mon Sep 17 00:00:00 2001
+Message-Id: <7258c7e8ce1c9605191d03194ec87851aaf8eebb.1368098699.git.minovotn@redhat.com>
+In-Reply-To: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+References: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Fri, 5 Apr 2013 19:44:45 +0200
+Subject: [PATCH 06/24] qcow2: Rework qcow2_snapshot_create error handling
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1365191091-25631-7-git-send-email-kwolf@redhat.com>
+Patchwork-id: 50165
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 06/12] qcow2: Rework qcow2_snapshot_create error handling
+Bugzilla: 796011
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+Bugzilla: 796011
+
+Increase refcounts only after allocating a new L1 table has succeeded in
+order to make leaks less likely. If writing the snapshot table fails,
+revert in-memory state to be consistent with that on disk.
+
+While at it, make it return the real error codes instead of -1.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+(cherry picked from commit d1ea98d56dc2485b4637a1ca19feef786b3aee8f)
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/qcow2-snapshot.c | 55 +++++++++++++++++++++++++++++++++++++-------------
+ 1 file changed, 41 insertions(+), 14 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/qcow2-snapshot.c | 55 +++++++++++++++++++++++++++++++++++++-------------
+ 1 file changed, 41 insertions(+), 14 deletions(-)
+
+diff --git a/block/qcow2-snapshot.c b/block/qcow2-snapshot.c
+index ceeab53..5ae1ccb 100644
+--- a/block/qcow2-snapshot.c
++++ b/block/qcow2-snapshot.c
+@@ -277,7 +277,9 @@ static int find_snapshot_by_id_or_name(BlockDriverState *bs, const char *name)
+ int qcow2_snapshot_create(BlockDriverState *bs, QEMUSnapshotInfo *sn_info)
+ {
+     BDRVQcowState *s = bs->opaque;
+-    QCowSnapshot *snapshots1, sn1, *sn = &sn1;
++    QCowSnapshot *new_snapshot_list = NULL;
++    QCowSnapshot *old_snapshot_list = NULL;
++    QCowSnapshot sn1, *sn = &sn1;
+     int i, ret;
+     uint64_t *l1_table = NULL;
+     int64_t l1_table_offset;
+@@ -303,16 +305,12 @@ int qcow2_snapshot_create(BlockDriverState *bs, QEMUSnapshotInfo *sn_info)
+     sn->date_nsec = sn_info->date_nsec;
+     sn->vm_clock_nsec = sn_info->vm_clock_nsec;
+ 
+-    ret = qcow2_update_snapshot_refcount(bs, s->l1_table_offset, s->l1_size, 1);
+-    if (ret < 0)
+-        goto fail;
+-
+     /* Allocate the L1 table of the snapshot and copy the current one there. */
+     l1_table_offset = qcow2_alloc_clusters(bs, s->l1_size * sizeof(uint64_t));
+     if (l1_table_offset < 0) {
++        ret = l1_table_offset;
+         goto fail;
+     }
+-    bdrv_flush(bs->file);
+ 
+     sn->l1_table_offset = l1_table_offset;
+     sn->l1_size = s->l1_size;
+@@ -321,22 +319,50 @@ int qcow2_snapshot_create(BlockDriverState *bs, QEMUSnapshotInfo *sn_info)
+     for(i = 0; i < s->l1_size; i++) {
+         l1_table[i] = cpu_to_be64(s->l1_table[i]);
+     }
+-    if (bdrv_pwrite_sync(bs->file, sn->l1_table_offset,
+-                    l1_table, s->l1_size * sizeof(uint64_t)) < 0)
++
++    ret = bdrv_pwrite(bs->file, sn->l1_table_offset, l1_table,
++                      s->l1_size * sizeof(uint64_t));
++    if (ret < 0) {
+         goto fail;
++    }
++
+     g_free(l1_table);
+     l1_table = NULL;
+ 
+-    snapshots1 = g_malloc((s->nb_snapshots + 1) * sizeof(QCowSnapshot));
++    /*
++     * Increase the refcounts of all clusters and make sure everything is
++     * stable on disk before updating the snapshot table to contain a pointer
++     * to the new L1 table.
++     */
++    ret = qcow2_update_snapshot_refcount(bs, s->l1_table_offset, s->l1_size, 1);
++    if (ret < 0) {
++        goto fail;
++    }
++
++    ret = bdrv_flush(bs);
++    if (ret < 0) {
++        goto fail;
++    }
++
++    /* Append the new snapshot to the snapshot list */
++    new_snapshot_list = g_malloc((s->nb_snapshots + 1) * sizeof(QCowSnapshot));
+     if (s->snapshots) {
+-        memcpy(snapshots1, s->snapshots, s->nb_snapshots * sizeof(QCowSnapshot));
+-        g_free(s->snapshots);
++        memcpy(new_snapshot_list, s->snapshots,
++               s->nb_snapshots * sizeof(QCowSnapshot));
++        old_snapshot_list = s->snapshots;
+     }
+-    s->snapshots = snapshots1;
++    s->snapshots = new_snapshot_list;
+     s->snapshots[s->nb_snapshots++] = *sn;
+ 
+-    if (qcow2_write_snapshots(bs) < 0)
++    ret = qcow2_write_snapshots(bs);
++    if (ret < 0) {
++        g_free(s->snapshots);
++        s->snapshots = old_snapshot_list;
+         goto fail;
++    }
++
++    g_free(old_snapshot_list);
++
+ #ifdef DEBUG_ALLOC
+     qcow2_check_refcounts(bs);
+ #endif
+@@ -346,7 +372,8 @@ fail:
+     g_free(sn->id_str);
+     g_free(sn->name);
+     g_free(l1_table);
+-    return -1;
++
++    return ret;
+ }
+ 
+ /* copy the snapshot 'snapshot_name' into the current disk image */
+-- 
+1.7.11.7
+

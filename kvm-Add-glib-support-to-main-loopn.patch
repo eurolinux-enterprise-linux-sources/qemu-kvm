@@ -1,0 +1,169 @@
+From ef4f8657a55fb56b6748f7134b37ecd088003322 Mon Sep 17 00:00:00 2001
+Message-Id: <ef4f8657a55fb56b6748f7134b37ecd088003322.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:18 +0200
+Subject: [PATCH 44/65] Add glib support to main loop
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <48c8244583e9aebe049b05b85c8b8eec49b29bbe.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50822
+O-Subject: [RHEL6.5 qemu-kvm PATCH 44/65] Add glib support to main loop
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+This allows GSources to be used to register callback events in QEMU.  This is
+useful as it allows us to take greater advantage of glib and also because it
+allows us to write code that is more easily testable outside of QEMU since we
+can make use of glib's main loop in unit tests.
+
+All new code should use glib's callback mechanisms for registering fd events
+which are very well documented at:
+
+http://developer.gnome.org/glib/stable/glib-The-Main-Event-Loop.html
+
+And:
+
+http://developer.gnome.org/gio/stable/
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 69e5bb68a5e95286edd59c3ce34c6f7bae5b5548)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	vl.c
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ vl.c | 75 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 75 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ vl.c | 75 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 75 insertions(+)
+
+diff --git a/vl.c b/vl.c
+index b6ab703..5c98297 100644
+--- a/vl.c
++++ b/vl.c
+@@ -124,6 +124,8 @@ int main(int argc, char **argv)
+ #define main qemu_main
+ #endif /* CONFIG_COCOA */
+ 
++#include <glib.h>
++
+ #include "hw/hw.h"
+ #include "hw/boards.h"
+ #include "hw/usb.h"
+@@ -3897,6 +3899,75 @@ void vm_stop(RunState reason)
+ #endif
+ 
+ 
++static GPollFD poll_fds[1024 * 2]; /* this is probably overkill */
++static int n_poll_fds;
++static int max_priority;
++
++static void glib_select_fill(int *max_fd, fd_set *rfds, fd_set *wfds,
++                             fd_set *xfds, struct timeval *tv)
++{
++    GMainContext *context = g_main_context_default();
++    int i;
++    int timeout = 0, cur_timeout;
++
++    g_main_context_prepare(context, &max_priority);
++
++    n_poll_fds = g_main_context_query(context, max_priority, &timeout,
++                                      poll_fds, ARRAY_SIZE(poll_fds));
++    g_assert(n_poll_fds <= ARRAY_SIZE(poll_fds));
++
++    for (i = 0; i < n_poll_fds; i++) {
++        GPollFD *p = &poll_fds[i];
++
++        if ((p->events & G_IO_IN)) {
++            FD_SET(p->fd, rfds);
++            *max_fd = MAX(*max_fd, p->fd);
++        }
++        if ((p->events & G_IO_OUT)) {
++            FD_SET(p->fd, wfds);
++            *max_fd = MAX(*max_fd, p->fd);
++        }
++        if ((p->events & G_IO_ERR)) {
++            FD_SET(p->fd, xfds);
++            *max_fd = MAX(*max_fd, p->fd);
++        }
++    }
++
++    cur_timeout = (tv->tv_sec * 1000) + ((tv->tv_usec + 500) / 1000);
++    if (timeout >= 0 && timeout < cur_timeout) {
++        tv->tv_sec = timeout / 1000;
++        tv->tv_usec = (timeout % 1000) * 1000;
++    }
++}
++
++static void glib_select_poll(fd_set *rfds, fd_set *wfds, fd_set *xfds,
++                             bool err)
++{
++    GMainContext *context = g_main_context_default();
++
++    if (!err) {
++        int i;
++
++        for (i = 0; i < n_poll_fds; i++) {
++            GPollFD *p = &poll_fds[i];
++
++            if ((p->events & G_IO_IN) && FD_ISSET(p->fd, rfds)) {
++                p->revents |= G_IO_IN;
++            }
++            if ((p->events & G_IO_OUT) && FD_ISSET(p->fd, wfds)) {
++                p->revents |= G_IO_OUT;
++            }
++            if ((p->events & G_IO_ERR) && FD_ISSET(p->fd, xfds)) {
++                p->revents |= G_IO_ERR;
++            }
++        }
++    }
++
++    if (g_main_context_check(context, max_priority, poll_fds, n_poll_fds)) {
++        g_main_context_dispatch(context);
++    }
++}
++
+ void main_loop_wait(int timeout)
+ {
+     IOHandlerRecord *ioh;
+@@ -3914,6 +3985,7 @@ void main_loop_wait(int timeout)
+     FD_ZERO(&rfds);
+     FD_ZERO(&wfds);
+     FD_ZERO(&xfds);
++
+     QLIST_FOREACH(ioh, &io_handlers, next) {
+         if (ioh->deleted)
+             continue;
+@@ -3936,6 +4008,8 @@ void main_loop_wait(int timeout)
+ 
+     slirp_select_fill(&nfds, &rfds, &wfds, &xfds);
+ 
++    glib_select_fill(&nfds, &rfds, &wfds, &xfds, &tv);
++
+     qemu_mutex_unlock_iothread();
+     ret = select(nfds + 1, &rfds, &wfds, &xfds, &tv);
+     qemu_mutex_lock_iothread();
+@@ -3963,6 +4037,7 @@ void main_loop_wait(int timeout)
+     }
+ 
+     slirp_select_poll(&rfds, &wfds, &xfds, (ret < 0));
++    glib_select_poll(&rfds, &wfds, &xfds, (ret < 0));
+ 
+     /* rearm timer, if not periodic */
+     if (alarm_timer->flags & ALARM_FLAG_EXPIRED) {
+-- 
+1.7.11.7
+

@@ -1,0 +1,55 @@
+From ade767e8db142e2822a4807eff1cd942def11153 Mon Sep 17 00:00:00 2001
+Message-Id: <ade767e8db142e2822a4807eff1cd942def11153.1453151886.git.jen@redhat.com>
+In-Reply-To: <e445c6fbfa4c35276b2869057fdcd8e546d63a4c.1453151886.git.jen@redhat.com>
+References: <e445c6fbfa4c35276b2869057fdcd8e546d63a4c.1453151886.git.jen@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Mon, 11 Jan 2016 14:53:07 -0500
+Subject: [CHANGE 4/8] Documentation: Warn against qemu-img on active image
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1452523987-19248-2-git-send-email-kwolf@redhat.com>
+Patchwork-id: 68731
+O-Subject: [RHEL-6.8 qemu-kvm PATCH 1/1] Documentation: Warn against qemu-img on active image
+Bugzilla: 1297424
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+People have repeatedly expected that you can do things like snapshotting
+an image with qemu-img while a qemu instance is running. Maybe we need
+to consider locking the files while they are in use, but having a
+warning in the qemu-img manpage is doable for 1.2 and can't hurt anyway.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 48467328c6dccc9c7be6628ed0ef0810f83be2a9)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ qemu-img.texi | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/qemu-img.texi b/qemu-img.texi
+index 7863587..4b1fdfa 100644
+--- a/qemu-img.texi
++++ b/qemu-img.texi
+@@ -4,6 +4,16 @@ usage: qemu-img command [command options]
+ @c man end
+ @end example
+ 
++@c man begin DESCRIPTION
++qemu-img allows you to create, convert and modify images offline. It can handle
++all image formats supported by QEMU.
++
++@b{Warning:} Never use qemu-img to modify images in use by a running virtual
++machine or any other process; this may destroy the image. Also, be aware that
++querying an image that is being modified by another process may encounter
++inconsistent state.
++@c man end
++
+ @c man begin OPTIONS
+ 
+ The following commands are supported:
+-- 
+2.1.0
+

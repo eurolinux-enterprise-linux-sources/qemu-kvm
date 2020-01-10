@@ -1,0 +1,119 @@
+From 8e809a3f3375fa1d772250f63c2a35637499dd2c Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Fri, 1 Aug 2014 16:30:55 -0500
+Subject: [CHANGE 2/4] ide: Ignore double DMA transfer starts/stops
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406910657-19808-2-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60404
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 1/3] ide: Ignore double DMA transfer starts/stops
+Bugzilla: 1104573
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Marcel Apfelbaum <marcel.a@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1104573
+
+You can only start a DMA transfer if it's not running yet, and you can only
+cancel it if it's running.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+(cherry picked from commit c29947bbb0978d312074ec73be968bfab1b6c977)
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	hw/ide/pci.c
+
+A lot of whitespace conflicts, but RHEL 6 also has bdrv_drain_all()
+already and the debug messages don't exactly match upstream at the point
+of this commit.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ hw/ide/pci.c | 60 ++++++++++++++++++++++++++++++++----------------------------
+ 1 file changed, 32 insertions(+), 28 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/ide/pci.c | 60 ++++++++++++++++++++++++++++++++----------------------------
+ 1 file changed, 32 insertions(+), 28 deletions(-)
+
+diff --git a/hw/ide/pci.c b/hw/ide/pci.c
+index 3da0d1d..713d9db 100644
+--- a/hw/ide/pci.c
++++ b/hw/ide/pci.c
+@@ -39,36 +39,40 @@ void bmdma_cmd_writeb(void *opaque, uint32_t addr, uint32_t val)
+ #ifdef DEBUG_IDE
+     printf("%s: 0x%08x\n", __func__, val);
+ #endif
+-    if (!(val & BM_CMD_START)) {
+-        /*
+-	 * We can't cancel Scatter Gather DMA in the middle of the
+-	 * operation or a partial (not full) DMA transfer would reach
+-	 * the storage so we wait for completion instead (we beahve
+-	 * like if the DMA was completed by the time the guest trying
+-	 * to cancel dma with bmdma_cmd_writeb with BM_CMD_START not
+-	 * set).
+-	 *
+-	 * In the future we'll be able to safely cancel the I/O if the
+-	 * whole DMA operation will be submitted to disk with a single
+-	 * aio operation with preadv/pwritev.
+-	 */
+-	if (bm->aiocb) {
+-		bdrv_drain_all();
+-		if (bm->aiocb)
+-			printf("ide_dma_cancel: aiocb still pending\n");
+-		if (bm->status & BM_STATUS_DMAING)
+-			printf("ide_dma_cancel: BM_STATUS_DMAING still pending\n");
+-	}
+-        bm->cmd = val & 0x09;
+-    } else {
+-        if (!(bm->status & BM_STATUS_DMAING)) {
+-            bm->status |= BM_STATUS_DMAING;
+-            /* start dma transfer if possible */
+-            if (bm->dma_cb)
+-                bm->dma_cb(bm, 0);
++
++    /* Ignore writes to SSBM if it keeps the old value */
++    if ((val & BM_CMD_START) != (bm->cmd & BM_CMD_START)) {
++        if (!(val & BM_CMD_START)) {
++            /*
++             * We can't cancel Scatter Gather DMA in the middle of the
++             * operation or a partial (not full) DMA transfer would reach
++             * the storage so we wait for completion instead (we beahve
++             * like if the DMA was completed by the time the guest trying
++             * to cancel dma with bmdma_cmd_writeb with BM_CMD_START not
++             * set).
++             *
++             * In the future we'll be able to safely cancel the I/O if the
++             * whole DMA operation will be submitted to disk with a single
++             * aio operation with preadv/pwritev.
++             */
++            if (bm->aiocb) {
++                bdrv_drain_all();
++                if (bm->aiocb)
++                    printf("ide_dma_cancel: aiocb still pending\n");
++                if (bm->status & BM_STATUS_DMAING)
++                    printf("ide_dma_cancel: BM_STATUS_DMAING still pending\n");
++            }
++        } else {
++            if (!(bm->status & BM_STATUS_DMAING)) {
++                bm->status |= BM_STATUS_DMAING;
++                /* start dma transfer if possible */
++                if (bm->dma_cb)
++                    bm->dma_cb(bm, 0);
++            }
+         }
+-        bm->cmd = val & 0x09;
+     }
++
++    bm->cmd = val & 0x09;
+ }
+ 
+ uint32_t bmdma_addr_readb(void *opaque, uint32_t addr)
+-- 
+1.9.3
+

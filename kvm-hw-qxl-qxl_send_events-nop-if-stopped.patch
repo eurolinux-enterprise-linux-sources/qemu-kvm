@@ -1,0 +1,61 @@
+From 424485de2fd4c66d4ba936809475676fe696319f Mon Sep 17 00:00:00 2001
+Message-Id: <424485de2fd4c66d4ba936809475676fe696319f.1455839186.git.jen@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 1 Feb 2016 12:23:08 -0500
+Subject: [CHANGE 1/2] hw/qxl: qxl_send_events: nop if stopped
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1454329389-28120-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 69096
+O-Subject: [RHEL-6.8 qemu-kvm PATCH v3 1/1] hw/qxl: qxl_send_events: nop if stopped
+Bugzilla: 1290743
+RH-Acked-by: Thomas Huth <thuth@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+
+From: Alon Levy <alevy@redhat.com>
+
+Added a trace point for easy logging.
+
+RHBZ: https://bugzilla.redhat.com/show_bug.cgi?id=870972
+
+Signed-off-by: Alon Levy <alevy@redhat.com>
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 511aefb0c60e3063ead76d4ba6aabf619eed18ef)
+
+[ rhel6: drop tracepoint ]
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	hw/qxl.c
+	trace-events
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/qxl.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/hw/qxl.c b/hw/qxl.c
+index 9466033..5fc592e 100644
+--- a/hw/qxl.c
++++ b/hw/qxl.c
+@@ -1766,7 +1766,12 @@ static void qxl_send_events(PCIQXLDevice *d, uint32_t events)
+     uint32_t old_pending;
+     uint32_t le_events = cpu_to_le32(events);
+ 
+-    assert(qemu_spice_display_is_running(&d->ssd));
++    if (!qemu_spice_display_is_running(&d->ssd)) {
++        /* spice-server tracks guest running state and should not do this */
++        fprintf(stderr, "%s: spice-server bug: guest stopped, ignoring\n",
++                __func__);
++        return;
++    }
+     old_pending = __sync_fetch_and_or(&d->ram->int_pending, le_events);
+     if ((old_pending & le_events) == le_events) {
+         return;
+-- 
+2.1.0
+

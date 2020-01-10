@@ -1,0 +1,119 @@
+From 5c41df40677e67b384191bf674ab8bd4ee0a2f9e Mon Sep 17 00:00:00 2001
+Message-Id: <5c41df40677e67b384191bf674ab8bd4ee0a2f9e.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:34 +0200
+Subject: [PATCH 19/47] VMDK: separate vmdk_read_extent/vmdk_write_extent
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-20-git-send-email-famz@redhat.com>
+Patchwork-id: 51455
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 19/47] VMDK: separate vmdk_read_extent/vmdk_write_extent
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Fam Zheng <famcool@gmail.com>
+
+Factor out read/write extent code, since there will be more things to
+take care of once reading/writing compressed clusters is introduced.
+
+Signed-off-by: Fam Zheng <famcool@gmail.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit dd3f6ee211d248bc8cf27cc839e94dfa42348cd9)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 54 +++++++++++++++++++++++++++++++++++++++++++++---------
+ 1 file changed, 45 insertions(+), 9 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 54 +++++++++++++++++++++++++++++++++++++++++++++---------
+ 1 file changed, 45 insertions(+), 9 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 3a5f4dc..d26bdcf 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -838,6 +838,43 @@ static int coroutine_fn vmdk_co_is_allocated(BlockDriverState *bs,
+     return ret;
+ }
+ 
++static int vmdk_write_extent(VmdkExtent *extent, int64_t cluster_offset,
++                            int64_t offset_in_cluster, const uint8_t *buf,
++                            int nb_sectors, int64_t sector_num)
++{
++    int ret;
++    const uint8_t *write_buf = buf;
++    int write_len = nb_sectors * 512;
++
++    ret = bdrv_pwrite(extent->file,
++                        cluster_offset + offset_in_cluster,
++                        write_buf,
++                        write_len);
++    if (ret != write_len) {
++        ret = ret < 0 ? ret : -EIO;
++        goto out;
++    }
++    ret = 0;
++ out:
++    return ret;
++}
++
++static int vmdk_read_extent(VmdkExtent *extent, int64_t cluster_offset,
++                            int64_t offset_in_cluster, uint8_t *buf,
++                            int nb_sectors)
++{
++    int ret;
++
++    ret = bdrv_pread(extent->file,
++                      cluster_offset + offset_in_cluster,
++                      buf, nb_sectors * 512);
++    if (ret == nb_sectors * 512) {
++        return 0;
++    } else {
++        return -EIO;
++    }
++}
++
+ static int vmdk_read(BlockDriverState *bs, int64_t sector_num,
+                     uint8_t *buf, int nb_sectors)
+ {
+@@ -874,10 +911,10 @@ static int vmdk_read(BlockDriverState *bs, int64_t sector_num,
+                 memset(buf, 0, 512 * n);
+             }
+         } else {
+-            ret = bdrv_pread(extent->file,
+-                            cluster_offset + index_in_cluster * 512,
+-                            buf, n * 512);
+-            if (ret < 0) {
++            ret = vmdk_read_extent(extent,
++                            cluster_offset, index_in_cluster * 512,
++                            buf, n);
++            if (ret) {
+                 return ret;
+             }
+         }
+@@ -937,11 +974,10 @@ static int vmdk_write(BlockDriverState *bs, int64_t sector_num,
+             n = nb_sectors;
+         }
+ 
+-        ret = bdrv_pwrite(extent->file,
+-                        cluster_offset + index_in_cluster * 512,
+-                        buf,
+-                        n * 512);
+-        if (ret < 0) {
++        ret = vmdk_write_extent(extent,
++                        cluster_offset, index_in_cluster * 512,
++                        buf, n, sector_num);
++        if (ret) {
+             return ret;
+         }
+         if (m_data.valid) {
+-- 
+1.7.11.7
+

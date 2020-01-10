@@ -1,0 +1,147 @@
+From 86c63d0f83d15416d516e32c1de4a2dbc0b591b6 Mon Sep 17 00:00:00 2001
+Message-Id: <86c63d0f83d15416d516e32c1de4a2dbc0b591b6.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:00 +0200
+Subject: [PATCH 26/65] char: remove qemu_chr_send_event()
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <e2edc6ffb84b4e9997d99edbe02bedcdf3fac8cb.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50804
+O-Subject: [RHEL6.5 qemu-kvm PATCH 26/65] char: remove qemu_chr_send_event()
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+It's dead code.
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 903396ad3ea8f84b38362134ef7157c82b32071e)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ console.c   | 16 ----------------
+ hw/baum.c   | 15 ---------------
+ qemu-char.c |  6 ------
+ qemu-char.h |  2 --
+ 4 files changed, 39 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ console.c   | 16 ----------------
+ hw/baum.c   | 15 ---------------
+ qemu-char.c |  6 ------
+ qemu-char.h |  2 --
+ 4 files changed, 39 deletions(-)
+
+diff --git a/console.c b/console.c
+index 8bd3001..dafdac0 100644
+--- a/console.c
++++ b/console.c
+@@ -1099,21 +1099,6 @@ static int console_puts(CharDriverState *chr, const uint8_t *buf, int len)
+     return len;
+ }
+ 
+-static void console_send_event(CharDriverState *chr, int event)
+-{
+-    TextConsole *s = chr->opaque;
+-    int i;
+-
+-    if (event == CHR_EVENT_FOCUS) {
+-        for(i = 0; i < nb_consoles; i++) {
+-            if (consoles[i] == s) {
+-                console_select(i);
+-                break;
+-            }
+-        }
+-    }
+-}
+-
+ static void kbd_send_chars(void *opaque)
+ {
+     TextConsole *s = opaque;
+@@ -1348,7 +1333,6 @@ static void text_console_do_init(CharDriverState *chr, DisplayState *ds, QemuOpt
+     }
+     chr->opaque = s;
+     chr->chr_write = console_puts;
+-    chr->chr_send_event = console_send_event;
+ 
+     s->chr = chr;
+     s->out_fifo.buf = s->out_fifo_buf;
+diff --git a/hw/baum.c b/hw/baum.c
+index 0dea922..2b76940 100644
+--- a/hw/baum.c
++++ b/hw/baum.c
+@@ -468,20 +468,6 @@ static int baum_write(CharDriverState *chr, const uint8_t *buf, int len)
+     return orig_len;
+ }
+ 
+-/* The other end sent us some event */
+-static void baum_send_event(CharDriverState *chr, int event)
+-{
+-    BaumDriverState *baum = chr->opaque;
+-    switch (event) {
+-    case CHR_EVENT_BREAK:
+-        break;
+-    case CHR_EVENT_OPENED:
+-        /* Reset state */
+-        baum->in_buf_used = 0;
+-        break;
+-    }
+-}
+-
+ /* Send the key code to the other end */
+ static void baum_send_key(BaumDriverState *baum, uint8_t type, uint8_t value) {
+     uint8_t packet[] = { type, value };
+@@ -579,7 +565,6 @@ CharDriverState *chr_baum_init(QemuOpts *opts)
+ 
+     chr->opaque = baum;
+     chr->chr_write = baum_write;
+-    chr->chr_send_event = baum_send_event;
+     chr->chr_accept_input = baum_accept_input;
+ 
+     handle = qemu_mallocz(brlapi_getHandleSize());
+diff --git a/qemu-char.c b/qemu-char.c
+index d7a9c0a..48a58c5 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -185,12 +185,6 @@ void qemu_chr_fe_printf(CharDriverState *s, const char *fmt, ...)
+     va_end(ap);
+ }
+ 
+-void qemu_chr_send_event(CharDriverState *s, int event)
+-{
+-    if (s->chr_send_event)
+-        s->chr_send_event(s, event);
+-}
+-
+ void qemu_chr_add_handlers(CharDriverState *s,
+                            IOCanRWHandler *fd_can_read,
+                            IOReadHandler *fd_read,
+diff --git a/qemu-char.h b/qemu-char.h
+index 04eea6f..a0e7ac0 100644
+--- a/qemu-char.h
++++ b/qemu-char.h
+@@ -61,7 +61,6 @@ struct CharDriverState {
+     IOCanRWHandler *chr_can_read;
+     IOReadHandler *chr_read;
+     void *handler_opaque;
+-    void (*chr_send_event)(struct CharDriverState *chr, int event);
+     void (*chr_close)(struct CharDriverState *chr);
+     void (*chr_accept_input)(struct CharDriverState *chr);
+     void (*chr_guest_open)(struct CharDriverState *chr);
+@@ -86,7 +85,6 @@ void qemu_chr_fe_close(struct CharDriverState *chr);
+ void qemu_chr_delete(CharDriverState *chr);
+ void qemu_chr_fe_printf(CharDriverState *s, const char *fmt, ...);
+ int qemu_chr_fe_write(CharDriverState *s, const uint8_t *buf, int len);
+-void qemu_chr_send_event(CharDriverState *s, int event);
+ void qemu_chr_add_handlers(CharDriverState *s,
+                            IOCanRWHandler *fd_can_read,
+                            IOReadHandler *fd_read,
+-- 
+1.7.11.7
+

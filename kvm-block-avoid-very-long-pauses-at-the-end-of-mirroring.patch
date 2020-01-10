@@ -1,0 +1,63 @@
+From 777136db36dd5845b7840ea809576565e3c9cdc5 Mon Sep 17 00:00:00 2001
+Message-Id: <777136db36dd5845b7840ea809576565e3c9cdc5.1482436097.git.ymankad@redhat.com>
+In-Reply-To: <c82b7dad71c6917c1ffa387b87de50a7d786e403.1482436097.git.ymankad@redhat.com>
+References: <c82b7dad71c6917c1ffa387b87de50a7d786e403.1482436097.git.ymankad@redhat.com>
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Fri, 16 Dec 2016 11:56:27 -0500
+Subject: [CHANGE 4/4] block: avoid very long pauses at the end of mirroring
+To: ymankad@redhat.com
+
+RH-Author: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: <20161216115627.27874-5-pbonzini@redhat.com>
+Patchwork-id: 73076
+O-Subject: [RHEL6.9 qemu-kvm PATCH 4/4] block: avoid very long pauses at the end of mirroring
+Bugzilla: 876993
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: John Snow <jsnow@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+If many mirroring operations are completing at the same time, they will
+generate a lot of I/O, and bdrv_drain_all will be very expensive.  RHEV
+also tends (or tended) to use large cluster sizes which made things even
+worse.  Replace bdrv_drain_all with bdrv_drain so that mirroring jobs
+do not stomp on each other's feet.
+
+The same holds for drive_reopen, which is also used at the end of
+mirroring.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ block/mirror.c | 2 +-
+ blockdev.c     | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/block/mirror.c b/block/mirror.c
+index 110add3..e7003dd 100644
+--- a/block/mirror.c
++++ b/block/mirror.c
+@@ -172,7 +172,7 @@ static void coroutine_fn mirror_run(void *opaque)
+              * Note that I/O can be submitted by the guest while
+              * mirror_populate runs.
+              */
+-            bdrv_drain_all();
++            bdrv_drain(bs);
+         }
+ 
+         ret = 0;
+diff --git a/blockdev.c b/blockdev.c
+index 88a0e40..128b728 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -815,7 +815,7 @@ void qmp___com_redhat_drive_reopen(const char *device, const char *new_image_fil
+         return;
+     }
+ 
+-    qemu_aio_flush();
++    bdrv_drain(bs);
+     if (!bdrv_is_read_only(bs) && bdrv_is_inserted(bs)) {
+         if (bdrv_flush(bs)) {
+             error_set(errp, QERR_IO_ERROR);
+-- 
+2.7.4
+

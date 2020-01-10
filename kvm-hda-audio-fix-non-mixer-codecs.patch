@@ -1,0 +1,46 @@
+From b0d1777fa37b0425f9284000ed51397ee759892d Mon Sep 17 00:00:00 2001
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Thu, 8 May 2014 11:55:04 -0500
+Subject: [CHANGE 1/4] hda-audio: fix non-mixer codecs
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1399550104-24762-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 58749
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 1/1] hda-audio: fix non-mixer codecs
+Bugzilla: 1080546
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+They don't advertise mixer support, but still allow the guest change
+mixer settings.  Add a check to avoid it.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit 4843877e5d7d9ef4fdd29ac14ee1ce55531a0fc4)
+
+[ rhel6: adapt to non-upstream mixemu, use get_mixemu_disabled() ]
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/hda-audio.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/hw/hda-audio.c b/hw/hda-audio.c
+index 21b5a9d..c6b4c4c 100644
+--- a/hw/hda-audio.c
++++ b/hw/hda-audio.c
+@@ -674,6 +674,9 @@ static void hda_audio_set_amp(HDAAudioStream *st)
+     left = left * 255 / QEMU_HDA_AMP_STEPS;
+     right = right * 255 / QEMU_HDA_AMP_STEPS;
+ 
++    if (get_mixemu_disabled()) {
++        return;
++    }
+     if (st->output) {
+         AUD_set_volume_out(st->voice.out, muted, left, right);
+     } else {
+-- 
+1.9.3
+

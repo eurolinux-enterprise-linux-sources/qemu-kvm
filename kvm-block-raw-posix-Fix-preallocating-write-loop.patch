@@ -1,0 +1,60 @@
+From c828f5f8b73c8e51c3d974bb6d58173b0c8729af Mon Sep 17 00:00:00 2001
+Message-Id: <c828f5f8b73c8e51c3d974bb6d58173b0c8729af.1422637807.git.jen@redhat.com>
+In-Reply-To: <d57bff8cf3457c2e855eeca4b18266bf5956270d.1422637807.git.jen@redhat.com>
+References: <d57bff8cf3457c2e855eeca4b18266bf5956270d.1422637807.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Mon, 19 Jan 2015 14:52:08 -0500
+Subject: [CHANGE 07/10] block/raw-posix: Fix preallocating write() loop
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1421679130-22714-8-git-send-email-mreitz@redhat.com>
+Patchwork-id: 63367
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 7/9] block/raw-posix: Fix preallocating write() loop
+Bugzilla: 1040220
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1040220
+
+write() may write less bytes than requested; in this case, the number of
+bytes written is returned. This is the byte count we should be
+subtracting from the number of bytes still to be written, and not the
+byte count we requested to write.
+
+Reported-by: László Érsek <lersek@redhat.com>
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 39411cf3c316de0fe3cbb9585774bacfe3bd8efd)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/raw-posix.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/raw-posix.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/block/raw-posix.c b/block/raw-posix.c
+index f54211a..4941a5f 100644
+--- a/block/raw-posix.c
++++ b/block/raw-posix.c
+@@ -676,7 +676,7 @@ static int raw_create(const char *filename, QEMUOptionParameter *options)
+                              strerror(-result));
+                 break;
+             }
+-            left -= num;
++            left -= result;
+         }
+         fsync(fd);
+         g_free(buf);
+-- 
+2.1.0
+

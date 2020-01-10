@@ -1,0 +1,86 @@
+From cdfeeaf9f87fd4083a4afb5b5cbd738673cdb16a Mon Sep 17 00:00:00 2001
+Message-Id: <cdfeeaf9f87fd4083a4afb5b5cbd738673cdb16a.1378999677.git.minovotn@redhat.com>
+In-Reply-To: <c345e2832073940a34662a696abefc2c4b8bfa79.1378999677.git.minovotn@redhat.com>
+References: <c345e2832073940a34662a696abefc2c4b8bfa79.1378999677.git.minovotn@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Thu, 12 Sep 2013 03:10:46 +0200
+Subject: [PATCH 3/5] qed: remove incoming live migration blocker
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <9983f443a7dcb3fa54ac5983f55405682eb93044.1378954963.git.jcody@redhat.com>
+Patchwork-id: 54301
+O-Subject: [RHEL6.5 qemu-kvm PATCH 3/5] qed: remove incoming live migration blocker
+Bugzilla: 999779
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Orit Wasserman <owasserm@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Benoît Canet <benoit.canet@gmail.com>
+
+Signed-off-by: Benoit Canet <benoit.canet@gmail.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@gmail.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 50d30c267563bf492fd403dd23abc7888f3e220c)
+
+RHEL6 notes:
+    The QED migration blocker was added in to pull in the qemu-tool
+    and qerror bits.  This removes the undesired QED parts.
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ block/qed.c | 9 ---------
+ block/qed.h | 2 --
+ 2 files changed, 11 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/qed.c | 9 ---------
+ block/qed.h | 2 --
+ 2 files changed, 11 deletions(-)
+
+diff --git a/block/qed.c b/block/qed.c
+index 101cdcb..5d96be9 100644
+--- a/block/qed.c
++++ b/block/qed.c
+@@ -500,12 +500,6 @@ static int bdrv_qed_open(BlockDriverState *bs, int flags)
+ 
+     s->need_check_timer = qemu_new_timer(vm_clock, qed_need_check_timer_cb, s);
+ 
+-    error_set(&s->migration_blocker,
+-              QERR_BLOCK_FORMAT_FEATURE_NOT_SUPPORTED,
+-              "qed", bs->device_name, "live migration");
+-    migrate_add_blocker(s->migration_blocker);
+-
+-
+ out:
+     if (ret) {
+         qed_free_l2_cache(&s->l2_cache);
+@@ -526,9 +520,6 @@ static void bdrv_qed_close(BlockDriverState *bs)
+ {
+     BDRVQEDState *s = bs->opaque;
+ 
+-    migrate_del_blocker(s->migration_blocker);
+-    error_free(s->migration_blocker);
+-
+     qed_cancel_need_check_timer(s);
+     qemu_free_timer(s->need_check_timer);
+ 
+diff --git a/block/qed.h b/block/qed.h
+index 62624a1..c716772 100644
+--- a/block/qed.h
++++ b/block/qed.h
+@@ -169,8 +169,6 @@ typedef struct {
+ 
+     /* Periodic flush and clear need check flag */
+     QEMUTimer *need_check_timer;
+-
+-    Error *migration_blocker;
+ } BDRVQEDState;
+ 
+ enum {
+-- 
+1.7.11.7
+

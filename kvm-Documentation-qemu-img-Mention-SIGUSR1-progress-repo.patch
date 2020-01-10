@@ -1,0 +1,59 @@
+From c7b44d977bfa5588e7f99a3cd82abbfa0328fc18 Mon Sep 17 00:00:00 2001
+From: Max Reitz <mreitz@redhat.com>
+Date: Thu, 7 Aug 2014 18:12:20 -0500
+Subject: [CHANGE 4/4] Documentation: qemu-img: Mention SIGUSR1 progress report
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1407435140-21792-2-git-send-email-mreitz@redhat.com>
+Patchwork-id: 60476
+O-Subject: [RHEL-6.6 qemu-kvm PATCH] Documentation: qemu-img: Mention SIGUSR1 progress report
+Bugzilla: 1122885
+RH-Acked-by: Ademar de Souza Reis Jr. <areis@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+Document the SIGUSR1 behaviour of qemu-img. Also, added compare to the
+list of subcommands that support -p.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Benoit Canet <benoit@irqsave.net>
+(cherry picked from commit 0e3bd9932f862c1c1e4926939b4d0c602ce214ef)
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	qemu-img.texi
+
+Conflicting context: There is no -q option in RHEL 6.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ qemu-img.texi | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ qemu-img.texi | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/qemu-img.texi b/qemu-img.texi
+index b0570df..3ed69cb 100644
+--- a/qemu-img.texi
++++ b/qemu-img.texi
+@@ -39,7 +39,9 @@ indicates that target image must be compressed (qcow format only)
+ @item -h
+ with or without a command shows help and lists the supported formats
+ @item -p
+-display progress bar (convert and rebase commands only)
++display progress bar (compare, convert and rebase commands only).
++If the @var{-p} option is not used for a command that supports it, the
++progress is reported when the process receives a @code{SIGUSR1} signal.
+ @item -S @var{size}
+ indicates the consecutive number of bytes that must contain only zeros
+ for qemu-img to create a sparse image during conversion. This value is rounded
+-- 
+1.9.3
+

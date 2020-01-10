@@ -1,0 +1,46 @@
+From 134726e0f8749a7053f44f72e8256dccf2580f8c Mon Sep 17 00:00:00 2001
+From: Amit Shah <amit.shah@redhat.com>
+Date: Fri, 11 Jul 2014 10:47:19 -0500
+Subject: [CHANGE 08/18] tests: vmstate static checker: remove a section
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <fa94b5218ac6622e5dbb12b550b07af84fae2624.1405075344.git.amit.shah@redhat.com>
+Patchwork-id: 59808
+O-Subject: [RHEL6.6 qemu-kvm PATCH 08/18] tests: vmstate static checker: remove a section
+Bugzilla: 1118718
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Reviewed-by: Juan Quintela <quintela@redhat.com>
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+(cherry picked from commit ab99bdbe33cd108f490d89ba92361c4197c5c56b)
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ tests/vmstate-static-checker-data/dump2.json | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ tests/vmstate-static-checker-data/dump2.json | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/vmstate-static-checker-data/dump2.json b/tests/vmstate-static-checker-data/dump2.json
+index 36a9b4b..4ccfd67 100644
+--- a/tests/vmstate-static-checker-data/dump2.json
++++ b/tests/vmstate-static-checker-data/dump2.json
+@@ -2,7 +2,7 @@
+   "vmschkmachine": {
+     "Name": "pc-i440fx-2.2"
+   },
+-  "fw_cfg": {
++  "fw_cfg2": {
+     "Name": "fw_cfg",
+     "version_id": 2,
+     "minimum_version_id": 1,
+-- 
+1.9.3
+

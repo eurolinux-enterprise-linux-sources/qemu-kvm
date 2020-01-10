@@ -1,0 +1,162 @@
+From 8cfb4abef8d3a6d5bae98bf1b90cfa2c146307bd Mon Sep 17 00:00:00 2001
+Message-Id: <8cfb4abef8d3a6d5bae98bf1b90cfa2c146307bd.1378999677.git.minovotn@redhat.com>
+In-Reply-To: <c345e2832073940a34662a696abefc2c4b8bfa79.1378999677.git.minovotn@redhat.com>
+References: <c345e2832073940a34662a696abefc2c4b8bfa79.1378999677.git.minovotn@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Thu, 12 Sep 2013 03:10:45 +0200
+Subject: [PATCH 2/5] qed: add migration blocker (v2)
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <455112afedb8fb01dd3b3a5ac47e7a5f947e91e0.1378954963.git.jcody@redhat.com>
+Patchwork-id: 54300
+O-Subject: [RHEL6.5 qemu-kvm PATCH 2/5] qed: add migration blocker (v2)
+Bugzilla: 999779
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Orit Wasserman <owasserm@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+Now when you try to migrate with qed, you get:
+
+(qemu) migrate tcp:localhost:1025
+Block format 'qed' used by device 'ide0-hd0' does not support feature 'live migration'
+(qemu)
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 1ed520c66e3f3b57b88d201c08558ec1616bf69d)
+
+Conflicts:
+	block/qed.c
+	qemu-tool.c
+	qerror.c
+	qerror.h
+
+RHEL6 notes:
+    This is included because it provides the migrate-add-blocker
+    qemu-tool stubs, as well as the qerror for block feature
+    not supported.
+
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ block/qed.c | 11 +++++++++++
+ block/qed.h |  2 ++
+ qemu-tool.c |  9 +++++++++
+ qerror.c    |  4 ++++
+ qerror.h    |  3 +++
+ 5 files changed, 29 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/qed.c | 11 +++++++++++
+ block/qed.h |  2 ++
+ qemu-tool.c |  9 +++++++++
+ qerror.c    |  4 ++++
+ qerror.h    |  3 +++
+ 5 files changed, 29 insertions(+)
+
+diff --git a/block/qed.c b/block/qed.c
+index 1bb53b2..101cdcb 100644
+--- a/block/qed.c
++++ b/block/qed.c
+@@ -16,6 +16,8 @@
+ #include "qemu-timer.h"
+ #include "trace.h"
+ #include "qed.h"
++#include "qerror.h"
++#include "migration.h"
+ 
+ static void qed_aio_cancel(BlockDriverAIOCB *blockacb)
+ {
+@@ -498,6 +500,12 @@ static int bdrv_qed_open(BlockDriverState *bs, int flags)
+ 
+     s->need_check_timer = qemu_new_timer(vm_clock, qed_need_check_timer_cb, s);
+ 
++    error_set(&s->migration_blocker,
++              QERR_BLOCK_FORMAT_FEATURE_NOT_SUPPORTED,
++              "qed", bs->device_name, "live migration");
++    migrate_add_blocker(s->migration_blocker);
++
++
+ out:
+     if (ret) {
+         qed_free_l2_cache(&s->l2_cache);
+@@ -518,6 +526,9 @@ static void bdrv_qed_close(BlockDriverState *bs)
+ {
+     BDRVQEDState *s = bs->opaque;
+ 
++    migrate_del_blocker(s->migration_blocker);
++    error_free(s->migration_blocker);
++
+     qed_cancel_need_check_timer(s);
+     qemu_free_timer(s->need_check_timer);
+ 
+diff --git a/block/qed.h b/block/qed.h
+index c716772..62624a1 100644
+--- a/block/qed.h
++++ b/block/qed.h
+@@ -169,6 +169,8 @@ typedef struct {
+ 
+     /* Periodic flush and clear need check flag */
+     QEMUTimer *need_check_timer;
++
++    Error *migration_blocker;
+ } BDRVQEDState;
+ 
+ enum {
+diff --git a/qemu-tool.c b/qemu-tool.c
+index a09f655..316c919 100644
+--- a/qemu-tool.c
++++ b/qemu-tool.c
+@@ -16,6 +16,7 @@
+ #include "qemu-timer.h"
+ #include "qemu-log.h"
+ #include "sysemu.h"
++#include "migration.h"
+ 
+ #include <sys/time.h>
+ 
+@@ -125,3 +126,11 @@ void qemu_mutex_lock_iothread(void)
+ void qemu_mutex_unlock_iothread(void)
+ {
+ }
++
++void migrate_add_blocker(Error *reason)
++{
++}
++
++void migrate_del_blocker(Error *reason)
++{
++}
+diff --git a/qerror.c b/qerror.c
+index 30194d1..8e3912b 100644
+--- a/qerror.c
++++ b/qerror.c
+@@ -57,6 +57,10 @@ static const QErrorStringTable qerror_table[] = {
+         .desc      = "Base '%(base)' not reachable from top '%(top)'",
+     },
+     {
++        .error_fmt = QERR_BLOCK_FORMAT_FEATURE_NOT_SUPPORTED,
++        .desc      = "Block format '%(format)' used by device '%(name)' does not support feature '%(feature)'",
++    },
++    {
+         .error_fmt = QERR_BUS_NOT_FOUND,
+         .desc      = "Bus '%(bus)' not found",
+     },
+diff --git a/qerror.h b/qerror.h
+index 5f21ccb..bb4c543 100644
+--- a/qerror.h
++++ b/qerror.h
+@@ -61,6 +61,9 @@ QError *qobject_to_qerror(const QObject *obj);
+ #define QERR_BASE_NOT_REACHABLE \
+     "{ 'class': 'GenericError', 'data': { 'base': %s, 'top': %s } }"
+ 
++#define QERR_BLOCK_FORMAT_FEATURE_NOT_SUPPORTED \
++    "{ 'class': 'BlockFormatFeatureNotSupported', 'data': { 'format': %s, 'name': %s, 'feature': %s } }"
++
+ #define QERR_BUS_NOT_FOUND \
+     "{ 'class': 'BusNotFound', 'data': { 'bus': %s } }"
+ 
+-- 
+1.7.11.7
+

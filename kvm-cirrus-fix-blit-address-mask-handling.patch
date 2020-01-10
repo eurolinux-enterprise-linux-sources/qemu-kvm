@@ -1,0 +1,115 @@
+From 618a6cb1f02791fd6b486e5c4c271fcb029b7e99 Mon Sep 17 00:00:00 2001
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 7 Feb 2017 11:18:33 +0000
+Subject: [PATCH 7/8] cirrus: fix blit address mask handling
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1486466314-7710-8-git-send-email-kraxel@redhat.com>
+Patchwork-id: 73577
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 7/8] cirrus: fix blit address mask handling
+Bugzilla: 1418230 1418231 1419416 1419417
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+RH-Acked-by: Laurent Vivier <lvivier@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Apply the cirrus_addr_mask to cirrus_blt_dstaddr and cirrus_blt_srcaddr
+right after assigning them, in cirrus_bitblt_start(), instead of having
+this all over the place in the cirrus code, and missing a few places.
+
+Reported-by: Wolfgang Bumiller <w.bumiller@proxmox.com>
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: 1485338996-17095-1-git-send-email-kraxel@redhat.com
+(cherry picked from commit 60cd23e85151525ab26591394c4e7e06fa07d216)
+Signed-off-by: Danilo C. L. de Paula <ddepaula@redhat.com>
+---
+ hw/cirrus_vga.c | 25 ++++++++++++-------------
+ 1 file changed, 12 insertions(+), 13 deletions(-)
+
+diff --git a/hw/cirrus_vga.c b/hw/cirrus_vga.c
+index 8ab0ac6..5dc0c2b 100644
+--- a/hw/cirrus_vga.c
++++ b/hw/cirrus_vga.c
+@@ -293,7 +293,7 @@ static bool blit_is_unsafe(struct CirrusVGAState *s, bool dst_only,
+     }
+ 
+     if (blit_region_is_unsafe(s, s->cirrus_blt_dstpitch,
+-                              s->cirrus_blt_dstaddr & s->cirrus_addr_mask)) {
++                              s->cirrus_blt_dstaddr)) {
+         return true;
+     }
+     if (dst_only) {
+@@ -306,7 +306,7 @@ static bool blit_is_unsafe(struct CirrusVGAState *s, bool dst_only,
+     }
+ 
+     if (blit_region_is_unsafe(s, check_pitch,
+-                              s->cirrus_blt_srcaddr & s->cirrus_addr_mask)) {
++                              s->cirrus_blt_srcaddr)) {
+         return true;
+     }
+ 
+@@ -676,7 +676,7 @@ static int cirrus_bitblt_common_patterncopy(CirrusVGAState * s,
+ {
+     uint8_t *dst;
+ 
+-    dst = s->vga.vram_ptr + (s->cirrus_blt_dstaddr & s->cirrus_addr_mask);
++    dst = s->vga.vram_ptr + s->cirrus_blt_dstaddr;
+ 
+     if (blit_is_unsafe(s, false, true)) {
+         return 0;
+@@ -701,7 +701,7 @@ static int cirrus_bitblt_solidfill(CirrusVGAState *s, int blt_rop)
+         return 0;
+     }
+     rop_func = cirrus_fill[rop_to_index[blt_rop]][s->cirrus_blt_pixelwidth - 1];
+-    rop_func(s, s->vga.vram_ptr + (s->cirrus_blt_dstaddr & s->cirrus_addr_mask),
++    rop_func(s, s->vga.vram_ptr + s->cirrus_blt_dstaddr,
+              s->cirrus_blt_dstpitch,
+              s->cirrus_blt_width, s->cirrus_blt_height);
+     cirrus_invalidate_region(s, s->cirrus_blt_dstaddr,
+@@ -719,9 +719,8 @@ static int cirrus_bitblt_solidfill(CirrusVGAState *s, int blt_rop)
+ 
+ static int cirrus_bitblt_videotovideo_patterncopy(CirrusVGAState * s)
+ {
+-    return cirrus_bitblt_common_patterncopy(s,
+-					    s->vga.vram_ptr + ((s->cirrus_blt_srcaddr & ~7) &
+-                                            s->cirrus_addr_mask));
++    return cirrus_bitblt_common_patterncopy(s, s->vga.vram_ptr +
++                                            (s->cirrus_blt_srcaddr & ~7));
+ }
+ 
+ static int cirrus_do_copy(CirrusVGAState *s, int dst, int src, int w, int h)
+@@ -775,10 +774,8 @@ static int cirrus_do_copy(CirrusVGAState *s, int dst, int src, int w, int h)
+     if (notify)
+ 	vga_hw_update();
+ 
+-    (*s->cirrus_rop) (s, s->vga.vram_ptr +
+-		      (s->cirrus_blt_dstaddr & s->cirrus_addr_mask),
+-		      s->vga.vram_ptr +
+-		      (s->cirrus_blt_srcaddr & s->cirrus_addr_mask),
++    (*s->cirrus_rop) (s, s->vga.vram_ptr + s->cirrus_blt_dstaddr,
++                      s->vga.vram_ptr + s->cirrus_blt_srcaddr,
+ 		      s->cirrus_blt_dstpitch, s->cirrus_blt_srcpitch,
+ 		      s->cirrus_blt_width, s->cirrus_blt_height);
+ 
+@@ -828,8 +825,7 @@ static void cirrus_bitblt_cputovideo_next(CirrusVGAState * s)
+         } else {
+             /* at least one scan line */
+             do {
+-                (*s->cirrus_rop)(s, s->vga.vram_ptr +
+-                                 (s->cirrus_blt_dstaddr & s->cirrus_addr_mask),
++                (*s->cirrus_rop)(s, s->vga.vram_ptr + s->cirrus_blt_dstaddr,
+                                   s->cirrus_bltbuf, 0, 0, s->cirrus_blt_width, 1);
+                 cirrus_invalidate_region(s, s->cirrus_blt_dstaddr, 0,
+                                          s->cirrus_blt_width, 1);
+@@ -948,6 +944,9 @@ static void cirrus_bitblt_start(CirrusVGAState * s)
+     s->cirrus_blt_modeext = s->vga.gr[0x33];
+     blt_rop = s->vga.gr[0x32];
+ 
++    s->cirrus_blt_dstaddr &= s->cirrus_addr_mask;
++    s->cirrus_blt_srcaddr &= s->cirrus_addr_mask;
++
+ #ifdef DEBUG_BITBLT
+     printf("rop=0x%02x mode=0x%02x modeext=0x%02x w=%d h=%d dpitch=%d spitch=%d daddr=0x%08x saddr=0x%08x writemask=0x%02x\n",
+            blt_rop,
+-- 
+1.8.3.1
+

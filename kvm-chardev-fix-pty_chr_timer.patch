@@ -1,0 +1,68 @@
+From 1b47e1b1ca6071035b7141ff089511c3e5dac038 Mon Sep 17 00:00:00 2001
+Message-Id: <1b47e1b1ca6071035b7141ff089511c3e5dac038.1380726631.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Wed, 18 Sep 2013 10:36:10 +0200
+Subject: [PATCH] chardev: fix pty_chr_timer
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1379500570-15792-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 54438
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 1/1] chardev: fix pty_chr_timer
+Bugzilla: 995341
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+pty_chr_timer first calls pty_chr_update_read_handler(), then clears
+timer_tag (because it is a one-shot timer).   This is the wrong order
+though.  pty_chr_update_read_handler might re-arm time timer, and the
+new timer_tag gets overwitten in that case.
+
+This leads to crashes when unplugging a pty chardev:  pty_chr_close
+thinks no timer is running -> timer isn't canceled -> pty_chr_timer gets
+called with stale CharDevState -> BOOM.
+
+This patch fixes the ordering.
+Kill the pointless goto while being at it.
+
+https://bugzilla.redhat.com/show_bug.cgi?id=994414
+
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit b0d768c35e08d2057b63e8e77e7a513c447199fa)
+---
+ qemu-char.c | 12 ++++--------
+ 1 file changed, 4 insertions(+), 8 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 12 ++++--------
+ 1 file changed, 4 insertions(+), 8 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 2dfc625..640878d 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -1027,15 +1027,11 @@ static gboolean pty_chr_timer(gpointer opaque)
+     struct CharDriverState *chr = opaque;
+     PtyCharDriver *s = chr->opaque;
+ 
+-    if (s->connected) {
+-        goto out;
+-    }
+-
+-    /* Next poll ... */
+-    pty_chr_update_read_handler(chr);
+-
+-out:
+     s->timer_tag = 0;
++    if (!s->connected) {
++        /* Next poll ... */
++        pty_chr_update_read_handler(chr);
++    }
+     return FALSE;
+ }
+ 
+-- 
+1.7.11.7
+

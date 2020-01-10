@@ -1,0 +1,47 @@
+From af6f3aadb042189eb938dd336910793c7da60bdb Mon Sep 17 00:00:00 2001
+From: Amit Shah <amit.shah@redhat.com>
+Date: Fri, 11 Jul 2014 10:47:16 -0500
+Subject: [CHANGE 05/18] tests: vmstate static checker: add version error in
+ main section
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <f66a4b6ba9d1a941aac1d5bc17219ba9b7c3c54b.1405075344.git.amit.shah@redhat.com>
+Patchwork-id: 59805
+O-Subject: [RHEL6.6 qemu-kvm PATCH 05/18] tests: vmstate static checker: add version error in main section
+Bugzilla: 1118718
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Acked-by: Juan Quintela <quintela@redhat.com>
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+(cherry picked from commit a81d3fad87302e482c4a8009c3c7d3eca96527e0)
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ tests/vmstate-static-checker-data/dump2.json | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ tests/vmstate-static-checker-data/dump2.json | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/vmstate-static-checker-data/dump2.json b/tests/vmstate-static-checker-data/dump2.json
+index 0a8b81d..f405534 100644
+--- a/tests/vmstate-static-checker-data/dump2.json
++++ b/tests/vmstate-static-checker-data/dump2.json
+@@ -34,7 +34,7 @@
+   },
+   "fusbh200-ehci-usb": {
+     "Name": "fusbh200-ehci-usb",
+-    "version_id": 2,
++    "version_id": 1,
+     "minimum_version_id": 1,
+     "Description": {
+       "name": "ehci-sysbus",
+-- 
+1.9.3
+

@@ -1,0 +1,66 @@
+From 62e8b6e8cfc2b4174221a76f25e2644003e5d7c2 Mon Sep 17 00:00:00 2001
+Message-Id: <62e8b6e8cfc2b4174221a76f25e2644003e5d7c2.1369221838.git.minovotn@redhat.com>
+In-Reply-To: <44d9306ede26ea2881e6c1f104b901be647022a8.1369221838.git.minovotn@redhat.com>
+References: <44d9306ede26ea2881e6c1f104b901be647022a8.1369221838.git.minovotn@redhat.com>
+From: Eduardo Habkost <ehabkost@redhat.com>
+Date: Thu, 9 May 2013 19:13:04 +0200
+Subject: [PATCH 2/8] target-i386: cpuid: check cpuid_7_0_ebx too, on
+ check/enforce mode
+
+RH-Author: Eduardo Habkost <ehabkost@redhat.com>
+Message-id: <1368126784-14282-1-git-send-email-ehabkost@redhat.com>
+Patchwork-id: 51210
+O-Subject: [RHEL6.5 qemu-kvm PATCH] target-i386: cpuid: check cpuid_7_0_ebx too, on check/enforce mode
+Bugzilla: 882834
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Bandan Das <bsd@redhat.com>
+RH-Acked-by: Igor Mammedov <imammedo@redhat.com>
+
+Bugzilla: 882834
+Upstream status: commit 07ca59450c9a0c5df65665ce46aa8487af59a1dd
+Brew scratch build: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=5748406
+
+This is not exactly a backport of the upstream commit, but an
+implementation of the same change in the existing code, without pulling
+the complex and intrusive refactoring of the CPUID checking code.
+
+This changes the code that takes care of the check/enforce modes to
+check the CPUID[EAX=7,ECX=0].EBX values, too. Without this, QEMU will
+let a VM start with features that are not supported by the host
+CPU/kernel, even if the "enforce" flag was set.
+
+Signed-off-by: Eduardo Habkost <ehabkost@redhat.com>
+---
+ target-i386/cpuid.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ target-i386/cpuid.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/target-i386/cpuid.c b/target-i386/cpuid.c
+index 639d41f..0122390 100644
+--- a/target-i386/cpuid.c
++++ b/target-i386/cpuid.c
+@@ -853,6 +853,7 @@ static void summary_cpuid_features(CPUX86State *env, x86_def_t *hd)
+             {&hd->ext_features, 0x00000001, R_ECX, CPUID_EXT_X2APIC},
+             {&hd->ext2_features, 0x80000001, R_EDX, 0},
+             {&hd->ext3_features, 0x80000001, R_ECX, 0},
++            {&hd->cpuid_7_0_ebx_features, 0x7, R_EBX, 0},
+             {NULL}}, *p;
+ 
+     kvm_cpu_fill_host(hd);
+@@ -887,6 +888,9 @@ static int kvm_check_features_against_host(CPUX86State *env, x86_def_t *guest_de
+         {&guest_def->ext3_features, &host_def.ext3_features,
+             ~0, kvm_nested ? 0 : CPUID_EXT3_SVM,
+             ext3_feature_name, "8000_0001:ecx"},
++        {&guest_def->cpuid_7_0_ebx_features, &host_def.cpuid_7_0_ebx_features,
++            ~0, 0,
++            cpuid_7_0_ebx_feature_name, "EAX=7,ECX=0:ebx"},
+         {NULL}}, *p;
+ 
+     assert(kvm_enabled());
+-- 
+1.7.11.7
+

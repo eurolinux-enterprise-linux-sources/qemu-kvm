@@ -1,0 +1,74 @@
+From dbebef01531ca55e6408e5a06d9f518bbc9c1163 Mon Sep 17 00:00:00 2001
+Message-Id: <dbebef01531ca55e6408e5a06d9f518bbc9c1163.1474550614.git.jen@redhat.com>
+In-Reply-To: <6f44551fd1c5be7bdb79be79e5859122c966facb.1474550614.git.jen@redhat.com>
+References: <6f44551fd1c5be7bdb79be79e5859122c966facb.1474550614.git.jen@redhat.com>
+From: John Snow <jsnow@redhat.com>
+Date: Tue, 20 Sep 2016 17:31:48 -0500
+Subject: [CHANGE 3/4] ide: fix halted IO segfault at reset
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: John Snow <jsnow@redhat.com>
+Message-id: <1474392709-555-2-git-send-email-jsnow@redhat.com>
+Patchwork-id: 72390
+O-Subject: [RHEL-6.9 qemu-kvm PATCH v2 1/2] ide: fix halted IO segfault at reset
+Bugzilla: 1281713
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+If one attempts to perform a system_reset after a failed IO request
+that causes the VM to enter a paused state, QEMU will segfault trying
+to free up the pending IO requests.
+
+These requests have already been completed and freed, though, so all
+we need to do is NULL them before we enter the paused state.
+
+Existing AHCI tests verify that halted requests are still resumed
+successfully after a STOP event.
+
+Analyzed-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: John Snow <jsnow@redhat.com>
+Message-id: 1469635201-11918-2-git-send-email-jsnow@redhat.com
+Signed-off-by: John Snow <jsnow@redhat.com>
+(cherry picked from commit 87ac25fd1fed05a30a93d27dbeb2a4c4b83ec95f)
+Signed-off-by: John Snow <jsnow@redhat.com>
+
+Conflicts:
+    hw/ide/core.c: aiocb is stored in a different structure,
+                   and there is more than one ide_dma callback.
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/ide/core.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/hw/ide/core.c b/hw/ide/core.c
+index 56cf7df..0a22c97 100644
+--- a/hw/ide/core.c
++++ b/hw/ide/core.c
+@@ -633,6 +633,7 @@ static void ide_read_dma_cb(void *opaque, int ret)
+         if (ide_handle_rw_error(s, -ret,
+             BM_STATUS_DMA_RETRY | BM_STATUS_RETRY_READ))
+         {
++            bm->aiocb = NULL;
+             return;
+         }
+     }
+@@ -838,8 +839,10 @@ static void ide_write_dma_cb(void *opaque, int ret)
+         return;
+     }
+     if (ret < 0) {
+-        if (ide_handle_rw_error(s, -ret,  BM_STATUS_DMA_RETRY))
++        if (ide_handle_rw_error(s, -ret,  BM_STATUS_DMA_RETRY)) {
++            bm->aiocb = NULL;
+             return;
++        }
+     }
+ 
+     n = s->io_buffer_size >> 9;
+-- 
+2.7.4
+

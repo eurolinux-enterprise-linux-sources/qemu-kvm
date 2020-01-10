@@ -1,0 +1,122 @@
+From 731318e84f5243011e53549a1832f7ec821343b7 Mon Sep 17 00:00:00 2001
+Message-Id: <731318e84f5243011e53549a1832f7ec821343b7.1369658547.git.minovotn@redhat.com>
+In-Reply-To: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+References: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:50 +0200
+Subject: [PATCH 35/47] vmdk: Read footer for streamOptimized images
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-36-git-send-email-famz@redhat.com>
+Patchwork-id: 51471
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 35/47] vmdk: Read footer for streamOptimized images
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+The footer takes precedence over the header when it exists. It contains
+the real grain directory offset that is missing in the header. Without
+this patch, streamOptimized images with a footer cannot be read.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+Reviewed-by: Jeff Cody <jcody@redhat.com>
+(cherry picked from commit 65bd155c7356d448ffee7f89149c4d473076b0ba)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 56 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 56 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 56 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 56 insertions(+)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 58061d8..3b9100c 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -34,6 +34,7 @@
+ #define VMDK4_FLAG_RGD (1 << 1)
+ #define VMDK4_FLAG_COMPRESS (1 << 16)
+ #define VMDK4_FLAG_MARKER (1 << 17)
++#define VMDK4_GD_AT_END 0xffffffffffffffffULL
+ 
+ typedef struct {
+     uint32_t version;
+@@ -113,6 +114,13 @@ typedef struct VmdkGrainMarker {
+     uint8_t  data[0];
+ } VmdkGrainMarker;
+ 
++enum {
++    MARKER_END_OF_STREAM    = 0,
++    MARKER_GRAIN_TABLE      = 1,
++    MARKER_GRAIN_DIRECTORY  = 2,
++    MARKER_FOOTER           = 3,
++};
++
+ static int vmdk_probe(const uint8_t *buf, int buf_size, const char *filename)
+ {
+     uint32_t magic;
+@@ -449,6 +457,54 @@ static int vmdk_open_vmdk4(BlockDriverState *bs,
+     if (header.capacity == 0 && header.desc_offset) {
+         return vmdk_open_desc_file(bs, flags, header.desc_offset << 9);
+     }
++
++    if (le64_to_cpu(header.gd_offset) == VMDK4_GD_AT_END) {
++        /*
++         * The footer takes precedence over the header, so read it in. The
++         * footer starts at offset -1024 from the end: One sector for the
++         * footer, and another one for the end-of-stream marker.
++         */
++        struct {
++            struct {
++                uint64_t val;
++                uint32_t size;
++                uint32_t type;
++                uint8_t pad[512 - 16];
++            } QEMU_PACKED footer_marker;
++
++            uint32_t magic;
++            VMDK4Header header;
++            uint8_t pad[512 - 4 - sizeof(VMDK4Header)];
++
++            struct {
++                uint64_t val;
++                uint32_t size;
++                uint32_t type;
++                uint8_t pad[512 - 16];
++            } QEMU_PACKED eos_marker;
++        } QEMU_PACKED footer;
++
++        ret = bdrv_pread(file,
++            bs->file->total_sectors * 512 - 1536,
++            &footer, sizeof(footer));
++        if (ret < 0) {
++            return ret;
++        }
++
++        /* Some sanity checks for the footer */
++        if (be32_to_cpu(footer.magic) != VMDK4_MAGIC ||
++            le32_to_cpu(footer.footer_marker.size) != 0  ||
++            le32_to_cpu(footer.footer_marker.type) != MARKER_FOOTER ||
++            le64_to_cpu(footer.eos_marker.val) != 0  ||
++            le32_to_cpu(footer.eos_marker.size) != 0  ||
++            le32_to_cpu(footer.eos_marker.type) != MARKER_END_OF_STREAM)
++        {
++            return -EINVAL;
++        }
++
++        header = footer.header;
++    }
++
+     l1_entry_sectors = le32_to_cpu(header.num_gtes_per_gte)
+                         * le64_to_cpu(header.granularity);
+     if (l1_entry_sectors == 0) {
+-- 
+1.7.11.7
+

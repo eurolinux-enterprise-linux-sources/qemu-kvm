@@ -1,0 +1,78 @@
+From 2a6976142274c43cdee2868c9a72a40cdf596761 Mon Sep 17 00:00:00 2001
+Message-Id: <2a6976142274c43cdee2868c9a72a40cdf596761.1372244120.git.minovotn@redhat.com>
+In-Reply-To: <24977988cb53a0f50e2996977c2221c5a358a4b8.1372244120.git.minovotn@redhat.com>
+References: <24977988cb53a0f50e2996977c2221c5a358a4b8.1372244120.git.minovotn@redhat.com>
+From: Amos Kong <akong@redhat.com>
+Date: Tue, 25 Jun 2013 14:05:29 +0200
+Subject: [PATCH 12/12] use atexit for quit_timers
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1372169129-12142-1-git-send-email-akong@redhat.com>
+Patchwork-id: 52215
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] use atexit for quit_timers
+Bugzilla: 843797
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Vlad Yasevich <vyasevic@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+
+Bugzilla: 843797
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=5945175
+Test: tested in localhost
+
+The last patch (http://patchwork.virt.bos.redhat.com/patch/45245/)
+didn't fix the bug, but it's useful. This patch is an additional
+fix.
+
+Currently we quit timers when mainloop finishes. And net_cleanup()
+will be called at normal process termination, it uses the released
+alarm_timer, so qemu crash occurs.
+
+Upstream also registers quit_timers() to be called at normal process
+termination. This patch changes internal to quit timers at the end
+of normal process termination. net_cleanup() can use effective
+alarm_timer.
+
+(manually backport commit 4260a7391190d2d01fac50ee3d738a15bab6b98e)
+
+    commit 4260a7391190d2d01fac50ee3d738a15bab6b98e
+    Author: Paolo Bonzini <pbonzini@redhat.com>
+    Date:   Mon Sep 19 10:18:51 2011 +0200
+
+        qemu-timer: use atexit for quit_timers
+
+        Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+---
+ vl.c |    3 ++-
+ 1 files changed, 2 insertions(+), 1 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ vl.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/vl.c b/vl.c
+index 710dc60..71370e6 100644
+--- a/vl.c
++++ b/vl.c
+@@ -6102,6 +6102,8 @@ int main(int argc, char **argv, char **envp)
+     fips_set_state(true);
+     loc_set_none();
+ 
++    atexit(&quit_timers);
++
+     /* If no data_dir is specified then try to find it relative to the
+        executable path.  */
+     if (!data_dir) {
+@@ -6623,7 +6625,6 @@ int main(int argc, char **argv, char **envp)
+ #endif
+ 
+     main_loop();
+-    quit_timers();
+ 
+     return 0;
+ }
+-- 
+1.7.11.7
+

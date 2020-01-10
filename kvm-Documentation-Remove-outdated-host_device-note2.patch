@@ -1,0 +1,53 @@
+From 5c1a9c22fbdee3d7723268ff06e195d78ed9e42f Mon Sep 17 00:00:00 2001
+Message-Id: <5c1a9c22fbdee3d7723268ff06e195d78ed9e42f.1368098699.git.minovotn@redhat.com>
+In-Reply-To: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+References: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Wed, 17 Apr 2013 11:44:43 +0200
+Subject: [PATCH 13/24] Documentation: Remove outdated host_device note
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1366199083-19056-1-git-send-email-kwolf@redhat.com>
+Patchwork-id: 50607
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] Documentation: Remove outdated host_device note
+Bugzilla: 953108
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Bugzilla: 953108
+
+People shouldn't explicitly specify host_device any more. raw is doing the
+Right Thing.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 02854532c215872b2af5ed48af93b7a309de1b1b)
+---
+ qemu-img.texi | 6 ------
+ 1 file changed, 6 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-img.texi | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/qemu-img.texi b/qemu-img.texi
+index d1340f1..c9cf198 100644
+--- a/qemu-img.texi
++++ b/qemu-img.texi
+@@ -190,12 +190,6 @@ Linux or NTFS on Windows), then only the written sectors will reserve
+ space. Use @code{qemu-img info} to know the real size used by the
+ image or @code{ls -ls} on Unix/Linux.
+ 
+-@item host_device
+-
+-Host device format. This format should be used instead of raw when
+-converting to block devices or other devices where "holes" are not
+-supported.
+-
+ @item qcow2
+ QEMU image format, the most versatile format. Use it to have smaller
+ images (useful if your filesystem does not supports holes, for example
+-- 
+1.7.11.7
+

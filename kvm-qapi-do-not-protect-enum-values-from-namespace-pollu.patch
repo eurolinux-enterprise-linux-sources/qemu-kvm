@@ -1,0 +1,105 @@
+From b4eb443217991e806511e72eddc23b6d68616162 Mon Sep 17 00:00:00 2001
+Message-Id: <b4eb443217991e806511e72eddc23b6d68616162.1374754301.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:05:16 +0200
+Subject: [PATCH 05/65] qapi: do not protect enum values from namespace
+ pollution
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-6-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52112
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 05/65] qapi: do not protect enum values from namespace pollution
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Eduardo Habkost <ehabkost@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Enum values are always preceded by the uppercase name of the enum, so
+they do not conflict with reserved words.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit eda50a656f52a5172fa8a95f7b217565b90d413e)
+
+Conflicts:
+
+	scripts/qapi-visit.py
+---
+ scripts/qapi-types.py |    4 ++--
+ scripts/qapi-visit.py |    2 +-
+ scripts/qapi.py       |    8 ++++----
+ 3 files changed, 7 insertions(+), 7 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ scripts/qapi-types.py | 4 ++--
+ scripts/qapi-visit.py | 2 +-
+ scripts/qapi.py       | 8 ++++----
+ 3 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/scripts/qapi-types.py b/scripts/qapi-types.py
+index 7e88315..53fa0f6 100644
+--- a/scripts/qapi-types.py
++++ b/scripts/qapi-types.py
+@@ -81,9 +81,9 @@ const char *%(name)s_lookup[] = {
+ 
+ def generate_enum_name(name):
+     if name.isupper():
+-        return c_fun(name)
++        return c_fun(name, False)
+     new_name = ''
+-    for c in c_fun(name):
++    for c in c_fun(name, False):
+         if c.isupper():
+             new_name += '_'
+         new_name += c
+diff --git a/scripts/qapi-visit.py b/scripts/qapi-visit.py
+index 7a5a4c3..efb44b7 100644
+--- a/scripts/qapi-visit.py
++++ b/scripts/qapi-visit.py
+@@ -173,7 +173,7 @@ void visit_type_%(name)s(Visitor *m, %(name)s ** obj, const char *name, Error **
+                 break;
+ ''',
+                 abbrev = de_camel_case(name).upper(),
+-                enum = c_fun(de_camel_case(key)).upper().lstrip('_'),
++                enum = c_fun(de_camel_case(key),False).upper().lstrip('_'),
+                 c_type=members[key],
+                 c_name=c_fun(key))
+ 
+diff --git a/scripts/qapi.py b/scripts/qapi.py
+index cbb76e5..dcba733 100644
+--- a/scripts/qapi.py
++++ b/scripts/qapi.py
+@@ -130,7 +130,7 @@ def camel_case(name):
+             new_name += ch.lower()
+     return new_name
+ 
+-def c_var(name):
++def c_var(name, protect=True):
+     # ANSI X3J11/88-090, 3.1.1
+     c89_words = set(['auto', 'break', 'case', 'char', 'const', 'continue',
+                      'default', 'do', 'double', 'else', 'enum', 'extern', 'float',
+@@ -145,12 +145,12 @@ def c_var(name):
+     # GCC http://gcc.gnu.org/onlinedocs/gcc-4.7.1/gcc/C-Extensions.html
+     # excluding _.*
+     gcc_words = set(['asm', 'typeof'])
+-    if name in c89_words | c99_words | c11_words | gcc_words:
++    if protect and (name in c89_words | c99_words | c11_words | gcc_words):
+         return "q_" + name
+     return name.replace('-', '_').lstrip("*")
+ 
+-def c_fun(name):
+-    return c_var(name).replace('.', '_')
++def c_fun(name, protect=True):
++    return c_var(name, protect).replace('.', '_')
+ 
+ def c_list_type(name):
+     return '%sList' % name
+-- 
+1.7.11.7
+

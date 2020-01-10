@@ -1,0 +1,268 @@
+From df26b13347392089e5699a6be872de7806a36a8c Mon Sep 17 00:00:00 2001
+Message-Id: <df26b13347392089e5699a6be872de7806a36a8c.1484342411.git.ymankad@redhat.com>
+From: Yash Mankad <ymankad@redhat.com>
+Date: Fri, 13 Jan 2017 15:41:15 -0500
+Subject: [CHANGE 1/8] Revert "iotests: Use _img_info"
+To: ymankad@redhat.com
+
+This reverts commit a718cecc05c9017dbe39ad024667967237f32397.
+
+This is to revert Max's patch series that fix BZ#1405882 as
+they did not have the 6.9 release flag set and could not be
+justified as exceptions / blockers. Will be moved to 6.10.
+
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ tests/qemu-iotests/070     |  2 +-
+ tests/qemu-iotests/070.out |  5 +++--
+ tests/qemu-iotests/082     | 12 +++++-----
+ tests/qemu-iotests/082.out | 55 ++++++++++++++++++++++++++++++++++++----------
+ tests/qemu-iotests/095     |  4 ++--
+ tests/qemu-iotests/095.out | 10 +++++----
+ 6 files changed, 62 insertions(+), 26 deletions(-)
+
+diff --git a/tests/qemu-iotests/070 b/tests/qemu-iotests/070
+index d649ddf..ea0dae7 100755
+--- a/tests/qemu-iotests/070
++++ b/tests/qemu-iotests/070
+@@ -77,7 +77,7 @@ _use_sample_img test-disk2vhd.vhdx.bz2
+ 
+ echo
+ echo "=== Verify image created by Disk2VHD can be opened ==="
+-_img_info
++$QEMU_IMG info "$TEST_IMG" 2>&1 | _filter_testdir | _filter_qemu
+ 
+ # success, all done
+ echo "*** done"
+diff --git a/tests/qemu-iotests/070.out b/tests/qemu-iotests/070.out
+index ca74383..15f1fc1 100644
+--- a/tests/qemu-iotests/070.out
++++ b/tests/qemu-iotests/070.out
+@@ -20,8 +20,9 @@ read 18874368/18874368 bytes at offset 0
+ 18 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+ 
+ === Verify image created by Disk2VHD can be opened ===
+-image: TEST_DIR/test-disk2vhd.IMGFMT
+-file format: IMGFMT
++image: TEST_DIR/test-disk2vhd.vhdx
++file format: vhdx
+ virtual size: 256M (268435456 bytes)
++disk size: 260M
+ cluster_size: 2097152
+ *** done
+diff --git a/tests/qemu-iotests/082 b/tests/qemu-iotests/082
+index 910b13e..f6eb75f 100755
+--- a/tests/qemu-iotests/082
++++ b/tests/qemu-iotests/082
+@@ -56,7 +56,7 @@ echo === create: Options specified more than once ===
+ 
+ # Last -f should win
+ run_qemu_img create -f foo -f $IMGFMT "$TEST_IMG" $size
+-_img_info
++run_qemu_img info "$TEST_IMG"
+ 
+ # Multiple -o should be merged
+ run_qemu_img create -f $IMGFMT -o cluster_size=4k -o lazy_refcounts=on "$TEST_IMG" $size
+@@ -66,7 +66,7 @@ run_qemu_img info "$TEST_IMG"
+ run_qemu_img create -f $IMGFMT -o cluster_size=4k -o lazy_refcounts=on -o cluster_size=8k "$TEST_IMG" $size
+ run_qemu_img info "$TEST_IMG"
+ run_qemu_img create -f $IMGFMT -o cluster_size=4k,cluster_size=8k "$TEST_IMG" $size
+-_img_info
++run_qemu_img info "$TEST_IMG"
+ 
+ echo
+ echo === create: help for -o ===
+@@ -106,11 +106,11 @@ run_qemu_img create -f $IMGFMT "$TEST_IMG" $size
+ 
+ # Last -f should win
+ run_qemu_img convert -f foo -f $IMGFMT "$TEST_IMG" "$TEST_IMG".base
+-TEST_IMG="${TEST_IMG}.base" _img_info
++run_qemu_img info "$TEST_IMG".base
+ 
+ # Last -O should win
+ run_qemu_img convert -O foo -O $IMGFMT "$TEST_IMG" "$TEST_IMG".base
+-TEST_IMG="${TEST_IMG}.base" _img_info
++run_qemu_img info "$TEST_IMG".base
+ 
+ # Multiple -o should be merged
+ run_qemu_img convert -O $IMGFMT -o cluster_size=4k -o lazy_refcounts=on "$TEST_IMG" "$TEST_IMG".base
+@@ -120,7 +120,7 @@ run_qemu_img info "$TEST_IMG".base
+ run_qemu_img convert -O $IMGFMT -o cluster_size=4k -o lazy_refcounts=on -o cluster_size=8k "$TEST_IMG" "$TEST_IMG".base
+ run_qemu_img info "$TEST_IMG".base
+ run_qemu_img convert -O $IMGFMT -o cluster_size=4k,cluster_size=8k "$TEST_IMG" "$TEST_IMG".base
+-TEST_IMG="${TEST_IMG}.base" _img_info
++run_qemu_img info "$TEST_IMG".base
+ 
+ echo
+ echo === convert: help for -o ===
+@@ -167,7 +167,7 @@ run_qemu_img info "$TEST_IMG"
+ run_qemu_img amend -f $IMGFMT -o size=8M -o lazy_refcounts=on -o size=132M "$TEST_IMG"
+ run_qemu_img info "$TEST_IMG"
+ run_qemu_img amend -f $IMGFMT -o size=4M,size=148M "$TEST_IMG"
+-_img_info
++run_qemu_img info "$TEST_IMG"
+ 
+ echo
+ echo === amend: help for -o ===
+diff --git a/tests/qemu-iotests/082.out b/tests/qemu-iotests/082.out
+index 249c5e4..90c21c8 100644
+--- a/tests/qemu-iotests/082.out
++++ b/tests/qemu-iotests/082.out
+@@ -4,10 +4,16 @@ QA output created by 082
+ 
+ Testing: create -f foo -f qcow2 TEST_DIR/t.qcow2 128M
+ Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=134217728 encryption=off cluster_size=65536 lazy_refcounts=off 
+-image: TEST_DIR/t.IMGFMT
+-file format: IMGFMT
++
++Testing: info TEST_DIR/t.qcow2
++image: TEST_DIR/t.qcow2
++file format: qcow2
+ virtual size: 128M (134217728 bytes)
++disk size: 196K
+ cluster_size: 65536
++Format specific information:
++    compat: 1.1
++    lazy refcounts: false
+ 
+ Testing: create -f qcow2 -o cluster_size=4k -o lazy_refcounts=on TEST_DIR/t.qcow2 128M
+ Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=134217728 encryption=off cluster_size=4096 lazy_refcounts=on 
+@@ -37,10 +43,16 @@ Format specific information:
+ 
+ Testing: create -f qcow2 -o cluster_size=4k,cluster_size=8k TEST_DIR/t.qcow2 128M
+ Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=134217728 encryption=off cluster_size=8192 lazy_refcounts=off 
+-image: TEST_DIR/t.IMGFMT
+-file format: IMGFMT
++
++Testing: info TEST_DIR/t.qcow2
++image: TEST_DIR/t.qcow2
++file format: qcow2
+ virtual size: 128M (134217728 bytes)
++disk size: 28K
+ cluster_size: 8192
++Format specific information:
++    compat: 1.1
++    lazy refcounts: false
+ 
+ === create: help for -o ===
+ 
+@@ -176,15 +188,24 @@ Testing: create -f qcow2 TEST_DIR/t.qcow2 128M
+ Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=134217728 encryption=off cluster_size=65536 lazy_refcounts=off 
+ 
+ Testing: convert -f foo -f qcow2 TEST_DIR/t.qcow2 TEST_DIR/t.qcow2.base
+-image: TEST_DIR/t.IMGFMT.base
++
++Testing: info TEST_DIR/t.qcow2.base
++image: TEST_DIR/t.qcow2.base
+ file format: raw
+ virtual size: 128M (134217728 bytes)
++disk size: 0
+ 
+ Testing: convert -O foo -O qcow2 TEST_DIR/t.qcow2 TEST_DIR/t.qcow2.base
+-image: TEST_DIR/t.IMGFMT.base
+-file format: IMGFMT
++
++Testing: info TEST_DIR/t.qcow2.base
++image: TEST_DIR/t.qcow2.base
++file format: qcow2
+ virtual size: 128M (134217728 bytes)
++disk size: 196K
+ cluster_size: 65536
++Format specific information:
++    compat: 1.1
++    lazy refcounts: false
+ 
+ Testing: convert -O qcow2 -o cluster_size=4k -o lazy_refcounts=on TEST_DIR/t.qcow2 TEST_DIR/t.qcow2.base
+ 
+@@ -211,10 +232,16 @@ Format specific information:
+     lazy refcounts: true
+ 
+ Testing: convert -O qcow2 -o cluster_size=4k,cluster_size=8k TEST_DIR/t.qcow2 TEST_DIR/t.qcow2.base
+-image: TEST_DIR/t.IMGFMT.base
+-file format: IMGFMT
++
++Testing: info TEST_DIR/t.qcow2.base
++image: TEST_DIR/t.qcow2.base
++file format: qcow2
+ virtual size: 128M (134217728 bytes)
++disk size: 28K
+ cluster_size: 8192
++Format specific information:
++    compat: 1.1
++    lazy refcounts: false
+ 
+ === convert: help for -o ===
+ 
+@@ -383,10 +410,16 @@ Format specific information:
+     lazy refcounts: true
+ 
+ Testing: amend -f qcow2 -o size=4M,size=148M TEST_DIR/t.qcow2
+-image: TEST_DIR/t.IMGFMT
+-file format: IMGFMT
++
++Testing: info TEST_DIR/t.qcow2
++image: TEST_DIR/t.qcow2
++file format: qcow2
+ virtual size: 148M (155189248 bytes)
++disk size: 196K
+ cluster_size: 65536
++Format specific information:
++    compat: 1.1
++    lazy refcounts: true
+ 
+ === amend: help for -o ===
+ 
+diff --git a/tests/qemu-iotests/095 b/tests/qemu-iotests/095
+index 3e5449d..cfa4f16 100755
+--- a/tests/qemu-iotests/095
++++ b/tests/qemu-iotests/095
+@@ -60,7 +60,7 @@ _make_test_img -b "${TEST_IMG}.snp1" $size_larger
+ 
+ echo
+ echo "=== Base image info before commit and resize ==="
+-TEST_IMG="${TEST_IMG}.base" _img_info
++$QEMU_IMG info "${TEST_IMG}.base" | _filter_testdir
+ 
+ echo
+ echo === Running QEMU Live Commit Test ===
+@@ -78,7 +78,7 @@ _send_qemu_cmd $h "{ 'execute': '__com.redhat_block-commit',
+ 
+ echo
+ echo "=== Base image info after commit and resize ==="
+-TEST_IMG="${TEST_IMG}.base" _img_info
++$QEMU_IMG info "${TEST_IMG}.base" | _filter_testdir
+ 
+ # success, all done
+ echo "*** done"
+diff --git a/tests/qemu-iotests/095.out b/tests/qemu-iotests/095.out
+index cc86efa..f1a3911 100644
+--- a/tests/qemu-iotests/095.out
++++ b/tests/qemu-iotests/095.out
+@@ -4,9 +4,10 @@ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=104857600 backing_file='TEST_DIR
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=104857600 backing_file='TEST_DIR/t.IMGFMT.snp1' 
+ 
+ === Base image info before commit and resize ===
+-image: TEST_DIR/t.IMGFMT.base
+-file format: IMGFMT
++image: TEST_DIR/t.qcow2.base
++file format: qcow2
+ virtual size: 5.0M (5242880 bytes)
++disk size: 136K
+ cluster_size: 65536
+ 
+ === Running QEMU Live Commit Test ===
+@@ -16,8 +17,9 @@ cluster_size: 65536
+ {"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "BLOCK_JOB_COMPLETED", "data": {"device": "test", "len": 104857600, "offset": 104857600, "speed": 0, "type": "commit"}}
+ 
+ === Base image info after commit and resize ===
+-image: TEST_DIR/t.IMGFMT.base
+-file format: IMGFMT
++image: TEST_DIR/t.qcow2.base
++file format: qcow2
+ virtual size: 100M (104857600 bytes)
++disk size: 136K
+ cluster_size: 65536
+ *** done
+-- 
+2.7.4
+

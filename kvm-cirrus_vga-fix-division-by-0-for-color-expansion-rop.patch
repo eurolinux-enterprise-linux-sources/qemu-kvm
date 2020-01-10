@@ -1,0 +1,115 @@
+From a4c8cde7f13b0c804d68335b2c9024480c9cf080 Mon Sep 17 00:00:00 2001
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 7 Feb 2017 11:18:27 +0000
+Subject: [PATCH 1/8] cirrus_vga: fix division by 0 for color expansion rop
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1486466314-7710-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 73574
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 1/8] cirrus_vga: fix division by 0 for color expansion rop
+Bugzilla: 1418230 1418231 1419416 1419417
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+RH-Acked-by: Laurent Vivier <lvivier@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Aurelien Jarno <aurelien@aurel32.net>
+
+Commit d85d0d3883f5a567fa2969a0396e42e0a662b3fa introduces a regression
+with Windows ME that leads to a division by 0 and a crash.
+
+It uses the color expansion rop with the source pitch set to 0. This is
+something allowed, as the manual explicitely says "When the source of
+color-expand data is display memory, the source pitch is ignored.".
+
+This patch fixes this regression by computing sx, sy and others
+variables only if they are going to be used later, that is for a plain
+copy ROP. It basically consists in moving code.
+
+Signed-off-by: Aurelien Jarno <aurelien@aurel32.net>
+(cherry picked from commit 92d675d1c1f23f3617e24b63c825074a1d1da44b)
+Signed-off-by: Danilo C. L. de Paula <ddepaula@redhat.com>
+---
+ hw/cirrus_vga.c | 59 +++++++++++++++++++++++++++++----------------------------
+ 1 file changed, 30 insertions(+), 29 deletions(-)
+
+diff --git a/hw/cirrus_vga.c b/hw/cirrus_vga.c
+index e6e2e60..cad6858 100644
+--- a/hw/cirrus_vga.c
++++ b/hw/cirrus_vga.c
+@@ -707,43 +707,44 @@ static void cirrus_do_copy(CirrusVGAState *s, int dst, int src, int w, int h)
+ {
+     int sx, sy;
+     int dx, dy;
+-    int width, height;
+     int depth;
+     int notify = 0;
+ 
+-    depth = s->vga.get_bpp(&s->vga) / 8;
+-    s->vga.get_resolution(&s->vga, &width, &height);
++    /* make sure to only copy if it's a plain copy ROP */
++    if (*s->cirrus_rop == cirrus_bitblt_rop_fwd_src ||
++        *s->cirrus_rop == cirrus_bitblt_rop_bkwd_src) {
+ 
+-    /* extra x, y */
+-    sx = (src % ABS(s->cirrus_blt_srcpitch)) / depth;
+-    sy = (src / ABS(s->cirrus_blt_srcpitch));
+-    dx = (dst % ABS(s->cirrus_blt_dstpitch)) / depth;
+-    dy = (dst / ABS(s->cirrus_blt_dstpitch));
++        int width, height;
+ 
+-    /* normalize width */
+-    w /= depth;
++        depth = s->vga.get_bpp(&s->vga) / 8;
++        s->vga.get_resolution(&s->vga, &width, &height);
+ 
+-    /* if we're doing a backward copy, we have to adjust
+-       our x/y to be the upper left corner (instead of the lower
+-       right corner) */
+-    if (s->cirrus_blt_dstpitch < 0) {
+-	sx -= (s->cirrus_blt_width / depth) - 1;
+-	dx -= (s->cirrus_blt_width / depth) - 1;
+-	sy -= s->cirrus_blt_height - 1;
+-	dy -= s->cirrus_blt_height - 1;
+-    }
++        /* extra x, y */
++        sx = (src % ABS(s->cirrus_blt_srcpitch)) / depth;
++        sy = (src / ABS(s->cirrus_blt_srcpitch));
++        dx = (dst % ABS(s->cirrus_blt_dstpitch)) / depth;
++        dy = (dst / ABS(s->cirrus_blt_dstpitch));
+ 
+-    /* are we in the visible portion of memory? */
+-    if (sx >= 0 && sy >= 0 && dx >= 0 && dy >= 0 &&
+-	(sx + w) <= width && (sy + h) <= height &&
+-	(dx + w) <= width && (dy + h) <= height) {
+-	notify = 1;
+-    }
++        /* normalize width */
++        w /= depth;
+ 
+-    /* make to sure only copy if it's a plain copy ROP */
+-    if (*s->cirrus_rop != cirrus_bitblt_rop_fwd_src &&
+-	*s->cirrus_rop != cirrus_bitblt_rop_bkwd_src)
+-	notify = 0;
++        /* if we're doing a backward copy, we have to adjust
++           our x/y to be the upper left corner (instead of the lower
++           right corner) */
++        if (s->cirrus_blt_dstpitch < 0) {
++            sx -= (s->cirrus_blt_width / depth) - 1;
++            dx -= (s->cirrus_blt_width / depth) - 1;
++            sy -= s->cirrus_blt_height - 1;
++            dy -= s->cirrus_blt_height - 1;
++        }
++
++        /* are we in the visible portion of memory? */
++        if (sx >= 0 && sy >= 0 && dx >= 0 && dy >= 0 &&
++            (sx + w) <= width && (sy + h) <= height &&
++            (dx + w) <= width && (dy + h) <= height) {
++            notify = 1;
++        }
++    }
+ 
+     /* we have to flush all pending changes so that the copy
+        is generated at the appropriate moment in time */
+-- 
+1.8.3.1
+

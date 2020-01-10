@@ -1,0 +1,112 @@
+From 18771712cf53f16626c6efce606885e890c12825 Mon Sep 17 00:00:00 2001
+Message-Id: <18771712cf53f16626c6efce606885e890c12825.1380723420.git.minovotn@redhat.com>
+In-Reply-To: <68de4f1434a46df7d1b6e59cb348f11c92dbf17c.1380723420.git.minovotn@redhat.com>
+References: <68de4f1434a46df7d1b6e59cb348f11c92dbf17c.1380723420.git.minovotn@redhat.com>
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Tue, 1 Oct 2013 12:27:05 +0200
+Subject: [PATCH 09/13] qapi: Add SnapshotInfo and ImageInfo.
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: <1380630429-29077-5-git-send-email-pbonzini@redhat.com>
+Patchwork-id: 54619
+O-Subject: [RHEL 6.5 qemu-kvm PATCH 4/8] qapi: Add SnapshotInfo and ImageInfo.
+Bugzilla: 1010610
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Eduardo Habkost <ehabkost@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: Benoît Canet <benoit@irqsave.net>
+
+Signed-off-by: Benoit Canet <benoit@irqsave.net>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit c249ee682542ff3b8c310c78be67e3e713fd61d7)
+
+Conflicts:
+	qapi-schema.json
+---
+ qapi-schema.json | 63 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 63 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qapi-schema.json | 63 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 63 insertions(+)
+
+diff --git a/qapi-schema.json b/qapi-schema.json
+index b43685c..c43768e 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -637,3 +637,66 @@
+ ##
+ { 'command': 'chardev-remove', 'data': {'id': 'str'} }
+ 
++##
++# @SnapshotInfo
++#
++# @id: unique snapshot id
++#
++# @name: user chosen name
++#
++# @vm-state-size: size of the VM state
++#
++# @date-sec: UTC date of the snapshot in seconds
++#
++# @date-nsec: fractional part in nano seconds to be used with date-sec
++#
++# @vm-clock-sec: VM clock relative to boot in seconds
++#
++# @vm-clock-nsec: fractional part in nano seconds to be used with vm-clock-sec
++#
++# Since: 1.3
++#
++##
++
++{ 'type': 'SnapshotInfo',
++  'data': { 'id': 'str', 'name': 'str', 'vm-state-size': 'int',
++            'date-sec': 'int', 'date-nsec': 'int',
++            'vm-clock-sec': 'int', 'vm-clock-nsec': 'int' } }
++
++##
++# @ImageInfo:
++#
++# Information about a QEMU image file
++#
++# @filename: name of the image file
++#
++# @format: format of the image file
++#
++# @virtual-size: maximum capacity in bytes of the image
++#
++# @actual-size: #optional actual size on disk in bytes of the image
++#
++# @dirty-flag: #optional true if image is not cleanly closed
++#
++# @cluster-size: #optional size of a cluster in bytes
++#
++# @encrypted: #optional true if the image is encrypted
++#
++# @backing-filename: #optional name of the backing file
++#
++# @full-backing-filename: #optional full path of the backing file
++#
++# @backing-filename-format: #optional the format of the backing file
++#
++# @snapshots: #optional list of VM snapshots
++#
++# Since: 1.3
++#
++##
++
++{ 'type': 'ImageInfo',
++  'data': {'filename': 'str', 'format': 'str', '*dirty-flag': 'bool',
++           '*actual-size': 'int', 'virtual-size': 'int',
++           '*cluster-size': 'int', '*encrypted': 'bool',
++           '*backing-filename': 'str', '*full-backing-filename': 'str',
++           '*backing-filename-format': 'str', '*snapshots': ['SnapshotInfo'] } }
+-- 
+1.7.11.7
+

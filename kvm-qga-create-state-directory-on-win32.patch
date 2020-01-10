@@ -1,0 +1,60 @@
+From fee8c62c03d9d08612539cdcd5b226e831c88b5d Mon Sep 17 00:00:00 2001
+Message-Id: <fee8c62c03d9d08612539cdcd5b226e831c88b5d.1372244120.git.minovotn@redhat.com>
+In-Reply-To: <24977988cb53a0f50e2996977c2221c5a358a4b8.1372244120.git.minovotn@redhat.com>
+References: <24977988cb53a0f50e2996977c2221c5a358a4b8.1372244120.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Fri, 7 Jun 2013 12:23:56 +0200
+Subject: [PATCH 04/12] qga: create state directory on win32
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1370607840-30295-5-git-send-email-lersek@redhat.com>
+Patchwork-id: 51777
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 4/8] qga: create state directory on win32
+Bugzilla: 962669
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Gal Hammer <ghammer@redhat.com>
+RH-Acked-by: Michal Novotny <minovotn@redhat.com>
+
+On Win32 the local state directory is application specific and users might
+expect qemu-ga to create it automatically.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit bf12c1fa8c78e3c667f2fe2ecc656f4f3cfb914e)
+---
+ qemu-ga.c |   14 ++++++++++++++
+ 1 files changed, 14 insertions(+), 0 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-ga.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/qemu-ga.c b/qemu-ga.c
+index d17983c..6777c9e 100644
+--- a/qemu-ga.c
++++ b/qemu-ga.c
+@@ -1041,6 +1041,20 @@ int main(int argc, char **argv)
+         }
+     }
+ 
++#ifdef _WIN32
++    /* On win32 the state directory is application specific (be it the default
++     * or a user override). We got past the command line parsing; let's create
++     * the directory (with any intermediate directories). If we run into an
++     * error later on, we won't try to clean up the directory, it is considered
++     * persistent.
++     */
++    if (g_mkdir_with_parents(state_dir, S_IRWXU) == -1) {
++        g_critical("unable to create (an ancestor of) the state directory"
++                   " '%s': %s", state_dir, strerror(errno));
++        return EXIT_FAILURE;
++    }
++#endif
++
+     s = g_malloc0(sizeof(GAState));
+     s->log_level = log_level;
+     s->log_file = stderr;
+-- 
+1.7.11.7
+

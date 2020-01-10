@@ -1,0 +1,78 @@
+From a69bfe86f2859ff707640ab4dff68d4f0951d0ef Mon Sep 17 00:00:00 2001
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Tue, 29 Jul 2014 15:40:03 -0500
+Subject: [CHANGE 11/11] virtio-scsi: implement parse_cdb
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: <1406648403-29466-6-git-send-email-pbonzini@redhat.com>
+Patchwork-id: 60305
+O-Subject: [RHEL 6.6/6.5.z qemu-kvm PATCH 5/5] virtio-scsi: implement parse_cdb
+Bugzilla: 1113917
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+
+Enable passthrough of vendor-specific commands.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 33cbb2c546594685131e771e2e0972418b9d0301)
+
+[RHEL: the condition for SCSI_XFER_FROM_DEV is different because we do
+ not support VIRTIO_F_ANY_LAYOUT]
+---
+ hw/virtio-scsi.c | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/virtio-scsi.c | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/hw/virtio-scsi.c b/hw/virtio-scsi.c
+index b55c355..8bd16eb 100644
+--- a/hw/virtio-scsi.c
++++ b/hw/virtio-scsi.c
+@@ -446,6 +446,30 @@ static void virtio_scsi_command_complete(SCSIRequest *r, uint32_t status,
+     virtio_scsi_complete_req(req);
+ }
+ 
++static int virtio_scsi_parse_cdb(SCSIDevice *dev, SCSICommand *cmd,
++                                 uint8_t *buf, void *hba_private)
++{
++    VirtIOSCSIReq *req = hba_private;
++
++    if (cmd->len == 0) {
++        cmd->len = MIN(VIRTIO_SCSI_CDB_SIZE, SCSI_CMD_BUF_SIZE);
++        memcpy(cmd->buf, buf, cmd->len);
++    }
++
++    /* Extract the direction and mode directly from the request, for
++     * host device passthrough.
++     */
++    cmd->xfer = req->qsgl.size;
++    if (cmd->xfer == 0) {
++        cmd->mode = SCSI_XFER_NONE;
++    } else if (req->elem.in_num > 1) {
++        cmd->mode = SCSI_XFER_FROM_DEV;
++    } else {
++        cmd->mode = SCSI_XFER_TO_DEV;
++    }
++    return 0;
++}
++
+ static QEMUSGList *virtio_scsi_get_sg_list(SCSIRequest *r)
+ {
+     VirtIOSCSIReq *req = r->hba_private;
+@@ -696,6 +720,7 @@ static struct SCSIBusInfo virtio_scsi_scsi_info = {
+     .change = virtio_scsi_change,
+     .hotplug = virtio_scsi_hotplug,
+     .hot_unplug = virtio_scsi_hot_unplug,
++    .parse_cdb = virtio_scsi_parse_cdb,
+     .get_sg_list = virtio_scsi_get_sg_list,
+     .save_request = virtio_scsi_save_request,
+     .load_request = virtio_scsi_load_request,
+-- 
+1.9.3
+

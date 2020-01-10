@@ -1,0 +1,65 @@
+From 9db4fbc10d733a88102ef99acaf6eb5d54153495 Mon Sep 17 00:00:00 2001
+Message-Id: <9db4fbc10d733a88102ef99acaf6eb5d54153495.1369841886.git.minovotn@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Mon, 20 May 2013 11:17:20 +0200
+Subject: [PATCH 01/14] atapi: reset cdrom tray statuses on ide_reset
+
+RH-Author: Pavel Hrdina <phrdina@redhat.com>
+Message-id: <d70c1d79a154ca11ab99a108821b6f174fbf85d4.1369048200.git.phrdina@redhat.com>
+Patchwork-id: 51489
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v2] atapi: reset cdrom tray statuses on ide_reset
+Bugzilla: 886878
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Tray statuses should be also reseted. Some guests may lock the tray
+and after reset before any kernel is loaded the tray should be unlocked.
+
+Also if you reset the real computer the tray is closed. We should
+do the same in qemu.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit a7f3d65b65b8c86a5ff0c0abcfefb45e2ec6fe4c)
+
+Bugzilla: 886878
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=5783018
+Upstream-status: committed
+
+Test results on bare-metal:
+  - on reset/power-on the CD-ROM tray is closed even before the monitor
+    is turned on
+  - on resume from suspend/hibernate the tray is also closed before
+    the monitor is turned on
+
+>From test results it seems that this behavior is OS and probably BIOS
+independent.
+---
+updates from v1:
+    - added test results into commit message
+
+ hw/ide/core.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/ide/core.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/hw/ide/core.c b/hw/ide/core.c
+index 74e7831..a9df4d8 100644
+--- a/hw/ide/core.c
++++ b/hw/ide/core.c
+@@ -1830,6 +1830,8 @@ static void ide_reset(IDEState *s)
+     s->io_buffer_index = 0;
+     s->cd_sector_size = 0;
+     s->atapi_dma = 0;
++    s->tray_locked = 0;
++    s->tray_open = 0;
+     /* ATA DMA state */
+     s->io_buffer_size = 0;
+     s->req_nb_sectors = 0;
+-- 
+1.7.11.7
+

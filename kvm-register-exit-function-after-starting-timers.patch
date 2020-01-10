@@ -1,0 +1,93 @@
+From 312188db7a97b59995ab5ec7689d7c0a2937a0df Mon Sep 17 00:00:00 2001
+Message-Id: <312188db7a97b59995ab5ec7689d7c0a2937a0df.1375955382.git.minovotn@redhat.com>
+In-Reply-To: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+References: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+From: Amos Kong <akong@redhat.com>
+Date: Wed, 7 Aug 2013 09:07:14 +0200
+Subject: [PATCH 34/35] register exit function after starting timers
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1375866434-28876-1-git-send-email-akong@redhat.com>
+Patchwork-id: 53032
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] register exit function after starting timers
+Bugzilla: 843797
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Vlad Yasevich <vyasevic@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+Bugzilla: 843797
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=6136472
+Upstream: this bug was introduced by backport, upstream is ok
+Test: tested in localhost
+
+This patch fixes a regression bug that was introduced by commit
+2a697614. quit_timer is registered before init_timer_alarm(),
+quitting an uninited timer will cause a crash.
+
+Moving quit_timers() to the above of init_timer_alarm(), it's
+used in init_timer_alarm().
+
+This patch calls atexit() inside of init_timer_alarm() as upstream,
+That still happens before network initialization so the bug 843797
+will be fixed.
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+---
+ vl.c |   15 +++++++--------
+ 1 files changed, 7 insertions(+), 8 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ vl.c | 15 +++++++--------
+ 1 file changed, 7 insertions(+), 8 deletions(-)
+
+diff --git a/vl.c b/vl.c
+index 14b7f25..c5caf6e 100644
+--- a/vl.c
++++ b/vl.c
+@@ -1826,6 +1826,12 @@ static void win32_rearm_timer(struct qemu_alarm_timer *t)
+ 
+ #endif /* _WIN32 */
+ 
++static void quit_timers(void)
++{
++    alarm_timer->stop(alarm_timer);
++    alarm_timer = NULL;
++}
++
+ static int init_timer_alarm(void)
+ {
+     struct qemu_alarm_timer *t = NULL;
+@@ -1845,6 +1851,7 @@ static int init_timer_alarm(void)
+     }
+ 
+     alarm_timer = t;
++    atexit(&quit_timers);
+ 
+     return 0;
+ 
+@@ -1852,12 +1859,6 @@ fail:
+     return err;
+ }
+ 
+-static void quit_timers(void)
+-{
+-    alarm_timer->stop(alarm_timer);
+-    alarm_timer = NULL;
+-}
+-
+ /***********************************************************/
+ /* host time/date access */
+ void qemu_get_timedate(struct tm *tm, int offset)
+@@ -6104,8 +6105,6 @@ int main(int argc, char **argv, char **envp)
+     fips_set_state(true);
+     loc_set_none();
+ 
+-    atexit(&quit_timers);
+-
+     /* If no data_dir is specified then try to find it relative to the
+        executable path.  */
+     if (!data_dir) {
+-- 
+1.7.11.7
+

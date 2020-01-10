@@ -1,0 +1,72 @@
+From c13fa3d30fbb6da44d545b7be4c299354879cf66 Mon Sep 17 00:00:00 2001
+Message-Id: <c13fa3d30fbb6da44d545b7be4c299354879cf66.1374754302.git.minovotn@redhat.com>
+In-Reply-To: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+References: <5d75a8513d08b33975bdf5971871c0c977167cd1.1374754301.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Mon, 24 Jun 2013 07:06:12 +0200
+Subject: [PATCH 61/65] remove text_console_opts
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1372057576-26450-62-git-send-email-kraxel@redhat.com>
+Patchwork-id: 52129
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 61/65] remove text_console_opts
+Bugzilla: 676568
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 44b37b933745a9005504427dec06f4066af9762e)
+
+Conflicts:
+
+	console.c
+---
+ console.c |    8 ++------
+ 1 file changed, 2 insertions(+), 6 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ console.c | 8 ++------
+ 1 file changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/console.c b/console.c
+index 566717d..f331710 100644
+--- a/console.c
++++ b/console.c
+@@ -1302,9 +1302,8 @@ void console_color_init(DisplayState *ds)
+ 
+ static int n_text_consoles;
+ static CharDriverState *text_consoles[128];
+-static QemuOpts *text_console_opts[128];
+ 
+-static void text_console_do_init(CharDriverState *chr, DisplayState *ds, QemuOpts *opts)
++static void text_console_do_init(CharDriverState *chr, DisplayState *ds)
+ {
+     TextConsole *s;
+     static int color_inited;
+@@ -1377,7 +1376,6 @@ CharDriverState *text_console_init(QemuOpts *opts)
+         exit(1);
+     }
+     text_consoles[n_text_consoles] = chr;
+-    text_console_opts[n_text_consoles] = opts;
+ 
+     width = qemu_opt_get_number(opts, "width", 0);
+     if (width == 0)
+@@ -1411,9 +1409,7 @@ void text_consoles_set_display(DisplayState *ds)
+     int i;
+ 
+     for (i = 0; i < n_text_consoles; i++) {
+-        text_console_do_init(text_consoles[i], ds, text_console_opts[i]);
+-        qemu_opts_del(text_console_opts[i]);
+-        text_console_opts[i] = NULL;
++        text_console_do_init(text_consoles[i], ds);
+     }
+ 
+     n_text_consoles = 0;
+-- 
+1.7.11.7
+

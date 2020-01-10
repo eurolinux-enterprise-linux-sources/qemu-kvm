@@ -1,0 +1,124 @@
+From fca40ea19ca3800a971fd16f6c463184dc35a44e Mon Sep 17 00:00:00 2001
+Message-Id: <fca40ea19ca3800a971fd16f6c463184dc35a44e.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:21:45 -0500
+Subject: [CHANGE 02/42] qcow2: Factor out count_cow_clusters
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-3-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64466
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 02/39] qcow2: Factor out count_cow_clusters
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+BZ: 1129892
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+(cherry picked from commit bf319ece56bc07608bfdf46b8ef5c61b52be83f6)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	block/qcow2-cluster.c
+
+Conflicts because of downstream-only commit
+f4dfd3f3a2a6d8d779252df8703cf83294afb5a6. The "later code changes"
+upstream which "fixed this bug as a side effect" mentioned in that
+commit are exactly this patch (which replaces the downstream fix by the
+upstream code).
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-cluster.c | 55 +++++++++++++++++++++++++++++++++------------------
+ 1 file changed, 36 insertions(+), 19 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-cluster.c | 55 +++++++++++++++++++++++++++++++++------------------
+ 1 file changed, 36 insertions(+), 19 deletions(-)
+
+diff --git a/block/qcow2-cluster.c b/block/qcow2-cluster.c
+index 439c86d..d2c7beb 100644
+--- a/block/qcow2-cluster.c
++++ b/block/qcow2-cluster.c
+@@ -729,6 +729,41 @@ err:
+  }
+ 
+ /*
++ * Returns the number of contiguous clusters that can be used for an allocating
++ * write, but require COW to be performed (this includes yet unallocated space,
++ * which must copy from the backing file)
++ */
++static int count_cow_clusters(BDRVQcowState *s, int nb_clusters,
++    uint64_t *l2_table, int l2_index)
++{
++    int i = 0;
++    uint64_t cluster_offset;
++
++    while (i < nb_clusters) {
++        i += count_contiguous_clusters(nb_clusters - i, s->cluster_size,
++                &l2_table[l2_index], i, 0);
++        if ((i >= nb_clusters) || be64_to_cpu(l2_table[l2_index + i])) {
++            break;
++        }
++
++        i += count_contiguous_free_clusters(nb_clusters - i,
++                &l2_table[l2_index + i]);
++        if (i >= nb_clusters) {
++            break;
++        }
++
++        cluster_offset = be64_to_cpu(l2_table[l2_index + i]);
++
++        if ((cluster_offset & QCOW_OFLAG_COPIED) ||
++                (cluster_offset & QCOW_OFLAG_COMPRESSED))
++            break;
++    }
++
++    assert(i <= nb_clusters);
++    return i;
++}
++
++/*
+  * alloc_cluster_offset
+  *
+  * For a given offset of the disk image, return cluster offset in qcow2 file.
+@@ -793,26 +828,8 @@ again:
+         nb_clusters = 1;
+ 
+     /* how many available clusters ? */
+-    i = 0;
+-    while (i < nb_clusters) {
+-        i += count_contiguous_clusters(nb_clusters - i, s->cluster_size,
+-                &l2_table[l2_index], i, 0);
+-        if ((i >= nb_clusters) || be64_to_cpu(l2_table[l2_index + i])) {
+-            break;
+-        }
+ 
+-        i += count_contiguous_free_clusters(nb_clusters - i,
+-                &l2_table[l2_index + i]);
+-        if (i >= nb_clusters) {
+-            break;
+-        }
+-
+-        cluster_offset = be64_to_cpu(l2_table[l2_index + i]);
+-
+-        if ((cluster_offset & QCOW_OFLAG_COPIED) ||
+-                (cluster_offset & QCOW_OFLAG_COMPRESSED))
+-            break;
+-    }
++    i = count_cow_clusters(s, nb_clusters, l2_table, l2_index);
+     assert(i <= nb_clusters);
+     nb_clusters = i;
+ 
+-- 
+2.1.0
+

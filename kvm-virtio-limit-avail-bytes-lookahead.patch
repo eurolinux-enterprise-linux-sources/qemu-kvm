@@ -1,0 +1,150 @@
+From 54451599195d242c8ea93b45adc43a161c44111c Mon Sep 17 00:00:00 2001
+From: Amos Kong <akong@redhat.com>
+Date: Tue, 10 Sep 2013 06:08:02 +0200
+Subject: [PATCH 20/39] virtio: limit avail bytes lookahead
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1378793288-3371-21-git-send-email-akong@redhat.com>
+Patchwork-id: 54255
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v3 20/26] virtio: limit avail bytes lookahead
+Bugzilla: 786407
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Michael S. Tsirkin <mst@redhat.com>
+
+Commit 0d8d7690850eb0cf2b2b60933cf47669a6b6f18f introduced
+a regression in virtio-net performance because it looks
+into the ring aggressively while we really only care
+about a single packet worth of buffers.
+Reported as bugzilla 1066055 in launchpad.
+
+To fix, add parameters limiting lookahead, and
+use in virtqueue_avail_bytes.
+
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+Reported-by: Edivaldo de Araujo Pereira <edivaldoapereira@yahoo.com.br>
+Tested-by: Edivaldo de Araujo Pereira <edivaldoapereira@yahoo.com.br>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit e1f7b4812eab992de46c98b3726745afb042a7f0)
+
+Droped the small change in hw/virtio-serial-bus.c, no effect
+
+Signed-off-by: Amos Kong <akong@redhat.com>
+---
+ hw/virtio-rng.c |   12 +++++++++---
+ hw/virtio.c     |   15 ++++++++-------
+ hw/virtio.h     |    3 ++-
+ 3 files changed, 19 insertions(+), 11 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ hw/virtio-rng.c |   12 +++++++++---
+ hw/virtio.c     |   15 ++++++++-------
+ hw/virtio.h     |    3 ++-
+ 3 files changed, 19 insertions(+), 11 deletions(-)
+
+diff --git a/hw/virtio-rng.c b/hw/virtio-rng.c
+index 595352d..b7e3e12 100644
+--- a/hw/virtio-rng.c
++++ b/hw/virtio-rng.c
+@@ -44,11 +44,11 @@ static bool is_guest_ready(VirtIORNG *vrng)
+     return false;
+ }
+ 
+-static size_t get_request_size(VirtQueue *vq)
++static size_t get_request_size(VirtQueue *vq, unsigned quota)
+ {
+     unsigned int in, out;
+ 
+-    virtqueue_get_avail_bytes(vq, &in, &out);
++    virtqueue_get_avail_bytes(vq, &in, &out, quota, 0);
+     return in;
+ }
+ 
+@@ -85,12 +85,18 @@ static void chr_read(void *opaque, const void *buf, size_t size)
+ static void virtio_rng_process(VirtIORNG *vrng)
+ {
+     size_t size;
++    unsigned quota;
+ 
+     if (!is_guest_ready(vrng)) {
+         return;
+     }
+ 
+-    size = get_request_size(vrng->vq);
++    if (vrng->quota_remaining < 0) {
++        quota = 0;
++    } else {
++        quota = MIN((uint64_t)vrng->quota_remaining, (uint64_t)UINT32_MAX);
++    }
++    size = get_request_size(vrng->vq, quota);
+     size = MIN(vrng->quota_remaining, size);
+     if (size) {
+         rng_backend_request_entropy(vrng->rng, size, chr_read, vrng);
+diff --git a/hw/virtio.c b/hw/virtio.c
+index 0bd3912..e5eeabd 100644
+--- a/hw/virtio.c
++++ b/hw/virtio.c
+@@ -340,7 +340,8 @@ static unsigned virtqueue_next_desc(target_phys_addr_t desc_pa,
+ }
+ 
+ void virtqueue_get_avail_bytes(VirtQueue *vq, unsigned int *in_bytes,
+-                               unsigned int *out_bytes)
++                               unsigned int *out_bytes,
++                               unsigned max_in_bytes, unsigned max_out_bytes)
+ {
+     unsigned int idx;
+     unsigned int total_bufs, in_total, out_total;
+@@ -389,6 +390,9 @@ void virtqueue_get_avail_bytes(VirtQueue *vq, unsigned int *in_bytes,
+             } else {
+                 out_total += vring_desc_len(desc_pa, i);
+             }
++            if (in_total >= max_in_bytes && out_total >= max_out_bytes) {
++                goto done;
++            }
+         } while ((i = virtqueue_next_desc(desc_pa, i, max)) != max);
+ 
+         if (!indirect)
+@@ -396,6 +400,7 @@ void virtqueue_get_avail_bytes(VirtQueue *vq, unsigned int *in_bytes,
+         else
+             total_bufs++;
+     }
++done:
+     if (in_bytes) {
+         *in_bytes = in_total;
+     }
+@@ -409,12 +414,8 @@ int virtqueue_avail_bytes(VirtQueue *vq, unsigned int in_bytes,
+ {
+     unsigned int in_total, out_total;
+ 
+-    virtqueue_get_avail_bytes(vq, &in_total, &out_total);
+-    if ((in_bytes && in_bytes < in_total)
+-        || (out_bytes && out_bytes < out_total)) {
+-        return 1;
+-    }
+-    return 0;
++    virtqueue_get_avail_bytes(vq, &in_total, &out_total, in_bytes, out_bytes);
++    return in_bytes <= in_total && out_bytes <= out_total;
+ }
+ 
+ void virtqueue_map_sg(struct iovec *sg, target_phys_addr_t *addr,
+diff --git a/hw/virtio.h b/hw/virtio.h
+index fbf3aea..1773654 100644
+--- a/hw/virtio.h
++++ b/hw/virtio.h
+@@ -156,7 +156,8 @@ int virtqueue_pop(VirtQueue *vq, VirtQueueElement *elem);
+ int virtqueue_avail_bytes(VirtQueue *vq, unsigned int in_bytes,
+                           unsigned int out_bytes);
+ void virtqueue_get_avail_bytes(VirtQueue *vq, unsigned int *in_bytes,
+-                               unsigned int *out_bytes);
++                               unsigned int *out_bytes,
++                               unsigned max_in_bytes, unsigned max_out_bytes);
+ 
+ void virtio_notify(VirtIODevice *vdev, VirtQueue *vq);
+ 
+-- 
+1.7.1
+

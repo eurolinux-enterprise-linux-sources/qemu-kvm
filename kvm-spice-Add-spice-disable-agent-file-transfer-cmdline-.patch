@@ -1,0 +1,100 @@
+From 6ce38f1a38a06fd4029d9cc034af1e2b6fea2208 Mon Sep 17 00:00:00 2001
+Message-Id: <6ce38f1a38a06fd4029d9cc034af1e2b6fea2208.1374747002.git.minovotn@redhat.com>
+In-Reply-To: <dc6252c81a64c798ad774505f4dc47c09bf2ea8c.1374747002.git.minovotn@redhat.com>
+References: <dc6252c81a64c798ad774505f4dc47c09bf2ea8c.1374747002.git.minovotn@redhat.com>
+From: Hans de Goede <hdegoede@redhat.com>
+Date: Wed, 10 Jul 2013 07:28:19 +0200
+Subject: [PATCH 2/3] spice: Add -spice disable-agent-file-transfer cmdline
+ option (rhbz#961850)
+
+RH-Author: Hans de Goede <hdegoede@redhat.com>
+Message-id: <1373441300-8228-1-git-send-email-hdegoede@redhat.com>
+Patchwork-id: 52414
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 1/2] spice: Add -spice disable-agent-file-transfer cmdline option (rhbz#961850)
+Bugzilla: 961850
+RH-Acked-by: Uri Lublin <uril@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Alon Levy <alevy@redhat.com>
+
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+
+Cherry-picked from: 5ad24e5f3b5968240d50fb2e5b6e19517b041052
+Conflicts:
+	ui/spice-core.c
+---
+ qemu-config.c   |  3 +++
+ qemu-options.hx |  7 +++++--
+ ui/spice-core.c | 10 ++++++++++
+ 3 files changed, 18 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-config.c   |  3 +++
+ qemu-options.hx |  7 +++++--
+ ui/spice-core.c | 10 ++++++++++
+ 3 files changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/qemu-config.c b/qemu-config.c
+index 3ee3434..942f221 100644
+--- a/qemu-config.c
++++ b/qemu-config.c
+@@ -376,6 +376,9 @@ QemuOptsList qemu_spice_opts = {
+             .name = "disable-copy-paste",
+             .type = QEMU_OPT_BOOL,
+         },{
++            .name = "disable-agent-file-xfer",
++            .type = QEMU_OPT_BOOL,
++        },{
+             .name = "x509-dir",
+             .type = QEMU_OPT_STRING,
+         },{
+diff --git a/qemu-options.hx b/qemu-options.hx
+index ca437b5..ee8fec1 100644
+--- a/qemu-options.hx
++++ b/qemu-options.hx
+@@ -584,8 +584,8 @@ DEF("spice", HAS_ARG, QEMU_OPTION_spice,
+     "       [,jpeg-wan-compression=[auto|never|always]]\n"
+     "       [,zlib-glz-wan-compression=[auto|never|always]]\n"
+     "       [,streaming-video=[off|all|filter]][,disable-copy-paste]\n"
+-    "       [,agent-mouse=[on|off]][,playback-compression=[on|off]]\n"
+-    "       [,seamless-migration=[on|off]]\n"
++    "       [,disable-agent-file-xfer][,agent-mouse=[on|off]]\n"
++    "       [,playback-compression=[on|off]][,seamless-migration=[on|off]]\n"
+     "   enable spice\n"
+     "   at least one of {port, tls-port} is mandatory\n")
+ STEXI
+@@ -614,6 +614,9 @@ Allow client connects without authentication.
+ @item disable-copy-paste
+ Disable copy paste between the client and the guest.
+ 
++@item disable-agent-file-xfer
++Disable spice-vdagent based file-xfer between the client and the guest.
++
+ @item tls-port=<nr>
+ Set the TCP port spice is listening on for encrypted channels.
+ 
+diff --git a/ui/spice-core.c b/ui/spice-core.c
+index 57d398f..a6d0a8d 100644
+--- a/ui/spice-core.c
++++ b/ui/spice-core.c
+@@ -728,6 +728,16 @@ void qemu_spice_init(void)
+         spice_server_set_agent_copypaste(spice_server, false);
+     }
+ 
++    if (qemu_opt_get_bool(opts, "disable-agent-file-xfer", 0)) {
++#if SPICE_SERVER_VERSION >= 0x000c04
++        spice_server_set_agent_file_xfer(spice_server, false);
++#else
++        error_report("this qemu build does not support the "
++                     "\"disable-agent-file-xfer\" option");
++        exit(1);
++#endif
++    }
++
+     compression = SPICE_IMAGE_COMPRESS_AUTO_GLZ;
+     str = qemu_opt_get(opts, "image-compression");
+     if (str) {
+-- 
+1.7.11.7
+

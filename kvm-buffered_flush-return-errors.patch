@@ -1,0 +1,145 @@
+From a7d80288808ba34439889fbafef902a5a593d784 Mon Sep 17 00:00:00 2001
+Message-Id: <a7d80288808ba34439889fbafef902a5a593d784.1421272770.git.jen@redhat.com>
+In-Reply-To: <acd6d327ae856e72f084949fd71314237a4b9b8b.1421272770.git.jen@redhat.com>
+References: <acd6d327ae856e72f084949fd71314237a4b9b8b.1421272770.git.jen@redhat.com>
+From: Juan Quintela <quintela@redhat.com>
+Date: Wed, 7 Jan 2015 16:45:13 -0600
+Subject: [CHANGE 09/10] buffered_flush: return errors
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Juan Quintela <quintela@redhat.com>
+Message-id: <1420649114-17435-10-git-send-email-quintela@redhat.com>
+Patchwork-id: 63166
+O-Subject: [PATCH qemu-kvm RHEL6.7 09/10] buffered_flush: return errors
+Bugzilla: 970103
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+If there happened an error in buffered_flush(), it was not propagated
+right away, we just did a wait_for_unfreeze() first.  Move to check for error first.
+
+Once there, if we found an error doing buffered_flush() (or had an
+error sooner given by qemu_file_get_error()), return that error on
+buffered_close().
+
+Don't exit on buffered_flush() error on rate_tick.  We could be
+waiting for the notification somewhere else, too fragile for changes
+at this time.
+
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+---
+ buffered_file.c | 35 ++++++++++++++++++++++++++++-------
+ 1 file changed, 28 insertions(+), 7 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ buffered_file.c | 35 ++++++++++++++++++++++++++++-------
+ 1 file changed, 28 insertions(+), 7 deletions(-)
+
+diff --git a/buffered_file.c b/buffered_file.c
+index 2fa13cd..92d4fa7 100644
+--- a/buffered_file.c
++++ b/buffered_file.c
+@@ -69,7 +69,7 @@ static void buffered_append(QEMUFileBuffered *s,
+     s->buffer_size += size;
+ }
+ 
+-static void buffered_flush(QEMUFileBuffered *s)
++static int buffered_flush(QEMUFileBuffered *s)
+ {
+     size_t offset = 0;
+     int error;
+@@ -77,7 +77,7 @@ static void buffered_flush(QEMUFileBuffered *s)
+     error = qemu_file_get_error(s->file);
+     if (error != 0) {
+         DPRINTF("flush when error, bailing: %s\n", strerror(-error));
+-        return;
++        return error;
+     }
+ 
+     DPRINTF("flushing %zu byte(s) of data\n", s->buffer_size);
+@@ -96,6 +96,7 @@ static void buffered_flush(QEMUFileBuffered *s)
+         if (ret <= 0) {
+             DPRINTF("error flushing data, %zd\n", ret);
+             qemu_file_set_error(s->file, ret);
++            error = ret;
+             break;
+         } else {
+             DPRINTF("flushed %zd byte(s)\n", ret);
+@@ -108,6 +109,7 @@ static void buffered_flush(QEMUFileBuffered *s)
+         memmove(s->buffer, s->buffer + offset, s->buffer_size - offset);
+         s->buffer_size -= offset;
+     }
++    return error;
+ }
+ 
+ static int buffered_put_buffer(void *opaque, const uint8_t *buf, int64_t pos, int size)
+@@ -127,7 +129,11 @@ static int buffered_put_buffer(void *opaque, const uint8_t *buf, int64_t pos, in
+     DPRINTF("unfreezing output\n");
+     s->freeze_output = 0;
+ 
+-    buffered_flush(s);
++    error = buffered_flush(s);
++    if (error) {
++        DPRINTF("error while flushing, bailing: %s\n", strerror(-error));
++        return error;
++    }
+ 
+     while (!s->freeze_output && offset < size) {
+         if (s->bytes_xfer > s->xfer_limit) {
+@@ -174,16 +180,19 @@ static int buffered_put_buffer(void *opaque, const uint8_t *buf, int64_t pos, in
+ static int buffered_close(void *opaque)
+ {
+     QEMUFileBuffered *s = opaque;
+-    int ret;
++    int ret, error;
+ 
+     DPRINTF("closing\n");
+ 
+-    while (!qemu_file_get_error(s->file) && s->buffer_size) {
+-        buffered_flush(s);
++    while (!(error = qemu_file_get_error(s->file)) && s->buffer_size) {
++        error = buffered_flush(s);
++        if (error != 0) {
++            DPRINTF("error while flushing, bailing: %s\n", strerror(-error));
++            break;
++        }
+         if (s->freeze_output)
+             s->wait_for_unfreeze(s->opaque);
+     }
+-
+     ret = s->close(s->opaque);
+ 
+     qemu_del_timer(s->timer);
+@@ -191,6 +200,10 @@ static int buffered_close(void *opaque)
+     qemu_free(s->buffer);
+     qemu_free(s);
+ 
++    if (error) {
++        return error;
++    }
++
+     return ret;
+ }
+ 
+@@ -256,7 +269,15 @@ static void buffered_rate_tick(void *opaque)
+     s->bytes_xfer = 0;
+ 
+     buffered_flush(s);
++/*  I am not sure this change is safe.  We could be waiting for the
++    put_ready notification in a different IO handler, just leave
++    things like this for now.
+ 
++    if (buffered_flush(s) < 0) {
++        DPRINTF("error while flushing, bailing: %s\n", strerror(-error));
++        return;
++    }
++*/
+     /* Add some checks around this */
+     s->put_ready(s->opaque);
+ }
+-- 
+2.1.0
+

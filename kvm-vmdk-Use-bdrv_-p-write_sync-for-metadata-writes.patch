@@ -1,0 +1,67 @@
+From 07146f8b79923c529fd93fa528e6fcbd6f571a02 Mon Sep 17 00:00:00 2001
+Message-Id: <07146f8b79923c529fd93fa528e6fcbd6f571a02.1369658547.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 20 May 2013 03:36:16 +0200
+Subject: [PATCH 01/47] vmdk: Use bdrv_(p)write_sync for metadata writes
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1369021022-22728-2-git-send-email-famz@redhat.com>
+Patchwork-id: 51437
+O-Subject: [PATCH RHEL-6.5 qemu-kvm v3 01/47] vmdk: Use bdrv_(p)write_sync for metadata writes
+Bugzilla: 960685
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+Use bdrv_(p)write_sync to ensure metadata integrity in case of a crash.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit b8852e87d9d113096342c3e0977266cda0fe9ee5)
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 8c6e007..932a0d9 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -152,7 +152,7 @@ static int vmdk_write_cid(BlockDriverState *bs, uint32_t cid)
+         pstrcat(desc, sizeof(desc), tmp_desc);
+     }
+ 
+-    if (bdrv_pwrite(bs->file, 0x200, desc, DESC_SIZE) != DESC_SIZE)
++    if (bdrv_pwrite_sync(bs->file, 0x200, desc, DESC_SIZE) < 0)
+         return -1;
+     return 0;
+ }
+@@ -474,14 +474,14 @@ static int vmdk_L2update(BlockDriverState *bs, VmdkMetaData *m_data)
+     BDRVVmdkState *s = bs->opaque;
+ 
+     /* update L2 table */
+-    if (bdrv_pwrite(bs->file, ((int64_t)m_data->l2_offset * 512) + (m_data->l2_index * sizeof(m_data->offset)),
+-                    &(m_data->offset), sizeof(m_data->offset)) != sizeof(m_data->offset))
++    if (bdrv_pwrite_sync(bs->file, ((int64_t)m_data->l2_offset * 512) + (m_data->l2_index * sizeof(m_data->offset)),
++                    &(m_data->offset), sizeof(m_data->offset)) < 0)
+         return -1;
+     /* update backup L2 table */
+     if (s->l1_backup_table_offset != 0) {
+         m_data->l2_offset = s->l1_backup_table[m_data->l1_index];
+-        if (bdrv_pwrite(bs->file, ((int64_t)m_data->l2_offset * 512) + (m_data->l2_index * sizeof(m_data->offset)),
+-                        &(m_data->offset), sizeof(m_data->offset)) != sizeof(m_data->offset))
++        if (bdrv_pwrite_sync(bs->file, ((int64_t)m_data->l2_offset * 512) + (m_data->l2_index * sizeof(m_data->offset)),
++                        &(m_data->offset), sizeof(m_data->offset)) < 0)
+             return -1;
+     }
+ 
+-- 
+1.7.11.7
+

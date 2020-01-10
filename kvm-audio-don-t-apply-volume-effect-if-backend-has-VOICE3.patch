@@ -1,0 +1,124 @@
+From e9e060bb6c2a39b9a1587eff21391db7390fd009 Mon Sep 17 00:00:00 2001
+Message-Id: <e9e060bb6c2a39b9a1587eff21391db7390fd009.1369841886.git.minovotn@redhat.com>
+In-Reply-To: <9db4fbc10d733a88102ef99acaf6eb5d54153495.1369841886.git.minovotn@redhat.com>
+References: <9db4fbc10d733a88102ef99acaf6eb5d54153495.1369841886.git.minovotn@redhat.com>
+From: Marc-Andr Lureau <marcandre.lureau@redhat.com>
+Date: Wed, 29 May 2013 14:34:57 +0200
+Subject: [PATCH 09/14] audio: don't apply volume effect if backend has
+ VOICE_VOLUME_CAP
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Marc-André Lureau <marcandre.lureau@redhat.com>
+Message-id: <1369838102-26064-9-git-send-email-marcandre.lureau@redhat.com>
+Patchwork-id: 51679
+O-Subject: [RHEL-6.5 qemu-kvm PATCHv3 08/13] audio: don't apply volume effect if backend has VOICE_VOLUME_CAP
+Bugzilla: 884253
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Marc-André Lureau <marcandre.lureau@gmail.com>
+
+If the audio backend is capable of volume control, don't apply
+software volume (mixeng_volume ()), but instead, rely on backend
+volume control. This will allow guest to have full range volume
+control.
+
+Signed-off-by: Marc-Andr? Lureau <marcandre.lureau@redhat.com>
+Signed-off-by: malc <av1474@comtv.ru>
+(cherry picked from commit c01b2456238f73964876471452e27d4aad7900fb)
+---
+ audio/audio.c          |    9 +++++++--
+ audio/audio_int.h      |    5 +++++
+ audio/audio_template.h |    2 ++
+ 3 files changed, 14 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ audio/audio.c          | 9 +++++++--
+ audio/audio_int.h      | 5 +++++
+ audio/audio_template.h | 2 ++
+ 3 files changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/audio/audio.c b/audio/audio.c
+index d32c461..e5a40e1 100644
+--- a/audio/audio.c
++++ b/audio/audio.c
+@@ -945,7 +945,9 @@ int audio_pcm_sw_read (SWVoiceIn *sw, void *buf, int size)
+         total += isamp;
+     }
+ 
+-    mixeng_volume (sw->buf, ret, &sw->vol);
++    if (!(hw->ctl_caps & VOICE_VOLUME_CAP)) {
++        mixeng_volume (sw->buf, ret, &sw->vol);
++    }
+ 
+     sw->clip (buf, sw->buf, ret);
+     sw->total_hw_samples_acquired += total;
+@@ -1029,7 +1031,10 @@ int audio_pcm_sw_write (SWVoiceOut *sw, void *buf, int size)
+     swlim = audio_MIN (swlim, samples);
+     if (swlim) {
+         sw->conv (sw->buf, buf, swlim);
+-        mixeng_volume (sw->buf, swlim, &sw->vol);
++
++        if (!(sw->hw->ctl_caps & VOICE_VOLUME_CAP)) {
++            mixeng_volume (sw->buf, swlim, &sw->vol);
++        }
+     }
+ 
+     while (swlim) {
+diff --git a/audio/audio_int.h b/audio/audio_int.h
+index 117f95e..b9b0676 100644
+--- a/audio/audio_int.h
++++ b/audio/audio_int.h
+@@ -82,6 +82,7 @@ typedef struct HWVoiceOut {
+     int samples;
+     QLIST_HEAD (sw_out_listhead, SWVoiceOut) sw_head;
+     QLIST_HEAD (sw_cap_listhead, SWVoiceCap) cap_head;
++    int ctl_caps;
+     struct audio_pcm_ops *pcm_ops;
+     QLIST_ENTRY (HWVoiceOut) entries;
+ } HWVoiceOut;
+@@ -101,6 +102,7 @@ typedef struct HWVoiceIn {
+ 
+     int samples;
+     QLIST_HEAD (sw_in_listhead, SWVoiceIn) sw_head;
++    int ctl_caps;
+     struct audio_pcm_ops *pcm_ops;
+     QLIST_ENTRY (HWVoiceIn) entries;
+ } HWVoiceIn;
+@@ -150,6 +152,7 @@ struct audio_driver {
+     int max_voices_in;
+     int voice_size_out;
+     int voice_size_in;
++    int ctl_caps;
+ };
+ 
+ struct audio_pcm_ops {
+@@ -233,6 +236,8 @@ void audio_run (const char *msg);
+ #define VOICE_DISABLE 2
+ #define VOICE_VOLUME 3
+ 
++#define VOICE_VOLUME_CAP (1 << VOICE_VOLUME)
++
+ static inline int audio_ring_dist (int dst, int src, int len)
+ {
+     return (dst >= src) ? (dst - src) : (len - src + dst);
+diff --git a/audio/audio_template.h b/audio/audio_template.h
+index 2f5224b..571cf33 100644
+--- a/audio/audio_template.h
++++ b/audio/audio_template.h
+@@ -267,6 +267,8 @@ static HW *glue (audio_pcm_hw_add_new_, TYPE) (struct audsettings *as)
+     }
+ 
+     hw->pcm_ops = drv->pcm_ops;
++    hw->ctl_caps = drv->ctl_caps;
++
+     QLIST_INIT (&hw->sw_head);
+ #ifdef DAC
+     QLIST_INIT (&hw->cap_head);
+-- 
+1.7.11.7
+

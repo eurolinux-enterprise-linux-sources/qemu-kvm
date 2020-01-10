@@ -1,0 +1,54 @@
+From df192c65f7716a236d576847a54916a5c06a054e Mon Sep 17 00:00:00 2001
+From: Amos Kong <akong@redhat.com>
+Date: Tue, 10 Sep 2013 06:07:58 +0200
+Subject: [PATCH 16/39] virtio-rng: remove extra request for entropy
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1378793288-3371-17-git-send-email-akong@redhat.com>
+Patchwork-id: 54251
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v3 16/26] virtio-rng: remove extra request for entropy
+Bugzilla: 786407
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Amit Shah <amit.shah@redhat.com>
+
+If we got fewer bytes from the backend than requested, don't poke the
+backend for more bytes; the guest will ask for more (or if the guest has
+already asked for more, the backend knows about it via handle_input()).
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+Reviewed-by: Anthony Liguori <aliguori@us.ibm.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 4621c1768ef5d12171cca2aa1473595ecb9f1c9e)
+---
+ hw/virtio-rng.c |    7 -------
+ 1 files changed, 0 insertions(+), 7 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ hw/virtio-rng.c |    7 -------
+ 1 files changed, 0 insertions(+), 7 deletions(-)
+
+diff --git a/hw/virtio-rng.c b/hw/virtio-rng.c
+index 07a27b9..fba60d8 100644
+--- a/hw/virtio-rng.c
++++ b/hw/virtio-rng.c
+@@ -89,13 +89,6 @@ static void chr_read(void *opaque, const void *buf, size_t size)
+         vrng->popped = false;
+     }
+     virtio_notify(&vrng->vdev, vrng->vq);
+-
+-    /*
+-     * Lastly, if we had multiple elems queued by the guest, and we
+-     * didn't have enough data to fill them all, indicate we want more
+-     * data.
+-     */
+-    virtio_rng_process(vrng);
+ }
+ 
+ static void virtio_rng_process(VirtIORNG *vrng)
+-- 
+1.7.1
+

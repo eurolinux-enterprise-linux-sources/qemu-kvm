@@ -1,0 +1,29 @@
+From 4a323a75860fd44e22a14a29a3ddd8131a022cc7 Mon Sep 17 00:00:00 2001
+From: Miroslav Rezanina <mrezanin@redhat.com>
+Date: Fri, 3 Apr 2015 08:53:03 +0200
+Subject: [PATCH 4/6] Revert "Revert "rbd: Only look for qemu-specific copy of
+ librbd.so.1""
+
+This reverts commit 6395259a8c3186a0044ae6d79a510f306a121708.
+
+As librados2-devel package is no longer available in RHEV enviroment, we have to remove the series.
+---
+ block/rbd.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/block/rbd.c b/block/rbd.c
+index a8f4ff7..2a9327d 100644
+--- a/block/rbd.c
++++ b/block/rbd.c
+@@ -1098,7 +1098,7 @@ static int qemu_rbd_load_libs(void)
+         return -1;
+     }
+ 
+-    librbd_handle = g_module_open("librbd.so.1", 0);
++    librbd_handle = g_module_open("/usr/lib64/qemu/librbd.so.1", 0);
+     if (!librbd_handle) {
+         error_report("error loading librbd: %s", g_module_error());
+         return -1;
+-- 
+1.8.3.1
+

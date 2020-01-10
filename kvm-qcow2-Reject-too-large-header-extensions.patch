@@ -1,0 +1,48 @@
+From df11159ca436d983d7b2976bd8ba4f836678adeb Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:23 -0500
+Subject: [CHANGE 01/31] qcow2: Reject too large header extensions
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-2-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60358
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 01/29] qcow2: Reject too large header extensions
+Bugzilla: 1124443
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Image files that make qemu-img info read several gigabytes into the
+unknown header extensions list are bad. Just fail opening the image
+if an extension claims to be larger than the header extension area.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@linux.vnet.ibm.com>
+(cherry picked from commit 64ca6aee4f06a3af869e5e09f0afeb6721966875)
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ block/qcow2.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/block/qcow2.c b/block/qcow2.c
+index 1fe2e50..a43f69b 100644
+--- a/block/qcow2.c
++++ b/block/qcow2.c
+@@ -111,6 +111,11 @@ static int qcow2_read_extensions(BlockDriverState *bs, uint64_t start_offset,
+ #ifdef DEBUG_EXT
+         printf("ext.magic = 0x%x\n", ext.magic);
+ #endif
++        if (ext.len > end_offset - offset) {
++            error_report("Header extension too large");
++            return -EINVAL;
++        }
++
+         switch (ext.magic) {
+         case QCOW2_EXT_MAGIC_END:
+             return 0;
+-- 
+1.9.3
+

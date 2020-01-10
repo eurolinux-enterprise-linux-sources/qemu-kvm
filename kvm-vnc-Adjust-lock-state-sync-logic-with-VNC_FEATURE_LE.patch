@@ -1,0 +1,70 @@
+From 7aff8278a6e218179b93a5704675523d8f4c0257 Mon Sep 17 00:00:00 2001
+Message-Id: <7aff8278a6e218179b93a5704675523d8f4c0257.1369899578.git.minovotn@redhat.com>
+In-Reply-To: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+References: <1d7d27453d05521b09c5b709aa6f00c682ab81dc.1369899578.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 14 May 2013 10:13:10 +0200
+Subject: [PATCH 03/15] vnc: Adjust lock state sync logic with
+ VNC_FEATURE_LED_STATE
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1368526391-6510-4-git-send-email-kraxel@redhat.com>
+Patchwork-id: 51345
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 3/4] vnc: Adjust lock state sync logic with VNC_FEATURE_LED_STATE
+Bugzilla: 955302
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Lei Li <lilei@linux.vnet.ibm.com>
+
+Signed-off-by: Lei Li <lilei@linux.vnet.ibm.com>
+Reviewed-by: Anthony Liguori <aliguori@us.ibm.com>
+Message-id: 1366867752-11578-4-git-send-email-lilei@linux.vnet.ibm.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit e7b2aaccd94a68c7927cae7ca47ced1bddc4f448)
+
+Conflicts:
+
+	vnc.c
+---
+ vnc.c |   11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ vnc.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/vnc.c b/vnc.c
+index f2847a6..11c26e5 100644
+--- a/vnc.c
++++ b/vnc.c
+@@ -1605,7 +1605,12 @@ static void do_key_event(VncState *vs, int down, int keycode, int sym)
+         break;
+     }
+ 
+-    if (down && keycode_is_keypad(vs->vd->kbd_layout, keycode)) {
++    /* Turn off the lock state sync logic if the client support the led
++       state extension.
++    */
++    if (down &&
++        !vnc_has_feature(vs, VNC_FEATURE_LED_STATE) &&
++        keycode_is_keypad(vs->vd->kbd_layout, keycode)) {
+         /* If the numlock state needs to change then simulate an additional
+            keypress before sending this one.  This will happen if the user
+            toggles numlock away from the VNC window.
+@@ -1623,7 +1628,9 @@ static void do_key_event(VncState *vs, int down, int keycode, int sym)
+         }
+     }
+ 
+-    if (down && ((sym >= 'A' && sym <= 'Z') || (sym >= 'a' && sym <= 'z'))) {
++    if (down &&
++        !vnc_has_feature(vs, VNC_FEATURE_LED_STATE) &&
++        ((sym >= 'A' && sym <= 'Z') || (sym >= 'a' && sym <= 'z'))) {
+         /* If the capslock state needs to change then simulate an additional
+            keypress before sending this one.  This will happen if the user
+            toggles capslock away from the VNC window.
+-- 
+1.7.11.7
+

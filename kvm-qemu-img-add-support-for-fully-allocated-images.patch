@@ -1,0 +1,83 @@
+From ddf5944bcc06f57d62aac4d33075fb5b1eb1cb22 Mon Sep 17 00:00:00 2001
+Message-Id: <ddf5944bcc06f57d62aac4d33075fb5b1eb1cb22.1477598874.git.ymankad@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Fri, 23 Sep 2016 14:56:55 -0400
+Subject: [CHANGE 1/3] qemu-img: add support for fully allocated images
+To: rhvirt-patches@redhat.com,
+    ymankad@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1474642616-6415-2-git-send-email-mreitz@redhat.com>
+Patchwork-id: 72418
+O-Subject: [RHEL-6.9 qemu-kvm PATCH v3 1/2] qemu-img: add support for fully allocated images
+Bugzilla: 1297653
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: John Snow <jsnow@redhat.com>
+
+From: Peter Lieven <pl@kamp.de>
+
+Signed-off-by: Peter Lieven <pl@kamp.de>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 11b6699af59b8684128debacfc7c44cbaa6ac53b)
+
+Conflicts:
+	qemu-img.c
+
+We don't have -q downstream, so its documentation is missing.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ qemu-img.c    | 10 +++++++---
+ qemu-img.texi |  6 ++++++
+ 2 files changed, 13 insertions(+), 3 deletions(-)
+
+diff --git a/qemu-img.c b/qemu-img.c
+index c986213..a7bc3f9 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -94,8 +94,12 @@ static void help(void)
+            "       rebasing in this case (useful for renaming the backing file)\n"
+            "  '-h' with or without a command shows this help and lists the supported formats\n"
+            "  '-p' show progress of command (only certain commands)\n"
+-           "  '-S' indicates the consecutive number of bytes that must contain only zeros\n"
+-           "       for qemu-img to create a sparse image during conversion\n"
++           "  '-S' indicates the consecutive number of bytes (defaults to 4k) that must\n"
++           "       contain only zeros for qemu-img to create a sparse image during\n"
++           "       conversion. If the number of bytes is 0, the source will not be scanned for\n"
++           "       unallocated or zero sectors, and the destination image will always be\n"
++           "       fully allocated\n"
++           "       images will always be fully allocated\n"
+            "  '--output' takes the format in which the output must be done (human or json)\n"
+            "\n"
+            "Parameters to check subcommand:\n"
+@@ -1426,7 +1430,7 @@ static int img_convert(int argc, char **argv)
+         /* signal EOF to align */
+         bdrv_write_compressed(out_bs, 0, NULL, 0);
+     } else {
+-        int has_zero_init = bdrv_has_zero_init(out_bs);
++        int has_zero_init = min_sparse ? bdrv_has_zero_init(out_bs) : 0;
+ 
+         sector_num = 0; // total number of sectors converted so far
+         nb_sectors = total_sectors - sector_num;
+diff --git a/qemu-img.texi b/qemu-img.texi
+index 4b1fdfa..128469c 100644
+--- a/qemu-img.texi
++++ b/qemu-img.texi
+@@ -206,6 +206,12 @@ Image conversion is also useful to get smaller image when using a
+ growable format such as @code{qcow} or @code{cow}: the empty sectors
+ are detected and suppressed from the destination image.
+ 
++@var{sparse_size} indicates the consecutive number of bytes (defaults to 4k)
++that must contain only zeros for qemu-img to create a sparse image during
++conversion. If @var{sparse_size} is 0, the source will not be scanned for
++unallocated or zero sectors, and the destination image will always be
++fully allocated.
++
+ You can use the @var{backing_file} option to force the output image to be
+ created as a copy on write image of the specified base image; the
+ @var{backing_file} should have the same content as the input's base image,
+-- 
+2.7.4
+

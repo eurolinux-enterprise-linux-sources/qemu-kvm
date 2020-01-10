@@ -1,0 +1,85 @@
+From 2086e6329ab1592ed045f18711dce4be79fe6724 Mon Sep 17 00:00:00 2001
+Message-Id: <2086e6329ab1592ed045f18711dce4be79fe6724.1429290875.git.jen@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Wed, 15 Apr 2015 08:56:51 -0500
+Subject: [CHANGE] block: Fix query-block after disabling throttling
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1429088211-4125-1-git-send-email-kwolf@redhat.com>
+Patchwork-id: 64816
+O-Subject: [RHEL-6.7 qemu-kvm PATCH] block: Fix query-block after disabling throttling
+Bugzilla: 1211545
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+Upstream status: Fix for downstream-only code
+
+If a VM had I/O throttling enabled, and then it was disabled at runtime,
+query-block would still return the old throttling limits. This patch
+fixes it to return 0 for all limits.
+
+This problem originates in downstream commit 669ccf4e, which differs
+from the corresponding upstream commit 727f005e in that it doesn't check
+bs->io_limits_enabled before accessing the limits. This was not a
+problem directly after the backport because disabling throttling
+involved clearing all limits to 0.
+
+The new throttling code as introduced in downstream commit 25ef1eb9
+(upstream cc0681c4), however, updates the limits only if throtting is
+enabled after the change. It appears a little weird to leave old values
+around and just resetting all limits to 0 might be the nicer fix, but
+this is what upstream still does today, so I chose to do the same here.
+
+For the fix this means that the code for setting the limits is
+unchanged, but query-block checks bs->io_limits_enabled before accessing
+the limits.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+Buzgilla: https://bugzilla.redhat.com/show_bug.cgi?id=1211545
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=8982488
+---
+ block.c | 20 +++++++++++---------
+ 1 file changed, 11 insertions(+), 9 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block.c | 18 ++++++++++--------
+ 1 file changed, 10 insertions(+), 8 deletions(-)
+
+diff --git a/block.c b/block.c
+index 524569e..6c14a9d 100644
+--- a/block.c
++++ b/block.c
+@@ -3075,15 +3075,17 @@ void bdrv_info(Monitor *mon, QObject **ret_data)
+ #ifdef CONFIG_BLOCK_IO_THROTTLING
+             ThrottleConfig cfg;
+             throttle_get_config(&bs->throttle_state, &cfg);
+-            int64_t bps, bps_rd, bps_wr;
+-            int64_t iops, iops_rd, iops_wr;
++            int64_t bps = 0, bps_rd = 0, bps_wr = 0;
++            int64_t iops = 0, iops_rd = 0, iops_wr = 0;
+ 
+-            bps = cfg.buckets[THROTTLE_BPS_TOTAL].avg;
+-            bps_rd = cfg.buckets[THROTTLE_BPS_READ].avg;
+-            bps_wr = cfg.buckets[THROTTLE_BPS_WRITE].avg;
+-            iops = cfg.buckets[THROTTLE_OPS_TOTAL].avg;
+-            iops_rd = cfg.buckets[THROTTLE_OPS_READ].avg;
+-            iops_wr = cfg.buckets[THROTTLE_OPS_WRITE].avg;
++            if (bs->io_limits_enabled) {
++                bps = cfg.buckets[THROTTLE_BPS_TOTAL].avg;
++                bps_rd = cfg.buckets[THROTTLE_BPS_READ].avg;
++                bps_wr = cfg.buckets[THROTTLE_BPS_WRITE].avg;
++                iops = cfg.buckets[THROTTLE_OPS_TOTAL].avg;
++                iops_rd = cfg.buckets[THROTTLE_OPS_READ].avg;
++                iops_wr = cfg.buckets[THROTTLE_OPS_WRITE].avg;
++            }
+ 
+             obj = qobject_from_jsonf("{ 'file': %s, 'ro': %i, 'drv': %s, "
+                                      "'encrypted': %i, "
+-- 
+2.1.0
+

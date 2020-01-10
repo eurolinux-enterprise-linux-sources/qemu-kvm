@@ -1,0 +1,59 @@
+From 83ce7e12aac200b5c91c6d4123be5af595e5421d Mon Sep 17 00:00:00 2001
+Message-Id: <83ce7e12aac200b5c91c6d4123be5af595e5421d.1377087281.git.minovotn@redhat.com>
+In-Reply-To: <9b8a816369d47b70917f2636824d7791d66b71da.1377087281.git.minovotn@redhat.com>
+References: <9b8a816369d47b70917f2636824d7791d66b71da.1377087281.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Mon, 12 Aug 2013 07:01:10 +0200
+Subject: [PATCH 2/2] block: refuse negative iops and bps values
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1376290870-15980-3-git-send-email-famz@redhat.com>
+Patchwork-id: 53148
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v4 2/2] block: refuse negative iops and bps values
+Bugzilla: 987725
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Asias He <asias@redhat.com>
+
+From: Stefan Hajnoczi <stefanha@redhat.com>
+
+Negative I/O throttling iops and bps values do not make sense so reject
+them with an error message.
+
+Reviewed-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 7d81c1413c9c9bdcc966453636e4ca7776b59861)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ blockdev.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ blockdev.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/blockdev.c b/blockdev.c
+index 83b86a3..91dce31 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -326,6 +326,16 @@ static bool do_check_io_limits(BlockIOLimit *io_limits, Error **errp)
+         return false;
+     }
+ 
++    if (io_limits->bps[BLOCK_IO_LIMIT_TOTAL] < 0 ||
++        io_limits->bps[BLOCK_IO_LIMIT_WRITE] < 0 ||
++        io_limits->bps[BLOCK_IO_LIMIT_READ] < 0 ||
++        io_limits->iops[BLOCK_IO_LIMIT_TOTAL] < 0 ||
++        io_limits->iops[BLOCK_IO_LIMIT_WRITE] < 0 ||
++        io_limits->iops[BLOCK_IO_LIMIT_READ] < 0) {
++        error_setg(errp, "bps and iops values must be 0 or greater");
++        return false;
++    }
++
+     return true;
+ }
+ 
+-- 
+1.7.11.7
+

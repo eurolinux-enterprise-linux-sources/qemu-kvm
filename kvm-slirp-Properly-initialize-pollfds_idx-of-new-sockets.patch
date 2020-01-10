@@ -1,0 +1,52 @@
+From c43675a280c0927ba900cb52f9f9e07bdd16ee33 Mon Sep 17 00:00:00 2001
+Message-Id: <c43675a280c0927ba900cb52f9f9e07bdd16ee33.1427300678.git.jen@redhat.com>
+In-Reply-To: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+References: <cd1e5c640073fe9f6f79125f2cbb3f434f1c7897.1427300678.git.jen@redhat.com>
+From: Vlad Yasevich <vyasevic@redhat.com>
+Date: Thu, 12 Mar 2015 19:13:15 -0500
+Subject: [CHANGE 19/33] slirp: Properly initialize pollfds_idx of new sockets
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Vlad Yasevich <vyasevic@redhat.com>
+Message-id: <1426187601-21396-20-git-send-email-vyasevic@redhat.com>
+Patchwork-id: 64357
+O-Subject: [RHEL6.7 qemu-kvm PATCH v2 19/25] slirp: Properly initialize pollfds_idx of new sockets
+Bugzilla: 1005016
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Jan Kiszka <jan.kiszka@siemens.com>
+
+Otherwise we may start processing sockets in slirp_pollfds_poll that
+were created past slirp_pollfds_fill.
+
+Signed-off-by: Jan Kiszka <jan.kiszka@siemens.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 7bd43ec2dd3ffaa12e6331af41fc55d4b2b12f13)
+Signed-off-by: Vlad Yasevich <vyasevic@redhat.com>
+---
+ slirp/socket.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ slirp/socket.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/slirp/socket.c b/slirp/socket.c
+index 7b452dc..2e3e801 100644
+--- a/slirp/socket.c
++++ b/slirp/socket.c
+@@ -51,6 +51,7 @@ socreate(Slirp *slirp)
+     so->so_state = SS_NOFDREF;
+     so->s = -1;
+     so->slirp = slirp;
++    so->pollfds_idx = -1;
+   }
+   return(so);
+ }
+-- 
+2.1.0
+

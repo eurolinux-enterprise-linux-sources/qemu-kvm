@@ -1,0 +1,55 @@
+From d8f9bf802d2dd43c0e4dfbcc258d3e503a342653 Mon Sep 17 00:00:00 2001
+Message-Id: <d8f9bf802d2dd43c0e4dfbcc258d3e503a342653.1375955382.git.minovotn@redhat.com>
+In-Reply-To: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+References: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+From: Alon Levy <alevy@redhat.com>
+Date: Thu, 1 Aug 2013 11:53:44 +0200
+Subject: [PATCH 25/35] dev-smartcard-reader: empty implementation for
+ Mechanical (fail correctly)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Alon Levy <alevy@redhat.com>
+Message-id: <1375358029-12968-26-git-send-email-alevy@redhat.com>
+Patchwork-id: 52915
+O-Subject: [RHEL-6.5 RHEL-6.4.z qemu-kvm v6 25/30] dev-smartcard-reader: empty implementation for Mechanical (fail correctly)
+Bugzilla: 917860
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+Signed-off-by: Alon Levy <alevy@redhat.com>
+Reviewed-by: Marc-André Lureau <mlureau@redhat.com>
+(cherry picked from commit 58aeda15abb963196faaa4a0f23c5af45840f1b0)
+
+Conflicts:
+	hw/usb/dev-smartcard-reader.c
+    renamed upstream from usb-ccid.c
+---
+ hw/usb-ccid.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/usb-ccid.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/hw/usb-ccid.c b/hw/usb-ccid.c
+index e98525d..af4674d 100644
+--- a/hw/usb-ccid.c
++++ b/hw/usb-ccid.c
+@@ -1112,6 +1112,10 @@ static int ccid_handle_bulk_out(USBCCIDState *s, USBPacket *p)
+             ccid_reset_error_status(s);
+             ccid_write_parameters(s, ccid_header);
+             break;
++        case CCID_MESSAGE_TYPE_PC_to_RDR_Mechanical:
++            ccid_report_error_failed(s, 0);
++            ccid_write_slot_status(s, ccid_header);
++            break;
+         default:
+             DPRINTF(s, 1,
+                 "handle_data: ERROR: unhandled message type %Xh\n",
+-- 
+1.7.11.7
+

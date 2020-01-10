@@ -1,0 +1,246 @@
+From 1b8d9fcd0da0d2893caa5dae78737d8cab4353fd Mon Sep 17 00:00:00 2001
+Message-Id: <1b8d9fcd0da0d2893caa5dae78737d8cab4353fd.1429739396.git.jen@redhat.com>
+In-Reply-To: <933ebfcd0e18f4ed2c68553cf4bc257652872678.1429739396.git.jen@redhat.com>
+References: <933ebfcd0e18f4ed2c68553cf4bc257652872678.1429739396.git.jen@redhat.com>
+From: John Snow <jsnow@redhat.com>
+Date: Mon, 6 Apr 2015 18:46:17 -0500
+Subject: [CHANGE 04/11] configure: cull BRLAPI options
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: John Snow <jsnow@redhat.com>
+Message-id: <1428345980-16249-3-git-send-email-jsnow@redhat.com>
+Patchwork-id: 64719
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 2/5] configure: cull BRLAPI options
+Bugzilla: 1208605
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Bandan Das <bsd@redhat.com>
+
+The BRLAPI library is used for compiling the Baum Braille device.
+
+However, it has been removed from RHEL6 with dc0d9a13 in June 2013.
+By leaving the brlapi configure bits in the tree, however, having brlapi
+installed on your system will prevent you from compiling the tree without
+explicitly disabling this device.
+
+Just cull the device, its documentation, and configuration options completely.
+
+Signed-off-by: John Snow <jsnow@redhat.com>
+---
+ Makefile                      |  2 +-
+ Makefile.objs                 |  1 -
+ configure                     | 31 -------------------------------
+ qemu-char.c                   |  5 -----
+ qemu-char.h                   |  3 ---
+ qemu-doc.texi                 |  3 ---
+ qemu-options.hx               | 15 ---------------
+ redhat/qemu-kvm.spec.template |  2 --
+ 8 files changed, 1 insertion(+), 61 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ Makefile                      |  2 +-
+ Makefile.objs                 |  1 -
+ configure                     | 31 -------------------------------
+ qemu-char.c                   |  5 -----
+ qemu-char.h                   |  3 ---
+ qemu-doc.texi                 |  3 ---
+ qemu-options.hx               | 15 ---------------
+ redhat/qemu-kvm.spec.template |  2 --
+ 8 files changed, 1 insertion(+), 61 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 9ff226d..5efdd7b 100644
+--- a/Makefile
++++ b/Makefile
+@@ -140,7 +140,7 @@ sdl_zoom.o: sdl_zoom.c sdl_zoom.h sdl_zoom_template.h
+ 
+ sdl.o: sdl.c keymaps.h sdl_keysym.h sdl_zoom.h
+ 
+-sdl.o audio/sdlaudio.o sdl_zoom.o baum.o: QEMU_CFLAGS += $(SDL_CFLAGS)
++sdl.o audio/sdlaudio.o sdl_zoom.o: QEMU_CFLAGS += $(SDL_CFLAGS)
+ 
+ acl.o: acl.h acl.c
+ 
+diff --git a/Makefile.objs b/Makefile.objs
+index 4141a44..3f4b1ca 100644
+--- a/Makefile.objs
++++ b/Makefile.objs
+@@ -108,7 +108,6 @@ common-obj-y += block-migration.o iohandler.o
+ common-obj-y += pflib.o
+ common-obj-y += bitmap.o bitops.o
+ 
+-common-obj-$(CONFIG_BRLAPI) += baum.o
+ common-obj-$(CONFIG_POSIX) += migration-exec.o migration-unix.o migration-fd.o
+ 
+ common-obj-$(CONFIG_SPICE) += ui/spice-core.o ui/spice-input.o ui/spice-display.o spice-qemu-char.o
+diff --git a/configure b/configure
+index 970753d..d09786a 100755
+--- a/configure
++++ b/configure
+@@ -227,7 +227,6 @@ kvm_version() {
+ # is impossible without a --enable-foo that exits if a feature is not found.
+ 
+ bluez=""
+-brlapi=""
+ curl=""
+ curses=""
+ docs=""
+@@ -565,10 +564,6 @@ for opt do
+   ;;
+   --enable-xen) xen="yes"
+   ;;
+-  --disable-brlapi) brlapi="no"
+-  ;;
+-  --enable-brlapi) brlapi="yes"
+-  ;;
+   --disable-bluez) bluez="no"
+   ;;
+   --enable-bluez) bluez="yes"
+@@ -844,8 +839,6 @@ echo "                           (affects only QEMU, not qemu-img)"
+ echo "  --enable-mixemu          enable mixer emulation"
+ echo "  --disable-xen            disable xen backend driver support"
+ echo "  --enable-xen             enable xen backend driver support"
+-echo "  --disable-brlapi         disable BrlAPI"
+-echo "  --enable-brlapi          enable BrlAPI"
+ echo "  --disable-vnc-tls        disable TLS encryption for VNC server"
+ echo "  --enable-vnc-tls         enable TLS encryption for VNC server"
+ echo "  --disable-vnc-sasl       disable SASL encryption for VNC server"
+@@ -1448,26 +1441,6 @@ for drv in $audio_drv_list; do
+ done
+ 
+ ##########################################
+-# BrlAPI probe
+-
+-if test "$brlapi" != "no" ; then
+-  brlapi_libs="-lbrlapi"
+-  cat > $TMPC << EOF
+-#include <brlapi.h>
+-int main( void ) { return brlapi__openConnection (NULL, NULL, NULL); }
+-EOF
+-  if compile_prog "" "$brlapi_libs" ; then
+-    brlapi=yes
+-    libs_softmmu="$brlapi_libs $libs_softmmu"
+-  else
+-    if test "$brlapi" = "yes" ; then
+-      feature_not_found "brlapi"
+-    fi
+-    brlapi=no
+-  fi
+-fi
+-
+-##########################################
+ # curses probe
+ curses_list="-lncurses -lcurses"
+ 
+@@ -2424,7 +2397,6 @@ if test -n "$sparc_cpu"; then
+ fi
+ echo "xen support       $xen"
+ echo "CPU emulation     $cpu_emulation"
+-echo "brlapi support    $brlapi"
+ echo "bluez  support    $bluez"
+ echo "Documentation     $docs"
+ [ ! -z "$uname_release" ] && \
+@@ -2645,9 +2617,6 @@ if test "$curl" = "yes" ; then
+   echo "CONFIG_CURL=y" >> $config_host_mak
+   echo "CURL_CFLAGS=$curl_cflags" >> $config_host_mak
+ fi
+-if test "$brlapi" = "yes" ; then
+-  echo "CONFIG_BRLAPI=y" >> $config_host_mak
+-fi
+ if test "$bluez" = "yes" ; then
+   echo "CONFIG_BLUEZ=y" >> $config_host_mak
+   echo "BLUEZ_CFLAGS=$bluez_cflags" >> $config_host_mak
+diff --git a/qemu-char.c b/qemu-char.c
+index c16d66b..736f4a4 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -3210,11 +3210,6 @@ ChardevReturn *qmp_chardev_add(const char *id, ChardevBackend *backend,
+     case CHARDEV_BACKEND_KIND_MSMOUSE:
+         chr = qemu_chr_open_msmouse();
+         break;
+-#ifdef CONFIG_BRLAPI
+-    case CHARDEV_BACKEND_KIND_BRAILLE:
+-        chr = chr_baum_init();
+-        break;
+-#endif
+     case CHARDEV_BACKEND_KIND_STDIO:
+         chr = qemu_chr_open_stdio(backend->stdio);
+         break;
+diff --git a/qemu-char.h b/qemu-char.h
+index 7a0675d..b0a78bc 100644
+--- a/qemu-char.h
++++ b/qemu-char.h
+@@ -276,7 +276,4 @@ int qemu_set_fd_handler(int fd,
+ /* msmouse */
+ CharDriverState *qemu_chr_open_msmouse(void);
+ 
+-/* baum.c */
+-CharDriverState *chr_baum_init(void);
+-
+ #endif
+diff --git a/qemu-doc.texi b/qemu-doc.texi
+index 021a12b..0ce51d9 100644
+--- a/qemu-doc.texi
++++ b/qemu-doc.texi
+@@ -744,9 +744,6 @@ usb_add serial:productid=FA00:tcp:192.168.0.2:4444
+ @end example
+ will connect to tcp port 4444 of ip 192.168.0.2, and plug that to the virtual
+ serial converter, faking a Matrix Orbital LCD Display (USB ID 0403:FA00).
+-@item braille
+-Braille device.  This will use BrlAPI to display the braille output on a real
+-or fake device.
+ @item net:@var{options}
+ Network adapter that supports CDC ethernet and RNDIS protocols.  @var{options}
+ specifies NIC options as with @code{-net nic,}@var{options} (see description).
+diff --git a/qemu-options.hx b/qemu-options.hx
+index bb17ac7..e5592ee 100644
+--- a/qemu-options.hx
++++ b/qemu-options.hx
+@@ -454,10 +454,6 @@ Pass through the host device identified by @var{vendor_id}:@var{product_id}
+ Serial converter to host character device @var{dev}, see @code{-serial} for the
+ available devices.
+ 
+-@item braille
+-Braille device.  This will use BrlAPI to display the braille output on a real
+-or fake device.
+-
+ @item net:@var{options}
+ Network adapter that supports CDC ethernet and RNDIS protocols.
+ 
+@@ -1337,9 +1333,6 @@ DEF("chardev", HAS_ARG, QEMU_OPTION_chardev,
+     "-chardev pty,id=id\n"
+     "-chardev stdio,id=id\n"
+ #endif
+-#ifdef CONFIG_BRLAPI
+-    "-chardev braille,id=id\n"
+-#endif
+ #if defined(__linux__) || defined(__sun__) || defined(__FreeBSD__) \
+         || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
+     "-chardev serial,id=id,path=path\n"
+@@ -1523,10 +1516,6 @@ Connect to standard input and standard output of the qemu process.
+ @option{stdio} does not take any options. @option{stdio} is not available on
+ Windows hosts.
+ 
+-@item -chardev braille ,id=@var{id}
+-
+-Connect to a local BrlAPI server. @option{braille} does not take any options.
+-
+ @item -chardev tty ,id=@var{id} ,path=@var{path}
+ 
+ @option{tty} is only available on Linux, Sun, FreeBSD, NetBSD, OpenBSD and
+@@ -1798,10 +1787,6 @@ listening on port 4444 would be:
+ @item -serial mon:telnet::4444,server,nowait
+ @end table
+ 
+-@item braille
+-Braille device.  This will use BrlAPI to display the braille output on a real
+-or fake device.
+-
+ @item msmouse
+ Three button serial mouse. Configure the guest to use Microsoft protocol.
+ @end table
+-- 
+2.1.0
+

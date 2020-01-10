@@ -1,0 +1,343 @@
+From 129acdb5cd0cfcc130dfb313d784798f78314c8b Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Thu, 31 Jul 2014 16:03:40 -0500
+Subject: [CHANGE 18/31] qemu-iotests: Backport 028
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1406822631-6570-19-git-send-email-kwolf@redhat.com>
+Patchwork-id: 60371
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v3 18/29] qemu-iotests: Backport 028
+Bugzilla: 1122410
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+RHEL 6 doesn't have block-backup. Remove that part.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Signed-off-by: jen <jen@redhat.com>
+---
+ tests/qemu-iotests/028     |  27 -----
+ tests/qemu-iotests/028.out | 268 ---------------------------------------------
+ 2 files changed, 295 deletions(-)
+
+diff --git a/tests/qemu-iotests/028 b/tests/qemu-iotests/028
+index 9e701e1..739129e 100755
+--- a/tests/qemu-iotests/028
++++ b/tests/qemu-iotests/028
+@@ -101,33 +101,6 @@ _check_test_img
+ # Rebase it on top of its base image
+ $QEMU_IMG rebase -b "$TEST_IMG.base" "$TEST_IMG"
+ 
+-echo
+-echo block-backup
+-echo
+-
+-qemu_comm_method="monitor"
+-_launch_qemu -drive file="${TEST_IMG}",cache=${CACHEMODE},id=disk
+-h=$QEMU_HANDLE
+-QEMU_COMM_TIMEOUT=1
+-
+-# Silence output since it contains the disk image path and QEMU's readline
+-# character echoing makes it very hard to filter the output
+-_send_qemu_cmd $h "drive_backup disk ${TEST_IMG}.copy" "(qemu)" >/dev/null
+-qemu_cmd_repeat=20 _send_qemu_cmd $h "info block-jobs" "No active jobs"
+-_send_qemu_cmd $h 'quit' ""
+-
+-# Base image sectors
+-TEST_IMG="${TEST_IMG}.copy" io readv $(( offset )) 512 1024 32
+-
+-# Image sectors
+-TEST_IMG="${TEST_IMG}.copy" io readv $(( offset + 512 )) 512 1024 64
+-
+-# Zero sectors beyond end of base image
+-TEST_IMG="${TEST_IMG}.copy" io_zero readv $(( offset + 32 * 1024 )) 512 1024 32
+-
+-
+-_check_test_img
+-
+ # success, all done
+ echo "*** done"
+ rm -f $seq.full
+diff --git a/tests/qemu-iotests/028.out b/tests/qemu-iotests/028.out
+index 0e1a5ae..f8cc0c8 100644
+--- a/tests/qemu-iotests/028.out
++++ b/tests/qemu-iotests/028.out
+@@ -465,272 +465,4 @@ read 512/512 bytes at offset 3221257728
+ read 512/512 bytes at offset 3221258752
+ 512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+ No errors were found on the image.
+-
+-block-backup
+-
+-Formatting 'TEST_DIR/t.qcow2.copy', fmt=qcow2 size=4294968832 backing_file='TEST_DIR/t.qcow2.base' backing_fmt='qcow2' encryption=off cluster_size=65536 lazy_refcounts=off
+-(qemu) i[K[Din[K[D[Dinf[K[D[D[Dinfo[K[D[D[D[Dinfo [K[D[D[D[D[Dinfo b[K[D[D[D[D[D[Dinfo bl[K[D[D[D[D[D[D[Dinfo blo[K[D[D[D[D[D[D[D[Dinfo bloc[K[D[D[D[D[D[D[D[D[Dinfo block[K[D[D[D[D[D[D[D[D[D[Dinfo block-[K[D[D[D[D[D[D[D[D[D[D[Dinfo block-j[K[D[D[D[D[D[D[D[D[D[D[D[Dinfo block-jo[K[D[D[D[D[D[D[D[D[D[D[D[D[Dinfo block-job[K[D[D[D[D[D[D[D[D[D[D[D[D[D[Dinfo block-jobs[K
+-Type backup, device disk: Completed 0 of 4294968832 bytes, speed limit 0 bytes/s
+-i[K[Din[K[D[Dinf[K[D[D[Dinfo[K[D[D[D[Dinfo [K[D[D[D[D[Dinfo b[K[D[D[D[D[D[Dinfo bl[K[D[D[D[D[D[D[Dinfo blo[K[D[D[D[D[D[D[D[Dinfo bloc[K[D[D[D[D[D[D[D[D[Dinfo block[K[D[D[D[D[D[D[D[D[D[Dinfo block-[K[D[D[D[D[D[D[D[D[D[D[Dinfo block-j[K[D[D[D[D[D[D[D[D[D[D[D[Dinfo block-jo[K[D[D[D[D[D[D[D[D[D[D[D[D[Dinfo block-job[K[D[D[D[D[D[D[D[D[D[D[D[D[D[Dinfo block-jobs[K
+-No active jobs
+-=== IO: pattern 195
+-read 512/512 bytes at offset 3221194240
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221195264
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221196288
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221197312
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221198336
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221199360
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221200384
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221201408
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221202432
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221203456
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221204480
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221205504
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221206528
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221207552
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221208576
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221209600
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221210624
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221211648
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221212672
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221213696
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221214720
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221215744
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221216768
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221217792
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221218816
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221219840
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221220864
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221221888
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221222912
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221223936
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221224960
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221225984
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-=== IO: pattern 196
+-read 512/512 bytes at offset 3221194752
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221195776
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221196800
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221197824
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221198848
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221199872
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221200896
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221201920
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221202944
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221203968
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221204992
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221206016
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221207040
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221208064
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221209088
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221210112
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221211136
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221212160
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221213184
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221214208
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221215232
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221216256
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221217280
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221218304
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221219328
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221220352
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221221376
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221222400
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221223424
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221224448
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221225472
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221226496
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221227520
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221228544
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221229568
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221230592
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221231616
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221232640
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221233664
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221234688
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221235712
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221236736
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221237760
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221238784
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221239808
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221240832
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221241856
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221242880
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221243904
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221244928
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221245952
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221246976
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221248000
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221249024
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221250048
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221251072
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221252096
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221253120
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221254144
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221255168
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221256192
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221257216
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221258240
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221259264
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-=== IO: pattern 0
+-read 512/512 bytes at offset 3221227008
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221228032
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221229056
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221230080
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221231104
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221232128
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221233152
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221234176
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221235200
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221236224
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221237248
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221238272
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221239296
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221240320
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221241344
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221242368
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221243392
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221244416
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221245440
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221246464
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221247488
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221248512
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221249536
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221250560
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221251584
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221252608
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221253632
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221254656
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221255680
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221256704
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221257728
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-read 512/512 bytes at offset 3221258752
+-512 bytes, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+-No errors were found on the image.
+ *** done
+-- 
+1.9.3
+

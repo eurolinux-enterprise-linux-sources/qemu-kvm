@@ -1,0 +1,58 @@
+From c2b466cf3955df52347a759b75e917843e18afd9 Mon Sep 17 00:00:00 2001
+Message-Id: <c2b466cf3955df52347a759b75e917843e18afd9.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:27:52 +0200
+Subject: [PATCH 087/114] qemu-ga: ga_open_pidfile(): use qemu_open()
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-30-git-send-email-lersek@redhat.com>
+Patchwork-id: 51128
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 29/56] qemu-ga: ga_open_pidfile(): use qemu_open()
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+This ensures that O_CLOEXEC is passed to open(), this way the
+pid file fd is not leaked to executed processes.
+
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Acked-by: Amos Kong <akong@redhat.com>
+Tested-by: Amos Kong <akong@redhat.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+(cherry picked from commit 6ffacc5d3ddf2e3227aae2a8cc5c15627265f727)
+
+Conflicts:
+
+	qga/main.c
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=892996
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qemu-ga.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-ga.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/qemu-ga.c b/qemu-ga.c
+index 79c8d21..24d7c76 100644
+--- a/qemu-ga.c
++++ b/qemu-ga.c
+@@ -267,7 +267,7 @@ static bool ga_open_pidfile(const char *pidfile)
+     int pidfd;
+     char pidstr[32];
+ 
+-    pidfd = open(pidfile, O_CREAT|O_WRONLY, S_IRUSR|S_IWUSR);
++    pidfd = qemu_open(pidfile, O_CREAT|O_WRONLY, S_IRUSR|S_IWUSR);
+     if (pidfd == -1 || lockf(pidfd, F_TLOCK, 0)) {
+         g_critical("Cannot lock pid file, %s", strerror(errno));
+         if (pidfd != -1) {
+-- 
+1.7.11.7
+

@@ -1,0 +1,46 @@
+From 5d8ecb69a1570da3ce40c7becd13882c2ed2c5e3 Mon Sep 17 00:00:00 2001
+Message-Id: <5d8ecb69a1570da3ce40c7becd13882c2ed2c5e3.1411757522.git.jen@redhat.com>
+In-Reply-To: <c52ca58a7a8b9f87bde7ca1ab5b11a39d82854e5.1411757522.git.jen@redhat.com>
+References: <c52ca58a7a8b9f87bde7ca1ab5b11a39d82854e5.1411757522.git.jen@redhat.com>
+From: Jeff Nelson <jenelson@redhat.com>
+Date: Fri, 26 Sep 2014 16:39:47 -0400
+Subject: [CHANGE 5/7] Revert "migration: only call append when there is
+ something to append"
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Jeff Nelson <jenelson@redhat.com>
+Message-id: <a82714ad84efad0a51030ce00d48de3703375479.1411747689.git.jen@redhat.com>
+Patchwork-id: 61461
+O-Subject: [RHEL-6.6.z qemu-kvm PATCH 5/7] Revert "migration: only call append when there is something to append"
+Bugzilla: 970103
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+
+This reverts commit 9b47bdb029c1e1bcc37e028f62a4c9038ed9ef46.
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ buffered_file.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ buffered_file.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/buffered_file.c b/buffered_file.c
+index 424dbd1..dd1f172 100644
+--- a/buffered_file.c
++++ b/buffered_file.c
+@@ -152,7 +152,7 @@ static int buffered_put_buffer(void *opaque, const uint8_t *buf, int64_t pos, in
+         s->bytes_xfer += ret;
+     }
+ 
+-    if (offset >= 0 && size - offset > 0) {
++    if (offset >= 0) {
+         DPRINTF("buffering %d bytes\n", size - offset);
+         buffered_append(s, buf + offset, size - offset);
+         offset = size;
+-- 
+1.9.3
+

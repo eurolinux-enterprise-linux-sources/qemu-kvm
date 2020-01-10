@@ -1,0 +1,86 @@
+From 1ebda71843b6a6ab1431d932f048d2ca8f77dc01 Mon Sep 17 00:00:00 2001
+Message-Id: <1ebda71843b6a6ab1431d932f048d2ca8f77dc01.1379425497.git.minovotn@redhat.com>
+In-Reply-To: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+References: <f5f5558c6067d2cdb77e46707b0bda1f4f885402.1379425497.git.minovotn@redhat.com>
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Fri, 6 Sep 2013 18:12:35 +0200
+Subject: [PATCH 15/25] qemu-img: always probe the input image for allocated
+ sectors
+
+qemu-img convert can assume "that sectors which are unallocated in the
+input image are present in both the output's and input's base images".
+
+However it is only doing this if the output image returns true for
+bdrv_has_zero_init().  Testing bdrv_has_zero_init() does not make much
+sense if the output image is copy-on-write, because a copy-on-write
+image is never initialized to zero (it is initialized to the content
+of the backing file).
+
+There is nothing here that makes has_zero_init images special.  The
+input and output must be equal for the operation to make sense, and
+that's it.
+
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit e4a86f88cc6b214c37b4abe9160e41f0338ce4cd)
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-img.c | 40 +++++++++++++++++++---------------------
+ 1 file changed, 19 insertions(+), 21 deletions(-)
+
+diff --git a/qemu-img.c b/qemu-img.c
+index bfc2ff3..217246f 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -1126,28 +1126,26 @@ static int img_convert(int argc, char **argv)
+                 n = bs_offset + bs_sectors - sector_num;
+             }
+ 
+-            if (has_zero_init) {
+-                /* If the output image is being created as a copy on write image,
+-                   assume that sectors which are unallocated in the input image
+-                   are present in both the output's and input's base images (no
+-                   need to copy them). */
+-                if (out_baseimg) {
+-                    ret = bdrv_is_allocated(bs[bs_i], sector_num - bs_offset,
+-                                            n, &n1);
+-                    if (ret < 0) {
+-                        error_report("error while reading metadata for sector "
+-                                     "%" PRId64 ": %s",
+-                                     sector_num - bs_offset, strerror(-ret));
+-                        goto out;
+-                    }
+-                    if (!ret) {
+-                        sector_num += n1;
+-                        continue;
+-                    }
+-                    /* The next 'n1' sectors are allocated in the input image. Copy
+-                       only those as they may be followed by unallocated sectors. */
+-                    n = n1;
++            /* If the output image is being created as a copy on write image,
++               assume that sectors which are unallocated in the input image
++               are present in both the output's and input's base images (no
++               need to copy them). */
++            if (out_baseimg) {
++                ret = bdrv_is_allocated(bs[bs_i], sector_num - bs_offset,
++                                        n, &n1);
++                if (ret < 0) {
++                    error_report("error while reading metadata for sector "
++                                 "%" PRId64 ": %s",
++                                 sector_num - bs_offset, strerror(-ret));
++                    goto out;
++                }
++                if (!ret) {
++                    sector_num += n1;
++                    continue;
+                 }
++                /* The next 'n1' sectors are allocated in the input image. Copy
++                   only those as they may be followed by unallocated sectors. */
++                n = n1;
+             } else {
+                 n1 = n;
+             }
+-- 
+1.7.11.7
+

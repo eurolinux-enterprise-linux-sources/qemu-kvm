@@ -1,0 +1,113 @@
+From 02f6d7eeab64fb8d7dde3b70328ef8f54a4e8391 Mon Sep 17 00:00:00 2001
+Message-Id: <02f6d7eeab64fb8d7dde3b70328ef8f54a4e8391.1366117835.git.minovotn@redhat.com>
+In-Reply-To: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+References: <8a8dc925d6cdb62aba736eb1551195551e09271b.1366117835.git.minovotn@redhat.com>
+From: Amos Kong <akong@redhat.com>
+Date: Tue, 18 Dec 2012 10:05:38 +0100
+Subject: [PATCH 02/19] vga: simplify screendump
+
+RH-Author: Amos Kong <akong@redhat.com>
+Message-id: <1355825138-11935-1-git-send-email-akong@redhat.com>
+Patchwork-id: 45153
+O-Subject: [RHEL-6.5 qemu-kvm PATCH] vga: simplify screendump
+Bugzilla: 869496
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Alon Levy <alevy@redhat.com>
+
+From: Gerd Hoffmann <kraxel@redhat.com>
+
+Bugzilla: 869496
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=5201444
+Test: tested in localhost
+
+The displaychangelistener isn't needed at all, we can simply save the
+image when vga_hw_update is done instead of hooking into the update
+process.
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 9a51f5b0677381ed87d413e969ea72adf1f17f5f)
+---
+I found this bug only existed in internal, upstream fixed it in a small
+refactor. If start guest with '-S' option, the saving hook can only be
+registered after continue the guest. Backport this patch to internal.
+---
+ hw/vga.c |   36 +-----------------------------------
+ 1 files changed, 1 insertions(+), 35 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/vga.c | 36 +-----------------------------------
+ 1 file changed, 1 insertion(+), 35 deletions(-)
+
+diff --git a/hw/vga.c b/hw/vga.c
+index 2407c28..930a77c 100644
+--- a/hw/vga.c
++++ b/hw/vga.c
+@@ -150,8 +150,6 @@ static uint16_t expand2[256];
+ static uint8_t expand4to8[16];
+ 
+ static void vga_screen_dump(void *opaque, const char *filename);
+-static char *screen_dump_filename;
+-static DisplayChangeListener *screen_dump_dcl;
+ 
+ static void vga_dumb_update_retrace_info(VGACommonState *s)
+ {
+@@ -2373,23 +2371,6 @@ void vga_init_vbe(VGACommonState *s)
+ /********************************************************/
+ /* vga screen dump */
+ 
+-static void vga_save_dpy_update(DisplayState *ds,
+-                                int x, int y, int w, int h)
+-{
+-    if (screen_dump_filename) {
+-        ppm_save(screen_dump_filename, ds->surface);
+-        screen_dump_filename = NULL;
+-    }
+-}
+-
+-static void vga_save_dpy_resize(DisplayState *s)
+-{
+-}
+-
+-static void vga_save_dpy_refresh(DisplayState *s)
+-{
+-}
+-
+ int ppm_save(const char *filename, struct DisplaySurface *ds)
+ {
+     FILE *f;
+@@ -2428,29 +2409,14 @@ int ppm_save(const char *filename, struct DisplaySurface *ds)
+     return 0;
+ }
+ 
+-static DisplayChangeListener* vga_screen_dump_init(DisplayState *ds)
+-{
+-    DisplayChangeListener *dcl;
+-
+-    dcl = qemu_mallocz(sizeof(DisplayChangeListener));
+-    dcl->dpy_update = vga_save_dpy_update;
+-    dcl->dpy_resize = vga_save_dpy_resize;
+-    dcl->dpy_refresh = vga_save_dpy_refresh;
+-    register_displaychangelistener(ds, dcl);
+-    return dcl;
+-}
+-
+ /* save the vga display in a PPM image even if no display is
+    available */
+ static void vga_screen_dump(void *opaque, const char *filename)
+ {
+     VGACommonState *s = opaque;
+ 
+-    if (!screen_dump_dcl)
+-        screen_dump_dcl = vga_screen_dump_init(s->ds);
+-
+-    screen_dump_filename = (char *)filename;
+     vga_invalidate_display(s);
+     vga_hw_update();
++    ppm_save(filename, s->ds->surface);
+ }
+ 
+-- 
+1.7.11.7
+

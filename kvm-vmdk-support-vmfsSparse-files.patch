@@ -1,0 +1,121 @@
+From 26904b89e891d2a0f85503a8fb534ff98116e5f8 Mon Sep 17 00:00:00 2001
+Message-Id: <26904b89e891d2a0f85503a8fb534ff98116e5f8.1378302750.git.minovotn@redhat.com>
+In-Reply-To: <b9370b63e1ba262320933a8d26c1dd9b3b2bc4b1.1378302750.git.minovotn@redhat.com>
+References: <b9370b63e1ba262320933a8d26c1dd9b3b2bc4b1.1378302750.git.minovotn@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Tue, 27 Aug 2013 01:14:34 +0200
+Subject: [PATCH 3/6] vmdk: support vmfsSparse files
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1377566075-3289-4-git-send-email-famz@redhat.com>
+Patchwork-id: 53778
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 3/4] vmdk: support vmfsSparse files
+Bugzilla: 995865
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+
+VMware ESX hosts use a variant of the VMDK3 format, identified by the
+vmfsSparse create type ad the VMFSSPARSE extent type.
+
+It has 16 KB grain tables (L2) and a variable-size grain directory (L1).
+In addition, the grain size is always 512, but that is not a problem
+because it is included in the header.
+
+The format of the extents is documented in the VMDK spec.  The format
+of the descriptor file is not documented precisely, but it can be
+found at http://kb.vmware.com/kb/10026353 (Recreating a missing virtual
+machine disk (VMDK) descriptor file for delta disks).
+
+With these patches, vmfsSparse files only work if opened through the
+descriptor file.  Data files without descriptor files, as far as I
+could understand, are not supported by ESX.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Fam Zheng <famz@redhat.com>
+
+--
+v2: Rebase to patch 01.
+    Change le64_to_cpu to le32_to_cpu.
+    Rename vmdk_open_vmdk3 to vmdk_open_vmfs_sparse, which represents the
+    current usage of this format.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit daac8fdc68c5f0118ce24fcac5873ddaa0d0c9f9)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block/vmdk.c | 17 +++++++++--------
+ 1 file changed, 9 insertions(+), 8 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/vmdk.c | 17 +++++++++--------
+ 1 file changed, 9 insertions(+), 8 deletions(-)
+
+diff --git a/block/vmdk.c b/block/vmdk.c
+index 841d38b..d95c7e6 100644
+--- a/block/vmdk.c
++++ b/block/vmdk.c
+@@ -479,9 +479,9 @@ static int vmdk_init_tables(BlockDriverState *bs, VmdkExtent *extent)
+     return ret;
+ }
+ 
+-static int vmdk_open_vmdk3(BlockDriverState *bs,
+-                           BlockDriverState *file,
+-                           int flags)
++static int vmdk_open_vmfs_sparse(BlockDriverState *bs,
++                                 BlockDriverState *file,
++                                 int flags)
+ {
+     int ret;
+     uint32_t magic;
+@@ -672,7 +672,7 @@ static int vmdk_open_sparse(BlockDriverState *bs,
+     magic = be32_to_cpu(magic);
+     switch (magic) {
+         case VMDK3_MAGIC:
+-            return vmdk_open_vmdk3(bs, file, flags);
++            return vmdk_open_vmfs_sparse(bs, file, flags);
+             break;
+         case VMDK4_MAGIC:
+             return vmdk_open_vmdk4(bs, file, flags);
+@@ -716,7 +716,8 @@ static int vmdk_parse_extents(const char *desc, BlockDriverState *bs,
+         }
+ 
+         if (sectors <= 0 ||
+-            (strcmp(type, "FLAT") && strcmp(type, "SPARSE")) ||
++            (strcmp(type, "FLAT") && strcmp(type, "SPARSE") &&
++             strcmp(type, "VMFSSPARSE")) ||
+             (strcmp(access, "RW"))) {
+             goto next_line;
+         }
+@@ -739,8 +740,8 @@ static int vmdk_parse_extents(const char *desc, BlockDriverState *bs,
+                 return ret;
+             }
+             extent->flat_start_offset = flat_offset << 9;
+-        } else if (!strcmp(type, "SPARSE")) {
+-            /* SPARSE extent */
++        } else if (!strcmp(type, "SPARSE") || !strcmp(type, "VMFSSPARSE")) {
++            /* SPARSE extent and VMFSSPARSE extent are both "COWD" sparse file*/
+             ret = vmdk_open_sparse(bs, extent_file, bs->open_flags);
+             if (ret) {
+                 bdrv_delete(extent_file);
+@@ -787,6 +788,7 @@ static int vmdk_open_desc_file(BlockDriverState *bs, int flags,
+         goto exit;
+     }
+     if (strcmp(ct, "monolithicFlat") &&
++        strcmp(ct, "vmfsSparse") &&
+         strcmp(ct, "twoGbMaxExtentSparse") &&
+         strcmp(ct, "twoGbMaxExtentFlat")) {
+         fprintf(stderr,
+@@ -1372,7 +1374,6 @@ static int coroutine_fn vmdk_co_write_zeroes(BlockDriverState *bs,
+     return ret;
+ }
+ 
+-
+ static int vmdk_create_extent(const char *filename, int64_t filesize,
+                               bool flat, bool compress, bool zeroed_grain)
+ {
+-- 
+1.7.11.7
+

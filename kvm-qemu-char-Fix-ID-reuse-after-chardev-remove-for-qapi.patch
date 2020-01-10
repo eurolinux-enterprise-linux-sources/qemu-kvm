@@ -1,0 +1,57 @@
+From c653f9a3938b8f8ee3c054c23afa5d838b6be41b Mon Sep 17 00:00:00 2001
+Message-Id: <c653f9a3938b8f8ee3c054c23afa5d838b6be41b.1376387172.git.minovotn@redhat.com>
+In-Reply-To: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+References: <f0474e57abf884b69c3682cd37daaca892347bda.1376387172.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Thu, 8 Aug 2013 12:40:31 +0200
+Subject: [PATCH 12/13] qemu-char: Fix ID reuse after chardev-remove for
+ qapi-based init
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1375965631-5025-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 53101
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 1/1] qemu-char: Fix ID reuse after chardev-remove for qapi-based init
+Bugzilla: 994891
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Bandan Das <bsd@redhat.com>
+
+From: Markus Armbruster <armbru@redhat.com>
+
+Commit 2c5f488 introduced qapi-based character device initialization
+as a new code path in qemu_chr_new_from_opts().  Unfortunately, it
+failed to store parameter opts in the new chardev.  Therefore,
+qemu_chr_delete() doesn't delete it.  Even though the device is gone,
+its options linger, and any attempt to create another one with the
+same ID fails.
+
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: 1372339512-28149-1-git-send-email-armbru@redhat.com
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 2ea3e2c1e85097c45a882dbc1fbba4a7fdb3ff1c)
+---
+ qemu-char.c |    1 +
+ 1 file changed, 1 insertion(+)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 3d2037c..08467fb 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -2911,6 +2911,7 @@ CharDriverState *qemu_chr_new_from_opts(QemuOpts *opts,
+         }
+ 
+         chr = qemu_chr_find(id);
++        chr->opts = opts;
+ 
+     qapi_out:
+         if (!backend->data) {
+-- 
+1.7.11.7
+

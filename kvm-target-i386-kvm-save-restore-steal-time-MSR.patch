@@ -1,0 +1,145 @@
+From 9c673d46101357ca224d61c85a8628822c0d1980 Mon Sep 17 00:00:00 2001
+Message-Id: <9c673d46101357ca224d61c85a8628822c0d1980.1379427660.git.minovotn@redhat.com>
+From: Marcelo Tosatti <mtosatti@redhat.com>
+Date: Thu, 28 Feb 2013 20:26:48 -0300
+Subject: [PATCH] target-i386: kvm: save/restore steal time MSR
+
+BZ: 903123
+
+upstream commit 3e41a753551a906dd9ed66fb0fc34167a6af3ba0
+target-i386: kvm: save/restore steal time MSR
+
+Read and write steal time MSR, so that reporting is functional across
+migration.
+
+Signed-off-by: Marcelo Tosatti <mtosatti@redhat.com>
+Signed-off-by: Gleb Natapov <gleb@redhat.com>
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ kvm/include/x86/asm/kvm_para.h |  2 ++
+ qemu-kvm-x86.c                 |  9 +++++++++
+ target-i386/cpu.h              |  1 +
+ target-i386/machine.c          | 21 +++++++++++++++++++++
+ 4 files changed, 33 insertions(+)
+
+diff --git a/kvm/include/x86/asm/kvm_para.h b/kvm/include/x86/asm/kvm_para.h
+index f712bce..780a235 100644
+--- a/kvm/include/x86/asm/kvm_para.h
++++ b/kvm/include/x86/asm/kvm_para.h
+@@ -15,12 +15,14 @@
+ #define KVM_FEATURE_CLOCKSOURCE		0
+ #define KVM_FEATURE_NOP_IO_DELAY	1
+ #define KVM_FEATURE_MMU_OP		2
++#define KVM_FEATURE_STEAL_TIME         5
+ #define KVM_FEATURE_PV_EOI		6
+ 
+ #define MSR_KVM_WALL_CLOCK  0x11
+ #define MSR_KVM_SYSTEM_TIME 0x12
+ 
+ /* Custom MSRs falls in the range 0x4b564d00-0x4b564dff */
++#define MSR_KVM_STEAL_TIME     0x4b564d03
+ #define MSR_KVM_PV_EOI_EN      0x4b564d04
+ 
+ #define KVM_MAX_MMU_OP_BATCH           32
+diff --git a/qemu-kvm-x86.c b/qemu-kvm-x86.c
+index 12bb873..f5f362a 100644
+--- a/qemu-kvm-x86.c
++++ b/qemu-kvm-x86.c
+@@ -36,6 +36,7 @@ static int has_msr_tsc_deadline;
+ static int lm_capable_kernel;
+ 
+ static bool has_msr_pv_eoi_en;
++static bool has_msr_kvm_steal_time;
+ 
+ int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr)
+ {
+@@ -883,6 +884,9 @@ static int get_msr_entry(struct kvm_msr_entry *entry, CPUState *env)
+         case MSR_KVM_WALL_CLOCK:
+             env->wall_clock_msr = entry->data;
+             break;
++        case MSR_KVM_STEAL_TIME:
++            env->steal_time_msr = entry->data;
++            break;
+         case HV_X64_MSR_GUEST_OS_ID:
+             env->hyperv_guest_os_id = entry->data;
+             break;
+@@ -1110,6 +1114,8 @@ void kvm_arch_load_regs(CPUState *env)
+ #endif
+     set_msr_entry(&msrs[n++], MSR_KVM_SYSTEM_TIME,  env->system_time_msr);
+     set_msr_entry(&msrs[n++], MSR_KVM_WALL_CLOCK,  env->wall_clock_msr);
++    if (has_msr_kvm_steal_time)
++        set_msr_entry(&msrs[n++], MSR_KVM_STEAL_TIME,  env->steal_time_msr);
+     if (kvm_check_extension(kvm_state, KVM_CAP_HYPERV)) {
+         set_msr_entry(&msrs[n++], HV_X64_MSR_GUEST_OS_ID, env->hyperv_guest_os_id);
+         set_msr_entry(&msrs[n++], HV_X64_MSR_HYPERCALL, env->hyperv_hypercall);
+@@ -1354,6 +1360,8 @@ void kvm_arch_save_regs(CPUState *env)
+ #endif
+     msrs[n++].index = MSR_KVM_SYSTEM_TIME;
+     msrs[n++].index = MSR_KVM_WALL_CLOCK;
++    if (has_msr_kvm_steal_time)
++        msrs[n++].index = MSR_KVM_STEAL_TIME;
+     if (kvm_check_extension(kvm_state, KVM_CAP_HYPERV)) {
+         msrs[n++].index = HV_X64_MSR_GUEST_OS_ID;
+         msrs[n++].index = HV_X64_MSR_HYPERCALL;
+@@ -1488,6 +1496,7 @@ int kvm_arch_init_vcpu(CPUState *cenv)
+     copy = *cenv;
+ 
+     has_msr_pv_eoi_en = pv_ent->eax & (1 << KVM_FEATURE_PV_EOI);
++    has_msr_kvm_steal_time = pv_ent->eax & (1 << KVM_FEATURE_STEAL_TIME);
+ 
+     copy.regs[R_EAX] = 0;
+     qemu_kvm_cpuid_on_env(&copy);
+diff --git a/target-i386/cpu.h b/target-i386/cpu.h
+index 7415335..d5110ee 100644
+--- a/target-i386/cpu.h
++++ b/target-i386/cpu.h
+@@ -722,6 +722,7 @@ typedef struct CPUX86State {
+     uint64_t system_time_msr;
+     uint64_t wall_clock_msr;
+     uint64_t pv_eoi_en_msr;
++    uint64_t steal_time_msr;
+ 
+     uint64_t hyperv_guest_os_id;
+     uint64_t hyperv_hypercall;
+diff --git a/target-i386/machine.c b/target-i386/machine.c
+index b623d4d..3e8d357 100644
+--- a/target-i386/machine.c
++++ b/target-i386/machine.c
+@@ -509,6 +509,24 @@ static const VMStateDescription vmstate_msr_hyperv_hypercall = {
+     }
+ };
+ 
++static bool steal_time_msr_needed(void *opaque)
++{
++    CPUState *env = opaque;
++
++    return env->steal_time_msr != 0;
++}
++
++static const VMStateDescription vmstate_steal_time_msr = {
++    .name = "cpu/steal_time_msr",
++    .version_id = 1,
++    .minimum_version_id = 1,
++    .minimum_version_id_old = 1,
++    .fields      = (VMStateField []) {
++        VMSTATE_UINT64(steal_time_msr, CPUState),
++        VMSTATE_END_OF_LIST()
++    }
++};
++
+ static const VMStateDescription vmstate_cpu = {
+     .name = "cpu",
+     .version_id = CPU_SAVE_VERSION,
+@@ -627,6 +645,9 @@ static const VMStateDescription vmstate_cpu = {
+             .vmsd = &vmstate_msr_hyperv_hypercall,
+             .needed = hyperv_hypercall_needed,
+         }, {
++            .vmsd = &vmstate_steal_time_msr,
++            .needed = steal_time_msr_needed, 
++        } , {
+ 	    /* empty */
+ 	}
+     }
+-- 
+1.7.11.7
+

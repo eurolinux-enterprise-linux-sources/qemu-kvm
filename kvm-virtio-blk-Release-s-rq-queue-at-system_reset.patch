@@ -1,0 +1,78 @@
+From 29e29ba52d27b3b659bb3fee0deffdf88597b720 Mon Sep 17 00:00:00 2001
+Message-Id: <29e29ba52d27b3b659bb3fee0deffdf88597b720.1478263472.git.ymankad@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Wed, 26 Oct 2016 03:57:51 +0530
+Subject: [CHANGE 1/2] virtio-blk: Release s->rq queue at system_reset
+To: rhvirt-patches@redhat.com,
+    ymankad@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1477454271-22319-1-git-send-email-famz@redhat.com>
+Patchwork-id: 72634
+O-Subject: [RHEL-6.9 qemu-kvm PATCH] virtio-blk: Release s->rq queue at system_reset
+Bugzilla: 1361490
+RH-Acked-by: John Snow <jsnow@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: https://bugzilla.redhat.com/show_bug.cgi?id=1361490
+Brew: https://brewweb.engineering.redhat.com/brew/taskinfo?taskID=11952024 (RHEL)
+      https://brewweb.engineering.redhat.com/brew/taskinfo?taskID=11952028 (RHEV)
+
+At system_reset, there is no point in retrying the queued request,
+because the driver that issued the request won't be around any more.
+
+Analyzed-by: Laszlo Ersek <lersek@redhat.com>
+Reported-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Message-id: 1470278654-13525-2-git-send-email-famz@redhat.com
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 26307f6aa451708b8c60a49d605a78bbd29f70ef)
+
+ Conflicts:
+	hw/block/virtio-blk.c
+
+The file in downstream is named hw/virtio-blk.c. The context is
+different. The hunk is placed below bdrv_drain_all() with the comment
+updated to match downstream.
+
+There is no virtio_blk_free_request in RHEL 6, use qemu_free().
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ hw/virtio-blk.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/hw/virtio-blk.c b/hw/virtio-blk.c
+index 773dbc6..1b8a672 100644
+--- a/hw/virtio-blk.c
++++ b/hw/virtio-blk.c
+@@ -530,6 +530,8 @@ static void virtio_blk_dma_restart_cb(void *opaque, int running, RunState state)
+ 
+ static void virtio_blk_reset(VirtIODevice *vdev)
+ {
++    VirtIOBlockReq *req;
++
+ #ifdef CONFIG_VIRTIO_BLK_DATA_PLANE
+     VirtIOBlock *s = to_virtio_blk(vdev);
+ 
+@@ -543,6 +545,14 @@ static void virtio_blk_reset(VirtIODevice *vdev)
+      * are per-device request lists.
+      */
+     bdrv_drain_all();
++
++    /* We drop queued requests after bdrv_drain_all() because bdrv_drain_all()
++     * itself can produce them. */
++    while (s->rq) {
++        req = s->rq;
++        s->rq = req->next;
++        qemu_free(req);
++    }
+ }
+ 
+ /* coalesce internal state, copy to pci i/o region 0
+-- 
+2.7.4
+

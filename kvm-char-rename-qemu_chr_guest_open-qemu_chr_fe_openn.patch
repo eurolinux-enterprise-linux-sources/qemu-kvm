@@ -1,0 +1,101 @@
+From 2c3a5398755c9989e4e78b2bac2b6351af1c3dfe Mon Sep 17 00:00:00 2001
+Message-Id: <2c3a5398755c9989e4e78b2bac2b6351af1c3dfe.1368111913.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:17:52 +0200
+Subject: [PATCH 18/65] char: rename qemu_chr_guest_open() ->
+ qemu_chr_fe_open()
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <3a4b29c8e864b00c20d84de87262326446c34ede.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50796
+O-Subject: [RHEL6.5 qemu-kvm PATCH 18/65] char: rename qemu_chr_guest_open() -> qemu_chr_fe_open()
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit c9d830eddc58db80a954a4eef1dc1e6ef8ca55b3)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	hw/virtio-console.c
+	qemu-char.c
+	qemu-char.h
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ hw/virtio-console.c | 2 +-
+ qemu-char.c         | 2 +-
+ qemu-char.h         | 2 +-
+ usb-redir.c         | 2 +-
+ 4 files changed, 4 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/virtio-console.c | 2 +-
+ qemu-char.c         | 2 +-
+ qemu-char.h         | 2 +-
+ usb-redir.c         | 2 +-
+ 4 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/hw/virtio-console.c b/hw/virtio-console.c
+index 08e8f09..ec510f1 100644
+--- a/hw/virtio-console.c
++++ b/hw/virtio-console.c
+@@ -56,7 +56,7 @@ static void guest_open(VirtIOSerialPort *port)
+     if (!vcon->chr) {
+         return;
+     }
+-    return qemu_chr_guest_open(vcon->chr);
++    return qemu_chr_fe_open(vcon->chr);
+ }
+ 
+ /* Callback function that's called when the guest closes the port */
+diff --git a/qemu-char.c b/qemu-char.c
+index 7b3b2e2..6af1256 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -2575,7 +2575,7 @@ CharDriverState *qemu_chr_open(const char *label, const char *filename, void (*i
+     return chr;
+ }
+ 
+-void qemu_chr_guest_open(struct CharDriverState *chr)
++void qemu_chr_fe_open(struct CharDriverState *chr)
+ {
+     if (chr->chr_guest_open) {
+         chr->chr_guest_open(chr);
+diff --git a/qemu-char.h b/qemu-char.h
+index b30c875..7165dcb 100644
+--- a/qemu-char.h
++++ b/qemu-char.h
+@@ -80,7 +80,7 @@ QemuOpts *qemu_chr_parse_compat(const char *label, const char *filename);
+ CharDriverState *qemu_chr_open_opts(QemuOpts *opts,
+                                     void (*init)(struct CharDriverState *s));
+ CharDriverState *qemu_chr_open(const char *label, const char *filename, void (*init)(struct CharDriverState *s));
+-void qemu_chr_guest_open(struct CharDriverState *chr);
++void qemu_chr_fe_open(struct CharDriverState *chr);
+ void qemu_chr_guest_close(struct CharDriverState *chr);
+ void qemu_chr_set_echo(struct CharDriverState *chr, bool echo);
+ void qemu_chr_close(CharDriverState *chr);
+diff --git a/usb-redir.c b/usb-redir.c
+index 3d028d8..59e3bab 100644
+--- a/usb-redir.c
++++ b/usb-redir.c
+@@ -1068,7 +1068,7 @@ static int usbredir_initfn(USBDevice *udev)
+     udev->auto_attach = 0;
+ 
+     /* Let the backend know we are ready */
+-    qemu_chr_guest_open(dev->cs);
++    qemu_chr_fe_open(dev->cs);
+     qemu_chr_add_handlers(dev->cs, usbredir_chardev_can_read,
+                           usbredir_chardev_read, usbredir_chardev_event, dev);
+ 
+-- 
+1.7.11.7
+

@@ -1,0 +1,156 @@
+From 6f2ed8449ac5fe5fd6b262e3cc44bb1c22c6b372 Mon Sep 17 00:00:00 2001
+Message-Id: <6f2ed8449ac5fe5fd6b262e3cc44bb1c22c6b372.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:22:02 -0500
+Subject: [CHANGE 19/42] iotests: Add test for qcow2 L1 table update
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-20-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64481
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 19/39] iotests: Add test for qcow2 L1 table update
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+BZ: 1129892
+
+Updating the L1 table should not result in random data being written.
+This adds a test for that.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 1b2dd0bee6bd03045b90c8a7549c8134466b2938)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	tests/qemu-iotests/107
+	tests/qemu-iotests/107.out
+	tests/qemu-iotests/group
+
+As there is no downstream way of forcing qemu-io to open an image as
+raw, replace that section by dd-ing the relevant part into an own file
+and then compare that part (which will be detected as raw, hopefully)
+using qemu-io.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ tests/qemu-iotests/107     | 62 ++++++++++++++++++++++++++++++++++++++++++++++
+ tests/qemu-iotests/107.out | 12 +++++++++
+ tests/qemu-iotests/group   |  1 +
+ 3 files changed, 75 insertions(+)
+ create mode 100755 tests/qemu-iotests/107
+ create mode 100644 tests/qemu-iotests/107.out
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ tests/qemu-iotests/107     | 62 ++++++++++++++++++++++++++++++++++++++++++++++
+ tests/qemu-iotests/107.out | 12 +++++++++
+ tests/qemu-iotests/group   |  1 +
+ 3 files changed, 75 insertions(+)
+ create mode 100755 tests/qemu-iotests/107
+ create mode 100644 tests/qemu-iotests/107.out
+
+diff --git a/tests/qemu-iotests/107 b/tests/qemu-iotests/107
+new file mode 100755
+index 0000000..df4d216
+--- /dev/null
++++ b/tests/qemu-iotests/107
+@@ -0,0 +1,62 @@
++#!/bin/bash
++#
++# Tests updates of the qcow2 L1 table
++#
++# Copyright (C) 2014 Red Hat, Inc.
++#
++# This program is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation; either version 2 of the License, or
++# (at your option) any later version.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with this program.  If not, see <http://www.gnu.org/licenses/>.
++#
++
++# creator
++owner=mreitz@redhat.com
++
++seq="$(basename $0)"
++echo "QA output created by $seq"
++
++here="$PWD"
++tmp=/tmp/$$
++status=1	# failure is the default!
++
++_cleanup()
++{
++	_cleanup_test_img
++	rm -f "${TEST_IMG}.l1"
++}
++trap "_cleanup; exit \$status" 0 1 2 3 15
++
++# get standard environment, filters and checks
++. ./common.rc
++. ./common.filter
++
++_supported_fmt qcow2
++_supported_proto file
++_supported_os Linux
++
++
++IMG_SIZE=64K
++
++echo
++echo '=== Updates should not write random data ==='
++echo
++
++_make_test_img $IMG_SIZE
++$QEMU_IO -c 'write 0 64k' "$TEST_IMG" | _filter_qemu_io
++dd if="$TEST_IMG" of="${TEST_IMG}.l1" bs=65536 count=1 skip=3
++$QEMU_IO -c 'read -p -P 0 8 65528' "${TEST_IMG}.l1" | _filter_qemu_io
++
++# success, all done
++echo "*** done"
++rm -f $seq.full
++status=0
++
+diff --git a/tests/qemu-iotests/107.out b/tests/qemu-iotests/107.out
+new file mode 100644
+index 0000000..0d62f83
+--- /dev/null
++++ b/tests/qemu-iotests/107.out
+@@ -0,0 +1,12 @@
++QA output created by 107
++
++=== Updates should not write random data ===
++
++Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=65536 
++wrote 65536/65536 bytes at offset 0
++64 KiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
++1+0 records in
++1+0 records out
++read 65528/65528 bytes at offset 8
++63.992 KiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
++*** done
+diff --git a/tests/qemu-iotests/group b/tests/qemu-iotests/group
+index 8d5b891..a62d2f2 100644
+--- a/tests/qemu-iotests/group
++++ b/tests/qemu-iotests/group
+@@ -100,3 +100,4 @@
+ # 091 rw auto quick -- required 'qemu-io' HMP command
+ 092 rw auto quick
+ 095 rw auto quick
++107 rw auto quick
+-- 
+2.1.0
+

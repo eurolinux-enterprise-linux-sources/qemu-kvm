@@ -1,0 +1,62 @@
+From 4e2861417faee8b641588c9b579d4f930df530c8 Mon Sep 17 00:00:00 2001
+Message-Id: <4e2861417faee8b641588c9b579d4f930df530c8.1456769395.git.jen@redhat.com>
+In-Reply-To: <af9075e3725e0685c2d54d451267d48b16f48b02.1456769395.git.jen@redhat.com>
+References: <af9075e3725e0685c2d54d451267d48b16f48b02.1456769395.git.jen@redhat.com>
+From: =?UTF-8?q?Marc-Andr=C3=A9=20Lureau?= <marcandre.lureau@redhat.com>
+Date: Fri, 26 Feb 2016 14:16:01 -0500
+Subject: [CHANGE 6/8] qga: use wide-chars constants for wchar_t comparisons
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Marc-André Lureau <marcandre.lureau@redhat.com>
+Message-id: <1456496163-31004-7-git-send-email-marcandre.lureau@redhat.com>
+Patchwork-id: 69506
+O-Subject: [RHEL-6.8 qemu-kvm PATCH v4 6/8] qga: use wide-chars constants for wchar_t comparisons
+Bugzilla: 1174181
+RH-Acked-by: Thomas Huth <thuth@redhat.com>
+RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Marc-André Lureau <marcandre.lureau@redhat.com>
+
+Reported-by: Laszlo Ersek <lersek@redhat.com>
+Signed-off-by: Marc-André Lureau <marcandre.lureau@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+Signed-off-by: Michael Roth <mdroth@linux.vnet.ibm.com>
+
+(cherry picked from commit 6c6916dac8a146f2e8ee845a2a4e8d459a8689eb)
+
+BZ: https://bugzilla.redhat.com/show_bug.cgi?id=1174181
+Brew: https://brewweb.devel.redhat.com/taskinfo?taskID=10566110
+Upstream-status: 6c6916dac8a146f2e8ee845a2a4e8d459a8689eb
+
+Signed-off-by: Marc-André Lureau <marcandre.lureau@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ qga/commands-win32.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/qga/commands-win32.c b/qga/commands-win32.c
+index 2819875..42e1932 100644
+--- a/qga/commands-win32.c
++++ b/qga/commands-win32.c
+@@ -392,8 +392,10 @@ get_net_error_message(gint error)
+     if (msg != NULL) {
+         nchars = wcslen(msg);
+ 
+-        if (nchars > 2 && msg[nchars-1] == '\n' && msg[nchars-2] == '\r') {
+-            msg[nchars-2] = '\0';
++        if (nchars > 2 &&
++            msg[nchars - 1] == L'\n' &&
++            msg[nchars - 2] == L'\r') {
++            msg[nchars - 2] = L'\0';
+         }
+ 
+         retval = g_utf16_to_utf8(msg, -1, NULL, NULL, NULL);
+-- 
+2.1.0
+

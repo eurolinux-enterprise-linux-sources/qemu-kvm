@@ -1,0 +1,154 @@
+From d89683388c9981e3cdabcc5dfdfc529a7a105049 Mon Sep 17 00:00:00 2001
+Message-Id: <d89683388c9981e3cdabcc5dfdfc529a7a105049.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:44 -0500
+Subject: [CHANGE 24/29] scsi: Introduce scsi_req_cancel_complete
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-25-git-send-email-famz@redhat.com>
+Patchwork-id: 64925
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 24/28] scsi: Introduce scsi_req_cancel_complete
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+Let the aio cb do the clean up and notification job after scsi_req_cancel, in
+preparation for asynchronous cancellation.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit d5776465ee9a55815792efa34d79de240f4ffd99)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	hw/scsi-disk.c
+The callbacks are different in downstream: we don't have unmap and write
+same support, as well as read FUA.
+---
+ hw/scsi-bus.c     | 14 ++++++++++----
+ hw/scsi-disk.c    | 16 ++++++++++++++++
+ hw/scsi-generic.c |  1 +
+ hw/scsi.h         |  1 +
+ 4 files changed, 28 insertions(+), 4 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/scsi-bus.c     | 14 ++++++++++----
+ hw/scsi-disk.c    | 16 ++++++++++++++++
+ hw/scsi-generic.c |  1 +
+ hw/scsi.h         |  1 +
+ 4 files changed, 28 insertions(+), 4 deletions(-)
+
+diff --git a/hw/scsi-bus.c b/hw/scsi-bus.c
+index aa82df8..c5ae470 100644
+--- a/hw/scsi-bus.c
++++ b/hw/scsi-bus.c
+@@ -1476,6 +1476,16 @@ void scsi_req_complete(SCSIRequest *req, int status)
+     scsi_req_unref(req);
+ }
+ 
++/* Called by the devices when the request is canceled. */
++void scsi_req_cancel_complete(SCSIRequest *req)
++{
++    assert(req->io_canceled);
++    if (req->bus->info->cancel) {
++        req->bus->info->cancel(req);
++    }
++    scsi_req_unref(req);
++}
++
+ void scsi_req_cancel(SCSIRequest *req)
+ {
+     if (!req->enqueued) {
+@@ -1487,10 +1497,6 @@ void scsi_req_cancel(SCSIRequest *req)
+     if (req->aiocb) {
+         bdrv_aio_cancel(req->aiocb);
+     }
+-    if (req->bus->info->cancel) {
+-        req->bus->info->cancel(req);
+-    }
+-    scsi_req_unref(req);
+ }
+ 
+ static int scsi_ua_precedence(SCSISense sense)
+diff --git a/hw/scsi-disk.c b/hw/scsi-disk.c
+index 577d45f..3f09d49 100644
+--- a/hw/scsi-disk.c
++++ b/hw/scsi-disk.c
+@@ -157,6 +157,10 @@ static void scsi_flush_complete(void * opaque, int ret)
+     assert(r->req.aiocb != NULL);
+     r->req.aiocb = NULL;
+     bdrv_acct_done(s->qdev.conf.bs, &r->acct);
++    if (r->req.io_canceled) {
++        scsi_req_cancel_complete(&r->req);
++        goto done;
++    }
+ 
+     if (ret < 0) {
+         if (scsi_handle_rw_error(r, -ret)) {
+@@ -218,6 +222,10 @@ static void scsi_dma_complete(void *opaque, int ret)
+     assert (r->req.aiocb != NULL);
+     r->req.aiocb = NULL;
+     bdrv_acct_done(s->qdev.conf.bs, &r->acct);
++    if (r->req.io_canceled) {
++        scsi_req_cancel_complete(&r->req);
++        goto done;
++    }
+ 
+     if (ret < 0) {
+         if (scsi_handle_rw_error(r, -ret)) {
+@@ -247,6 +255,10 @@ static void scsi_read_complete(void * opaque, int ret)
+     assert (r->req.aiocb != NULL);
+     r->req.aiocb = NULL;
+     bdrv_acct_done(s->qdev.conf.bs, &r->acct);
++    if (r->req.io_canceled) {
++        scsi_req_cancel_complete(&r->req);
++        goto done;
++    }
+ 
+     if (ret < 0) {
+         if (scsi_handle_rw_error(r, -ret)) {
+@@ -372,6 +384,10 @@ static void scsi_write_complete(void * opaque, int ret)
+         r->req.aiocb = NULL;
+         bdrv_acct_done(s->qdev.conf.bs, &r->acct);
+     }
++    if (r->req.io_canceled) {
++        scsi_req_cancel_complete(&r->req);
++        goto done;
++    }
+ 
+     if (ret < 0) {
+         if (scsi_handle_rw_error(r, -ret)) {
+diff --git a/hw/scsi-generic.c b/hw/scsi-generic.c
+index 2752ba6..18f3549 100644
+--- a/hw/scsi-generic.c
++++ b/hw/scsi-generic.c
+@@ -96,6 +96,7 @@ static void scsi_command_complete(void *opaque, int ret)
+ 
+     r->req.aiocb = NULL;
+     if (r->req.io_canceled) {
++        scsi_req_cancel_complete(&r->req);
+         goto done;
+     }
+     if (r->io_header.driver_status & SG_ERR_DRIVER_SENSE) {
+diff --git a/hw/scsi.h b/hw/scsi.h
+index 82135ae..1bfc98b 100644
+--- a/hw/scsi.h
++++ b/hw/scsi.h
+@@ -235,6 +235,7 @@ void scsi_req_data(SCSIRequest *req, int len);
+ void scsi_req_complete(SCSIRequest *req, int status);
+ uint8_t *scsi_req_get_buf(SCSIRequest *req);
+ int scsi_req_get_sense(SCSIRequest *req, uint8_t *buf, int len);
++void scsi_req_cancel_complete(SCSIRequest *req);
+ void scsi_req_cancel(SCSIRequest *req);
+ void scsi_req_retry(SCSIRequest *req);
+ void scsi_device_purge_requests(SCSIDevice *sdev, SCSISense sense);
+-- 
+2.1.0
+

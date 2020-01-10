@@ -1,0 +1,113 @@
+From 7e52a4f784fce9177952cd2e5e73de2bc4b23ddf Mon Sep 17 00:00:00 2001
+Message-Id: <7e52a4f784fce9177952cd2e5e73de2bc4b23ddf.1427148003.git.jen@redhat.com>
+In-Reply-To: <b8c4fd0ae93c624609d61e4789afa7daaf50a8f1.1427148003.git.jen@redhat.com>
+References: <b8c4fd0ae93c624609d61e4789afa7daaf50a8f1.1427148003.git.jen@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Wed, 11 Mar 2015 15:11:03 -0500
+Subject: [CHANGE 9/9] spice: make sure we don't overflow ssd->buf
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1426086663-17937-10-git-send-email-kraxel@redhat.com>
+Patchwork-id: 64287
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v4 9/9] spice: make sure we don't overflow ssd->buf
+Bugzilla: 1053039
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+Related spice-only bug.  We have a fixed 16 MB buffer here, being
+presented to the spice-server as qxl video memory in case spice is
+used with a non-qxl card.  It's also used with qxl in vga mode.
+
+When using display resolutions requiring more than 16 MB of memory we
+are going to overflow that buffer.  In theory the guest can write,
+indirectly via spice-server.  The spice-server clears the memory after
+setting a new video mode though, triggering a segfault in the overflow
+case, so qemu crashes before the guest has a chance to do something
+evil.
+
+Fix that by switching to dynamic allocation for the buffer.
+
+CVE-2014-3615
+
+Cc: qemu-stable@nongnu.org
+Cc: secalert@redhat.com
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+(cherry picked from commit ab9509cceabef28071e41bdfa073083859c949a7)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	ui/spice-display.c
+---
+ ui/spice-display.c | 24 +++++++++++++++++-------
+ 1 file changed, 17 insertions(+), 7 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ ui/spice-display.c | 24 +++++++++++++++++-------
+ 1 file changed, 17 insertions(+), 7 deletions(-)
+
+diff --git a/ui/spice-display.c b/ui/spice-display.c
+index 80149fc..f2919f5 100644
+--- a/ui/spice-display.c
++++ b/ui/spice-display.c
+@@ -298,9 +298,23 @@ void qemu_spice_create_host_memslot(SimpleSpiceDisplay *ssd)
+ void qemu_spice_create_host_primary(SimpleSpiceDisplay *ssd)
+ {
+     QXLDevSurfaceCreate surface;
++    uint64_t surface_size;
+ 
+-    dprint(1, "%s: %dx%d\n", __FUNCTION__,
+-           ds_get_width(ssd->ds), ds_get_height(ssd->ds));
++    memset(&surface, 0, sizeof(surface));
++
++    surface_size = (uint64_t) ds_get_width(ssd->ds) *
++        ds_get_height(ssd->ds) * 4;
++    assert(surface_size > 0);
++    assert(surface_size < INT_MAX);
++    if (ssd->bufsize < surface_size) {
++        ssd->bufsize = surface_size;
++        g_free(ssd->buf);
++        ssd->buf = g_malloc(ssd->bufsize);
++    }
++
++    dprint(1, "%s/%d: %ux%u (size %" PRIu64 "/%d)\n", __func__, ssd->qxl.id,
++           ds_get_width(ssd->ds), ds_get_height(ssd->ds),
++           surface_size, ssd->bufsize);
+ 
+     surface.format     = SPICE_SURFACE_FMT_32_xRGB;
+     surface.width      = ds_get_width(ssd->ds);
+@@ -329,8 +343,6 @@ void qemu_spice_display_init_common(SimpleSpiceDisplay *ssd, DisplayState *ds)
+     QTAILQ_INIT(&ssd->updates);
+     ssd->mouse_x = -1;
+     ssd->mouse_y = -1;
+-    ssd->bufsize = (16 * 1024 * 1024);
+-    ssd->buf = qemu_malloc(ssd->bufsize);
+ }
+ 
+ /* display listener callbacks */
+@@ -435,14 +447,12 @@ static void interface_set_mm_time(QXLInstance *sin, uint32_t mm_time)
+ 
+ static void interface_get_init_info(QXLInstance *sin, QXLDevInitInfo *info)
+ {
+-    SimpleSpiceDisplay *ssd = container_of(sin, SimpleSpiceDisplay, qxl);
+-
+     info->memslot_gen_bits = MEMSLOT_GENERATION_BITS;
+     info->memslot_id_bits  = MEMSLOT_SLOT_BITS;
+     info->num_memslots = NUM_MEMSLOTS;
+     info->num_memslots_groups = NUM_MEMSLOTS_GROUPS;
+     info->internal_groupslot_id = 0;
+-    info->qxl_ram_size = ssd->bufsize;
++    info->qxl_ram_size = 16 * 1024 * 1024;
+     info->n_surfaces = NUM_SURFACES;
+ }
+ 
+-- 
+2.1.0
+

@@ -1,0 +1,56 @@
+From a3c426fb769e6623501c86dee75d3956c1eae580 Mon Sep 17 00:00:00 2001
+Message-Id: <a3c426fb769e6623501c86dee75d3956c1eae580.1409965573.git.jen@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 2 Sep 2014 09:22:19 -0500
+Subject: [CHANGE] qxl-render: add more sanity checks
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1409649739-2557-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 60789
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 1/1] qxl-render: add more sanity checks
+Bugzilla: 1095612
+RH-Acked-by: Marcel Apfelbaum <marcel.a@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Eduardo Habkost <ehabkost@redhat.com>
+
+Damn, the dirty rectangle values are signed integers.  So the checks
+added by commit 788fbf042fc6d5aaeab56757e6dad622ac5f0c21 are not good
+enough, we also have to make sure they are not negative.
+
+[ Note: There must be something broken in spice-server so we get
+  negative values in the first place.  Bug opened:
+  https://bugzilla.redhat.com/show_bug.cgi?id=1135372 ]
+
+Cc: qemu-stable@nongnu.org
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+(cherry picked from commit 503b3b33feca818baa4459aba286e54a528e5567)
+---
+ hw/qxl-render.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/qxl-render.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/hw/qxl-render.c b/hw/qxl-render.c
+index a8a5413..d19fbef 100644
+--- a/hw/qxl-render.c
++++ b/hw/qxl-render.c
+@@ -137,7 +137,9 @@ static void qxl_render_update_area_unlocked(PCIQXLDevice *qxl)
+         if (qemu_spice_rect_is_empty(qxl->dirty+i)) {
+             break;
+         }
+-        if (qxl->dirty[i].left > qxl->dirty[i].right ||
++        if (qxl->dirty[i].left < 0 ||
++            qxl->dirty[i].top < 0 ||
++            qxl->dirty[i].left > qxl->dirty[i].right ||
+             qxl->dirty[i].top > qxl->dirty[i].bottom ||
+             qxl->dirty[i].right > qxl->guest_primary.surface.width ||
+             qxl->dirty[i].bottom > qxl->guest_primary.surface.height) {
+-- 
+1.9.3
+

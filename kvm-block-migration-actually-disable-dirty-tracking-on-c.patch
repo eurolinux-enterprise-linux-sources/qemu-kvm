@@ -1,0 +1,60 @@
+From a40b820bb374f60728096a04920cfe7cdb1f49af Mon Sep 17 00:00:00 2001
+Message-Id: <a40b820bb374f60728096a04920cfe7cdb1f49af.1378124219.git.minovotn@redhat.com>
+In-Reply-To: <a0308ac2c5e4658f994145b94cc5c51eae25bff8.1378124219.git.minovotn@redhat.com>
+References: <a0308ac2c5e4658f994145b94cc5c51eae25bff8.1378124219.git.minovotn@redhat.com>
+From: Jeffrey Cody <jcody@redhat.com>
+Date: Thu, 22 Aug 2013 20:05:00 +0200
+Subject: [PATCH 2/3] block-migration: actually disable dirty tracking on
+ cleanup
+
+RH-Author: Jeffrey Cody <jcody@redhat.com>
+Message-id: <ab0620ba38a2dc22e6dcdcb6e40203eca193ee78.1377200909.git.jcody@redhat.com>
+Patchwork-id: 53701
+O-Subject: [RHEL6.5 qemu-kvm PATCH 2/2] block-migration: actually disable dirty tracking on cleanup
+Bugzilla: 994813
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Michal Novotny <minovotn@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Marcelo Tosatti <mtosatti@redhat.com>
+
+Call to set_dirty_tracking() is misplaced.
+
+Signed-off-by: Marcelo Tosatti <mtosatti@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 8f794c557c4b51c7a957d47ef6a2230114bb9e79)
+Signed-off-by: Jeff Cody <jcody@redhat.com>
+---
+ block-migration.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block-migration.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/block-migration.c b/block-migration.c
+index f09d210..1d1ed94 100644
+--- a/block-migration.c
++++ b/block-migration.c
+@@ -389,6 +389,8 @@ static void blk_mig_cleanup(Monitor *mon)
+     BlkMigDevState *bmds;
+     BlkMigBlock *blk;
+ 
++    set_dirty_tracking(0);
++
+     while ((bmds = QSIMPLEQ_FIRST(&block_mig_state.bmds_list)) != NULL) {
+         QSIMPLEQ_REMOVE_HEAD(&block_mig_state.bmds_list, entry);
+         bdrv_set_in_use(bmds->bs, 0);
+@@ -401,8 +403,6 @@ static void blk_mig_cleanup(Monitor *mon)
+         qemu_free(blk);
+     }
+ 
+-    set_dirty_tracking(0);
+-
+     monitor_printf(mon, "\n");
+ }
+ 
+-- 
+1.7.11.7
+

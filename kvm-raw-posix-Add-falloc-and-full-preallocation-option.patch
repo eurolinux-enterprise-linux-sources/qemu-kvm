@@ -1,0 +1,188 @@
+From 197f34f785baf4214f222faba7dc67f0d26135bf Mon Sep 17 00:00:00 2001
+Message-Id: <197f34f785baf4214f222faba7dc67f0d26135bf.1422637807.git.jen@redhat.com>
+In-Reply-To: <d57bff8cf3457c2e855eeca4b18266bf5956270d.1422637807.git.jen@redhat.com>
+References: <d57bff8cf3457c2e855eeca4b18266bf5956270d.1422637807.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Mon, 19 Jan 2015 14:52:06 -0500
+Subject: [CHANGE 05/10] raw-posix: Add falloc and full preallocation option
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1421679130-22714-6-git-send-email-mreitz@redhat.com>
+Patchwork-id: 63365
+O-Subject: [RHEL-6.7 qemu-kvm PATCH 5/9] raw-posix: Add falloc and full preallocation option
+Bugzilla: 1040220
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Hu Tao <hutao@cn.fujitsu.com>
+
+BZ: 1040220
+
+This patch adds a new option preallocation for raw format, and implements
+falloc and full preallocation.
+
+Signed-off-by: Hu Tao <hutao@cn.fujitsu.com>
+Reviewed-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 06247428be8037b3739280f82cb29efe8397695f)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	qemu-doc.texi
+	block/raw-posix.c
+
+The modified section of qemu-doc.texi does not exist downstream (and it
+is not absolutely necessary, because the modifications made upstream are
+exactly the same as those in qemu-img.texi, and those are part of this
+patch).
+
+For block/raw-posix.c, first the option handling is different
+downstream; second, nocow does not exist; third, error message passing
+is different, so some messages are kept and printed (those directly
+related to preallocation) and others are omitted (those where operations
+failed that did exist before (open, truncate, close) but where no
+message was printed); and fourth, total_size in raw_create() is given in
+sectors instead of bytes.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/raw-posix.c | 64 ++++++++++++++++++++++++++++++++++++++++++++++++++-----
+ qemu-img.texi     |  9 ++++++++
+ 2 files changed, 68 insertions(+), 5 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/raw-posix.c | 64 ++++++++++++++++++++++++++++++++++++++++++++++++++-----
+ qemu-img.texi     |  9 ++++++++
+ 2 files changed, 68 insertions(+), 5 deletions(-)
+
+diff --git a/block/raw-posix.c b/block/raw-posix.c
+index bd19cad..f54211a 100644
+--- a/block/raw-posix.c
++++ b/block/raw-posix.c
+@@ -30,6 +30,8 @@
+ #include "compatfd.h"
+ #include <assert.h>
+ #include "block/raw-posix-aio.h"
++#include "qapi/util.h"
++#include "qapi-visit.h"
+ 
+ #ifdef CONFIG_COCOA
+ #include <paths.h>
+@@ -621,11 +623,23 @@ static int raw_create(const char *filename, QEMUOptionParameter *options)
+     int fd;
+     int result = 0;
+     int64_t total_size = 0;
++    PreallocMode prealloc = PREALLOC_MODE_OFF;
++    char *buf = NULL;
++    Error *local_err = NULL;
+ 
+     /* Read out options */
+     while (options && options->name) {
+         if (!strcmp(options->name, BLOCK_OPT_SIZE)) {
+             total_size = options->value.n / BDRV_SECTOR_SIZE;
++        } else if (!strcmp(options->name, BLOCK_OPT_PREALLOC)) {
++            prealloc = qapi_enum_parse(PreallocMode_lookup, options->value.s,
++                                       PREALLOC_MODE_MAX, PREALLOC_MODE_OFF,
++                                       &local_err);
++            if (local_err) {
++                qerror_report_err(local_err);
++                error_free(local_err);
++                return -EINVAL;
++            }
+         }
+         options++;
+     }
+@@ -634,14 +648,49 @@ static int raw_create(const char *filename, QEMUOptionParameter *options)
+               0644);
+     if (fd < 0) {
+         result = -errno;
+-    } else {
+-        if (ftruncate(fd, total_size * BDRV_SECTOR_SIZE) != 0) {
+-            result = -errno;
++        goto out;
++    }
++
++    if (ftruncate(fd, total_size * BDRV_SECTOR_SIZE) != 0) {
++        result = -errno;
++        goto out_close;
++    }
++
++    if (prealloc == PREALLOC_MODE_FALLOC) {
++        /* posix_fallocate() doesn't set errno. */
++        result = -posix_fallocate(fd, 0, total_size * BDRV_SECTOR_SIZE);
++        if (result != 0) {
++            error_report("Could not preallocate data for the new file: %s",
++                         strerror(-result));
+         }
+-        if (close(fd) != 0) {
+-            result = -errno;
++    } else if (prealloc == PREALLOC_MODE_FULL) {
++        buf = g_malloc0(65536);
++        int64_t num = 0, left = total_size * BDRV_SECTOR_SIZE;
++
++        while (left > 0) {
++            num = MIN(left, 65536);
++            result = write(fd, buf, num);
++            if (result < 0) {
++                result = -errno;
++                error_report("Could not write to the new file: %s",
++                             strerror(-result));
++                break;
++            }
++            left -= num;
+         }
++        fsync(fd);
++        g_free(buf);
++    } else if (prealloc != PREALLOC_MODE_OFF) {
++        result = -EINVAL;
++        error_report("Unsupported preallocation mode: %s",
++                     PreallocMode_lookup[prealloc]);
++    }
++
++out_close:
++    if (qemu_close(fd) != 0 && result == 0) {
++        result = -errno;
+     }
++out:
+     return result;
+ }
+ 
+@@ -684,6 +733,11 @@ static QEMUOptionParameter raw_create_options[] = {
+         .type = OPT_SIZE,
+         .help = "Virtual disk size"
+     },
++    {
++        .name = BLOCK_OPT_PREALLOC,
++        .type = OPT_STRING,
++        .help = "Preallocation mode (allowed values: off, falloc, full)"
++    },
+     { NULL }
+ };
+ 
+diff --git a/qemu-img.texi b/qemu-img.texi
+index cc50e13..1511c98 100644
+--- a/qemu-img.texi
++++ b/qemu-img.texi
+@@ -332,6 +332,15 @@ Linux or NTFS on Windows), then only the written sectors will reserve
+ space. Use @code{qemu-img info} to know the real size used by the
+ image or @code{ls -ls} on Unix/Linux.
+ 
++Supported options:
++@table @code
++@item preallocation
++Preallocation mode (allowed values: @code{off}, @code{falloc}, @code{full}).
++@code{falloc} mode preallocates space for image by calling posix_fallocate().
++@code{full} mode preallocates space for image by writing zeros to underlying
++storage.
++@end table
++
+ @item qcow2
+ QEMU image format, the most versatile format. Use it to have smaller
+ images (useful if your filesystem does not supports holes, for example
+-- 
+2.1.0
+

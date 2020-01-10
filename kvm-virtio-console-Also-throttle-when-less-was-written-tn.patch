@@ -1,0 +1,95 @@
+From fa72623b9ec1b63a588e06a1af92e1e12dc0d6b7 Mon Sep 17 00:00:00 2001
+Message-Id: <fa72623b9ec1b63a588e06a1af92e1e12dc0d6b7.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:29 +0200
+Subject: [PATCH 55/65] virtio-console: Also throttle when less was written
+ then requested
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <7b4a2012d76507e7a4898ba3572b40a06e992bd6.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50833
+O-Subject: [RHEL6.5 qemu-kvm PATCH 55/65] virtio-console: Also throttle when less was written then requested
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Hans de Goede <hdegoede@redhat.com>
+
+This is necessary so that we get properly woken up to write the rest.
+
+This patch also changes the len argument to the have_data callback, to
+avoid doing an unsigned signed comparison.
+
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+Acked-by: Amit Shah <amit.shah@redhat.com>
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit f9fb0532fb0c7155c0616614dc12ecccf93f8afb)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	hw/virtio-console.c
+	hw/virtio-serial.h
+---
+ hw/virtio-console.c | 8 +++++---
+ hw/virtio-serial.h  | 2 +-
+ 2 files changed, 6 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ hw/virtio-console.c | 8 +++++---
+ hw/virtio-serial.h  | 2 +-
+ 2 files changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/hw/virtio-console.c b/hw/virtio-console.c
+index 72fc1b1..b4e5bec 100644
+--- a/hw/virtio-console.c
++++ b/hw/virtio-console.c
+@@ -34,7 +34,8 @@ static gboolean chr_write_unblocked(GIOChannel *chan, GIOCondition cond,
+ }
+ 
+ /* Callback function that's called when the guest sends us data */
+-static ssize_t flush_buf(VirtIOSerialPort *port, const uint8_t *buf, size_t len)
++static ssize_t flush_buf(VirtIOSerialPort *port,
++                         const uint8_t *buf, ssize_t len)
+ {
+     VirtConsole *vcon = DO_UPCAST(VirtConsole, port, port);
+     ssize_t ret;
+@@ -46,7 +47,7 @@ static ssize_t flush_buf(VirtIOSerialPort *port, const uint8_t *buf, size_t len)
+     ret = qemu_chr_fe_write(vcon->chr, buf, len);
+     trace_virtio_console_flush_buf(port->id, len, ret);
+ 
+-    if (ret <= 0) {
++    if (ret < len) {
+         VirtIOSerialPortInfo *info = DO_UPCAST(VirtIOSerialPortInfo, qdev,
+                                                vcon->port.dev.info);
+ 
+@@ -56,7 +57,8 @@ static ssize_t flush_buf(VirtIOSerialPort *port, const uint8_t *buf, size_t len)
+          * we had a finer-grained message, like -EPIPE, we could close
+          * this connection.
+          */
+-        ret = 0;
++        if (ret < 0)
++            ret = 0;
+         if (!info->is_console) {
+             virtio_serial_throttle_port(port, true);
+             qemu_chr_fe_add_watch(vcon->chr, G_IO_OUT, chr_write_unblocked,
+diff --git a/hw/virtio-serial.h b/hw/virtio-serial.h
+index 7aba755..3036958 100644
+--- a/hw/virtio-serial.h
++++ b/hw/virtio-serial.h
+@@ -170,7 +170,7 @@ struct VirtIOSerialPortInfo {
+      * 'len'.  In this case, throttling will be enabled for this port.
+      */
+     ssize_t (*have_data)(VirtIOSerialPort *port, const uint8_t *buf,
+-                         size_t len);
++                         ssize_t len);
+ };
+ 
+ /* Interface to the virtio-serial bus */
+-- 
+1.7.11.7
+

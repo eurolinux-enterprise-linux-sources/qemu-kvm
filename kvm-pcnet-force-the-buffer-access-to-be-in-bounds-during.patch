@@ -1,0 +1,51 @@
+From e2fc16c877a76a954345c392db77e204a057c10a Mon Sep 17 00:00:00 2001
+Message-Id: <e2fc16c877a76a954345c392db77e204a057c10a.1433189248.git.jen@redhat.com>
+In-Reply-To: <87674b2fa1da8f881efb0617acf114e43db1764f.1433189248.git.jen@redhat.com>
+References: <87674b2fa1da8f881efb0617acf114e43db1764f.1433189248.git.jen@redhat.com>
+From: Miroslav Rezanina <mrezanin@redhat.com>
+Date: Mon, 1 Jun 2015 15:20:06 +0200
+Subject: [CHANGE 2/2] pcnet: force the buffer access to be in bounds during tx
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+4096 is the maximum length per TMD and it is also currently the size of
+the relay buffer pcnet driver uses for sending the packet data to QEMU
+for further processing. With packet spanning multiple TMDs it can
+happen that the overall packet size will be bigger than sizeof(buffer),
+which results in memory corruption.
+
+Fix this by only allowing to queue maximum sizeof(buffer) bytes.
+
+This is CVE-2015-3209.
+
+Signed-off-by: Petr Matousek <pmatouse@redhat.com>
+Reported-by: Matt Tait <matttait@google.com>
+Reviewed-by: Peter Maydell <peter.maydell@linaro.org>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/pcnet.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/hw/pcnet.c b/hw/pcnet.c
+index f0a80b0..01dc0b2 100644
+--- a/hw/pcnet.c
++++ b/hw/pcnet.c
+@@ -1258,6 +1258,14 @@ static void pcnet_transmit(PCNetState *s)
+         }
+ 
+         bcnt = 4096 - GET_FIELD(tmd.length, TMDL, BCNT);
++
++        /* if multi-tmd packet outsizes s->buffer then skip it silently.
++           Note: this is not what real hw does */
++        if (s->xmit_pos + bcnt > sizeof(s->buffer)) {
++           s->xmit_pos = -1;
++           goto txdone;
++        }
++
+         s->phys_mem_read(s->dma_opaque, PHYSADDR(s, tmd.tbadr),
+                          s->buffer + s->xmit_pos, bcnt, CSR_BSWP(s));
+         s->xmit_pos += bcnt;
+-- 
+2.1.0
+

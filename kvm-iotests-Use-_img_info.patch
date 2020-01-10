@@ -1,0 +1,298 @@
+From a718cecc05c9017dbe39ad024667967237f32397 Mon Sep 17 00:00:00 2001
+Message-Id: <a718cecc05c9017dbe39ad024667967237f32397.1484162498.git.ymankad@redhat.com>
+In-Reply-To: <6da299cbd22aeea340aaabe3e57b8efc46a477f6.1484162498.git.ymankad@redhat.com>
+References: <6da299cbd22aeea340aaabe3e57b8efc46a477f6.1484162498.git.ymankad@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Mon, 9 Jan 2017 20:21:03 -0500
+Subject: [CHANGE 7/7] iotests: Use _img_info
+To: ymankad@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <20170109202103.28932-8-mreitz@redhat.com>
+Patchwork-id: 73230
+O-Subject: [RHEL-6.9 qemu-kvm PATCH 7/7] iotests: Use _img_info
+Bugzilla: 1405882
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+qemu-img info should only be used directly if the format-specific
+information or the name of the format is relevant (some tests explicitly
+test format-specific information; test 082 uses qcow2-specific settings
+to test the qemu-img interface); otherwise, tests should always use
+_img_info instead.
+
+Test 082 was touched only partially. It does test the qemu-img
+interface; however, its invocations of qemu-img info are not real tests
+but rather verifications, so if format-specific information is not
+important for the test, there is no reason not to use _img_info. In
+contrast to directly invoking qemu-img info, "qcow2" is replaced by
+"IMGFMT"; but as "qcow2" is only mentioned once in test 082 (in
+_supported_fmt), I consider this an improvement.
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Message-id: 1412105489-7681-2-git-send-email-mreitz@redhat.com
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 1b53eab270ee08e61e21c3fcc77e34c4b5484c30)
+
+Conflicts:
+	tests/qemu-iotests/095.out
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ tests/qemu-iotests/070     |  2 +-
+ tests/qemu-iotests/070.out |  5 ++---
+ tests/qemu-iotests/082     | 12 +++++-----
+ tests/qemu-iotests/082.out | 55 ++++++++++------------------------------------
+ tests/qemu-iotests/095     |  4 ++--
+ tests/qemu-iotests/095.out | 10 ++++-----
+ 6 files changed, 26 insertions(+), 62 deletions(-)
+
+diff --git a/tests/qemu-iotests/070 b/tests/qemu-iotests/070
+index ea0dae7..d649ddf 100755
+--- a/tests/qemu-iotests/070
++++ b/tests/qemu-iotests/070
+@@ -77,7 +77,7 @@ _use_sample_img test-disk2vhd.vhdx.bz2
+ 
+ echo
+ echo "=== Verify image created by Disk2VHD can be opened ==="
+-$QEMU_IMG info "$TEST_IMG" 2>&1 | _filter_testdir | _filter_qemu
++_img_info
+ 
+ # success, all done
+ echo "*** done"
+diff --git a/tests/qemu-iotests/070.out b/tests/qemu-iotests/070.out
+index 15f1fc1..ca74383 100644
+--- a/tests/qemu-iotests/070.out
++++ b/tests/qemu-iotests/070.out
+@@ -20,9 +20,8 @@ read 18874368/18874368 bytes at offset 0
+ 18 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+ 
+ === Verify image created by Disk2VHD can be opened ===
+-image: TEST_DIR/test-disk2vhd.vhdx
+-file format: vhdx
++image: TEST_DIR/test-disk2vhd.IMGFMT
++file format: IMGFMT
+ virtual size: 256M (268435456 bytes)
+-disk size: 260M
+ cluster_size: 2097152
+ *** done
+diff --git a/tests/qemu-iotests/082 b/tests/qemu-iotests/082
+index f6eb75f..910b13e 100755
+--- a/tests/qemu-iotests/082
++++ b/tests/qemu-iotests/082
+@@ -56,7 +56,7 @@ echo === create: Options specified more than once ===
+ 
+ # Last -f should win
+ run_qemu_img create -f foo -f $IMGFMT "$TEST_IMG" $size
+-run_qemu_img info "$TEST_IMG"
++_img_info
+ 
+ # Multiple -o should be merged
+ run_qemu_img create -f $IMGFMT -o cluster_size=4k -o lazy_refcounts=on "$TEST_IMG" $size
+@@ -66,7 +66,7 @@ run_qemu_img info "$TEST_IMG"
+ run_qemu_img create -f $IMGFMT -o cluster_size=4k -o lazy_refcounts=on -o cluster_size=8k "$TEST_IMG" $size
+ run_qemu_img info "$TEST_IMG"
+ run_qemu_img create -f $IMGFMT -o cluster_size=4k,cluster_size=8k "$TEST_IMG" $size
+-run_qemu_img info "$TEST_IMG"
++_img_info
+ 
+ echo
+ echo === create: help for -o ===
+@@ -106,11 +106,11 @@ run_qemu_img create -f $IMGFMT "$TEST_IMG" $size
+ 
+ # Last -f should win
+ run_qemu_img convert -f foo -f $IMGFMT "$TEST_IMG" "$TEST_IMG".base
+-run_qemu_img info "$TEST_IMG".base
++TEST_IMG="${TEST_IMG}.base" _img_info
+ 
+ # Last -O should win
+ run_qemu_img convert -O foo -O $IMGFMT "$TEST_IMG" "$TEST_IMG".base
+-run_qemu_img info "$TEST_IMG".base
++TEST_IMG="${TEST_IMG}.base" _img_info
+ 
+ # Multiple -o should be merged
+ run_qemu_img convert -O $IMGFMT -o cluster_size=4k -o lazy_refcounts=on "$TEST_IMG" "$TEST_IMG".base
+@@ -120,7 +120,7 @@ run_qemu_img info "$TEST_IMG".base
+ run_qemu_img convert -O $IMGFMT -o cluster_size=4k -o lazy_refcounts=on -o cluster_size=8k "$TEST_IMG" "$TEST_IMG".base
+ run_qemu_img info "$TEST_IMG".base
+ run_qemu_img convert -O $IMGFMT -o cluster_size=4k,cluster_size=8k "$TEST_IMG" "$TEST_IMG".base
+-run_qemu_img info "$TEST_IMG".base
++TEST_IMG="${TEST_IMG}.base" _img_info
+ 
+ echo
+ echo === convert: help for -o ===
+@@ -167,7 +167,7 @@ run_qemu_img info "$TEST_IMG"
+ run_qemu_img amend -f $IMGFMT -o size=8M -o lazy_refcounts=on -o size=132M "$TEST_IMG"
+ run_qemu_img info "$TEST_IMG"
+ run_qemu_img amend -f $IMGFMT -o size=4M,size=148M "$TEST_IMG"
+-run_qemu_img info "$TEST_IMG"
++_img_info
+ 
+ echo
+ echo === amend: help for -o ===
+diff --git a/tests/qemu-iotests/082.out b/tests/qemu-iotests/082.out
+index 90c21c8..249c5e4 100644
+--- a/tests/qemu-iotests/082.out
++++ b/tests/qemu-iotests/082.out
+@@ -4,16 +4,10 @@ QA output created by 082
+ 
+ Testing: create -f foo -f qcow2 TEST_DIR/t.qcow2 128M
+ Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=134217728 encryption=off cluster_size=65536 lazy_refcounts=off 
+-
+-Testing: info TEST_DIR/t.qcow2
+-image: TEST_DIR/t.qcow2
+-file format: qcow2
++image: TEST_DIR/t.IMGFMT
++file format: IMGFMT
+ virtual size: 128M (134217728 bytes)
+-disk size: 196K
+ cluster_size: 65536
+-Format specific information:
+-    compat: 1.1
+-    lazy refcounts: false
+ 
+ Testing: create -f qcow2 -o cluster_size=4k -o lazy_refcounts=on TEST_DIR/t.qcow2 128M
+ Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=134217728 encryption=off cluster_size=4096 lazy_refcounts=on 
+@@ -43,16 +37,10 @@ Format specific information:
+ 
+ Testing: create -f qcow2 -o cluster_size=4k,cluster_size=8k TEST_DIR/t.qcow2 128M
+ Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=134217728 encryption=off cluster_size=8192 lazy_refcounts=off 
+-
+-Testing: info TEST_DIR/t.qcow2
+-image: TEST_DIR/t.qcow2
+-file format: qcow2
++image: TEST_DIR/t.IMGFMT
++file format: IMGFMT
+ virtual size: 128M (134217728 bytes)
+-disk size: 28K
+ cluster_size: 8192
+-Format specific information:
+-    compat: 1.1
+-    lazy refcounts: false
+ 
+ === create: help for -o ===
+ 
+@@ -188,24 +176,15 @@ Testing: create -f qcow2 TEST_DIR/t.qcow2 128M
+ Formatting 'TEST_DIR/t.qcow2', fmt=qcow2 size=134217728 encryption=off cluster_size=65536 lazy_refcounts=off 
+ 
+ Testing: convert -f foo -f qcow2 TEST_DIR/t.qcow2 TEST_DIR/t.qcow2.base
+-
+-Testing: info TEST_DIR/t.qcow2.base
+-image: TEST_DIR/t.qcow2.base
++image: TEST_DIR/t.IMGFMT.base
+ file format: raw
+ virtual size: 128M (134217728 bytes)
+-disk size: 0
+ 
+ Testing: convert -O foo -O qcow2 TEST_DIR/t.qcow2 TEST_DIR/t.qcow2.base
+-
+-Testing: info TEST_DIR/t.qcow2.base
+-image: TEST_DIR/t.qcow2.base
+-file format: qcow2
++image: TEST_DIR/t.IMGFMT.base
++file format: IMGFMT
+ virtual size: 128M (134217728 bytes)
+-disk size: 196K
+ cluster_size: 65536
+-Format specific information:
+-    compat: 1.1
+-    lazy refcounts: false
+ 
+ Testing: convert -O qcow2 -o cluster_size=4k -o lazy_refcounts=on TEST_DIR/t.qcow2 TEST_DIR/t.qcow2.base
+ 
+@@ -232,16 +211,10 @@ Format specific information:
+     lazy refcounts: true
+ 
+ Testing: convert -O qcow2 -o cluster_size=4k,cluster_size=8k TEST_DIR/t.qcow2 TEST_DIR/t.qcow2.base
+-
+-Testing: info TEST_DIR/t.qcow2.base
+-image: TEST_DIR/t.qcow2.base
+-file format: qcow2
++image: TEST_DIR/t.IMGFMT.base
++file format: IMGFMT
+ virtual size: 128M (134217728 bytes)
+-disk size: 28K
+ cluster_size: 8192
+-Format specific information:
+-    compat: 1.1
+-    lazy refcounts: false
+ 
+ === convert: help for -o ===
+ 
+@@ -410,16 +383,10 @@ Format specific information:
+     lazy refcounts: true
+ 
+ Testing: amend -f qcow2 -o size=4M,size=148M TEST_DIR/t.qcow2
+-
+-Testing: info TEST_DIR/t.qcow2
+-image: TEST_DIR/t.qcow2
+-file format: qcow2
++image: TEST_DIR/t.IMGFMT
++file format: IMGFMT
+ virtual size: 148M (155189248 bytes)
+-disk size: 196K
+ cluster_size: 65536
+-Format specific information:
+-    compat: 1.1
+-    lazy refcounts: true
+ 
+ === amend: help for -o ===
+ 
+diff --git a/tests/qemu-iotests/095 b/tests/qemu-iotests/095
+index cfa4f16..3e5449d 100755
+--- a/tests/qemu-iotests/095
++++ b/tests/qemu-iotests/095
+@@ -60,7 +60,7 @@ _make_test_img -b "${TEST_IMG}.snp1" $size_larger
+ 
+ echo
+ echo "=== Base image info before commit and resize ==="
+-$QEMU_IMG info "${TEST_IMG}.base" | _filter_testdir
++TEST_IMG="${TEST_IMG}.base" _img_info
+ 
+ echo
+ echo === Running QEMU Live Commit Test ===
+@@ -78,7 +78,7 @@ _send_qemu_cmd $h "{ 'execute': '__com.redhat_block-commit',
+ 
+ echo
+ echo "=== Base image info after commit and resize ==="
+-$QEMU_IMG info "${TEST_IMG}.base" | _filter_testdir
++TEST_IMG="${TEST_IMG}.base" _img_info
+ 
+ # success, all done
+ echo "*** done"
+diff --git a/tests/qemu-iotests/095.out b/tests/qemu-iotests/095.out
+index f1a3911..cc86efa 100644
+--- a/tests/qemu-iotests/095.out
++++ b/tests/qemu-iotests/095.out
+@@ -4,10 +4,9 @@ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=104857600 backing_file='TEST_DIR
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=104857600 backing_file='TEST_DIR/t.IMGFMT.snp1' 
+ 
+ === Base image info before commit and resize ===
+-image: TEST_DIR/t.qcow2.base
+-file format: qcow2
++image: TEST_DIR/t.IMGFMT.base
++file format: IMGFMT
+ virtual size: 5.0M (5242880 bytes)
+-disk size: 136K
+ cluster_size: 65536
+ 
+ === Running QEMU Live Commit Test ===
+@@ -17,9 +16,8 @@ cluster_size: 65536
+ {"timestamp": {"seconds":  TIMESTAMP, "microseconds":  TIMESTAMP}, "event": "BLOCK_JOB_COMPLETED", "data": {"device": "test", "len": 104857600, "offset": 104857600, "speed": 0, "type": "commit"}}
+ 
+ === Base image info after commit and resize ===
+-image: TEST_DIR/t.qcow2.base
+-file format: qcow2
++image: TEST_DIR/t.IMGFMT.base
++file format: IMGFMT
+ virtual size: 100M (104857600 bytes)
+-disk size: 136K
+ cluster_size: 65536
+ *** done
+-- 
+2.7.4
+

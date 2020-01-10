@@ -1,0 +1,70 @@
+From eda95bc98497387e6b23e870c95867fa560793c7 Mon Sep 17 00:00:00 2001
+Message-Id: <eda95bc98497387e6b23e870c95867fa560793c7.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:21:47 -0500
+Subject: [CHANGE 04/42] qcow2: Fail write_compressed when overwriting data
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-5-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64469
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 04/39] qcow2: Fail write_compressed when overwriting data
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+BZ: 1129892
+
+qcow2_alloc_compressed_cluster_offset() already fails if the copied flag
+is set, because qcow2_write_compressed() doesn't perform COW as it would
+have to do to allow this.
+
+However, what we really want to check here is whether the cluster is
+allocated or not. With internal snapshots the copied flag may not be set
+on allocated clusters. Check the cluster offset instead.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit b0b6862e5e1a1394e0ab3d5da94ba8b0da8664e2)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2-cluster.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2-cluster.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/block/qcow2-cluster.c b/block/qcow2-cluster.c
+index 7ff8b50..f973b54 100644
+--- a/block/qcow2-cluster.c
++++ b/block/qcow2-cluster.c
+@@ -623,15 +623,14 @@ uint64_t qcow2_alloc_compressed_cluster_offset(BlockDriverState *bs,
+         return 0;
+     }
+ 
++    /* Compression can't overwrite anything. Fail if the cluster was already
++     * allocated. */
+     cluster_offset = be64_to_cpu(l2_table[l2_index]);
+-    if (cluster_offset & QCOW_OFLAG_COPIED) {
++    if (cluster_offset & L2E_OFFSET_MASK) {
+         qcow2_cache_put(bs, s->l2_table_cache, (void**) &l2_table);
+         return 0;
+     }
+ 
+-    if (cluster_offset)
+-        qcow2_free_any_clusters(bs, cluster_offset, 1);
+-
+     cluster_offset = qcow2_alloc_bytes(bs, compressed_size);
+     if (cluster_offset < 0) {
+         qcow2_cache_put(bs, s->l2_table_cache, (void**) &l2_table);
+-- 
+2.1.0
+

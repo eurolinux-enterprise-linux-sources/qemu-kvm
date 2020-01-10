@@ -1,0 +1,66 @@
+From dccf2f253f7944f8f11cfcf1f0fcbbde42c56438 Mon Sep 17 00:00:00 2001
+Message-Id: <dccf2f253f7944f8f11cfcf1f0fcbbde42c56438.1375955382.git.minovotn@redhat.com>
+In-Reply-To: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+References: <7d8ebc793c9bc4b5058ec1189139e7912e209e19.1375955382.git.minovotn@redhat.com>
+From: Alon Levy <alevy@redhat.com>
+Date: Thu, 1 Aug 2013 11:53:31 +0200
+Subject: [PATCH 12/35] libcacard: remove sql: prefix
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Alon Levy <alevy@redhat.com>
+Message-id: <1375358029-12968-13-git-send-email-alevy@redhat.com>
+Patchwork-id: 52902
+O-Subject: [RHEL-6.5 RHEL-6.4.z qemu-kvm v6 12/30] libcacard: remove sql: prefix
+Bugzilla: 917860
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Marc-André Lureau <mlureau@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+From: Marc-André Lureau <mlureau@redhat.com>
+
+For some reason, with sql:/ prefix, the PKCS11 modules are not loaded.
+
+This patch goes on top of Alon smartcard series.
+
+Signed-off-by: Marc-André Lureau <mlureau@redhat.com>
+Reviewed-by: Alon Levy <alevy@redhat.com>
+(cherry picked from commit 667e0b4b6806d53e0b46e29a15d24427ef958c78)
+---
+ libcacard/vcard_emul_nss.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ libcacard/vcard_emul_nss.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/libcacard/vcard_emul_nss.c b/libcacard/vcard_emul_nss.c
+index 3111ecd..57c6ee1 100644
+--- a/libcacard/vcard_emul_nss.c
++++ b/libcacard/vcard_emul_nss.c
+@@ -758,7 +758,7 @@ vcard_emul_init(const VCardEmulOptions *options)
+     if (options->nss_db) {
+         rv = NSS_Init(options->nss_db);
+     } else {
+-        gchar *path, *db;
++        gchar *path;
+ #ifndef _WIN32
+         path = g_strdup("/etc/pki/nssdb");
+ #else
+@@ -770,10 +770,8 @@ vcard_emul_init(const VCardEmulOptions *options)
+         path = g_build_filename(
+             g_get_system_config_dirs()[0], "pki", "nssdb", NULL);
+ #endif
+-        db = g_strdup_printf("sql:%s", path);
+ 
+-        rv = NSS_Init(db);
+-        g_free(db);
++        rv = NSS_Init(path);
+         g_free(path);
+     }
+     if (rv != SECSuccess) {
+-- 
+1.7.11.7
+

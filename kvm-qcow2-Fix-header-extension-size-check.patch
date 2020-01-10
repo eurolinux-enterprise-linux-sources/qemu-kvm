@@ -1,0 +1,103 @@
+From c1339067c6364052ad6e07fcd808e8bd0df2235d Mon Sep 17 00:00:00 2001
+Message-Id: <c1339067c6364052ad6e07fcd808e8bd0df2235d.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:22:20 -0500
+Subject: [CHANGE 37/42] qcow2: Fix header extension size check
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-38-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64501
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 37/39] qcow2: Fix header extension size check
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+BZ: 1129892
+
+After reading the extension header, offset is incremented, but not
+checked against end_offset any more. This way an integer overflow could
+happen when checking whether the extension end is within the allowed
+range, effectively disabling the check.
+
+This patch adds the missing check and a test case for it.
+
+Cc: qemu-stable@nongnu.org
+Reported-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Max Reitz <mreitz@redhat.com>
+Message-id: 1416935562-7760-2-git-send-email-kwolf@redhat.com
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 2ebafc854d109ff09b66fb4dd62c2c53fc29754a)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	block/qcow2.c
+	tests/qemu-iotests/080.out
+
+error_setg() vs. error_report().
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ block/qcow2.c              | 2 +-
+ tests/qemu-iotests/080     | 2 ++
+ tests/qemu-iotests/080.out | 3 +++
+ 3 files changed, 6 insertions(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block/qcow2.c              | 2 +-
+ tests/qemu-iotests/080     | 2 ++
+ tests/qemu-iotests/080.out | 3 +++
+ 3 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/block/qcow2.c b/block/qcow2.c
+index 321aec2..e83e247 100644
+--- a/block/qcow2.c
++++ b/block/qcow2.c
+@@ -115,7 +115,7 @@ static int qcow2_read_extensions(BlockDriverState *bs, uint64_t start_offset,
+ #ifdef DEBUG_EXT
+         printf("ext.magic = 0x%x\n", ext.magic);
+ #endif
+-        if (ext.len > end_offset - offset) {
++        if (offset > end_offset || ext.len > end_offset - offset) {
+             error_report("Header extension too large");
+             return -EINVAL;
+         }
+diff --git a/tests/qemu-iotests/080 b/tests/qemu-iotests/080
+index 3203a45..c5b3875 100755
+--- a/tests/qemu-iotests/080
++++ b/tests/qemu-iotests/080
+@@ -69,6 +69,8 @@ poke_file "$TEST_IMG" "$offset_backing_file_offset" "\xff\xff\xff\xff\xff\xff\xf
+ poke_file "$TEST_IMG" "$offset_ext_magic" "\x12\x34\x56\x78"
+ poke_file "$TEST_IMG" "$offset_ext_size" "\x7f\xff\xff\xff"
+ { $QEMU_IO -c "read 0 512" $TEST_IMG; } 2>&1 | _filter_qemu_io | _filter_testdir
++poke_file "$TEST_IMG" "$offset_backing_file_offset" "\x00\x00\x00\x00\x00\x00\x00\x$(printf %x $offset_ext_size)"
++{ $QEMU_IO -c "read 0 512" $TEST_IMG; } 2>&1 | _filter_qemu_io | _filter_testdir
+ poke_file "$TEST_IMG" "$offset_backing_file_offset" "\x00\x00\x00\x00\x00\x00\x00\x00"
+ { $QEMU_IO -c "read 0 512" $TEST_IMG; } 2>&1 | _filter_qemu_io | _filter_testdir
+ 
+diff --git a/tests/qemu-iotests/080.out b/tests/qemu-iotests/080.out
+index 3fc6745..6b4ee19 100644
+--- a/tests/qemu-iotests/080.out
++++ b/tests/qemu-iotests/080.out
+@@ -8,6 +8,9 @@ no file open, try 'help open'
+ Header extension too large
+ qemu-io: can't open device TEST_DIR/t.qcow2
+ no file open, try 'help open'
++Header extension too large
++qemu-io: can't open device TEST_DIR/t.qcow2
++no file open, try 'help open'
+ 
+ == Huge refcount table size ==
+ Formatting 'TEST_DIR/t.IMGFMT', fmt=IMGFMT size=67108864 
+-- 
+2.1.0
+

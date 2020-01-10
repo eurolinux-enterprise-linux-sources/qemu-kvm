@@ -1,0 +1,71 @@
+From abd97d7a12132b0aab5927d0ce80c4c6aca0fc2d Mon Sep 17 00:00:00 2001
+Message-Id: <abd97d7a12132b0aab5927d0ce80c4c6aca0fc2d.1368098699.git.minovotn@redhat.com>
+In-Reply-To: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+References: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Fri, 5 Apr 2013 19:44:51 +0200
+Subject: [PATCH 12/24] qcow2: Fix L1 write error handling in
+ qcow2_update_snapshot_refcount
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1365191091-25631-13-git-send-email-kwolf@redhat.com>
+Patchwork-id: 50171
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 12/12] qcow2: Fix L1 write error handling in qcow2_update_snapshot_refcount
+Bugzilla: 796011
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+Bugzilla: 796011
+
+It ignored the error code, and at least the 'goto fail' is obvious
+nonsense as it creates an endless loop (if the next attempt doesn't
+magically succeed) and leaves the in-memory L1 table in big-endian
+instead of converting it back.
+
+In error cases, there's no point in writing an updated L1 table, so
+skip this part for them.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit c2b6ff51e4a3ad1f7ec5dbc94970e9778b31d718)
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/qcow2-refcount.c | 14 ++++++++------
+ 1 file changed, 8 insertions(+), 6 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block/qcow2-refcount.c | 14 ++++++++------
+ 1 file changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/block/qcow2-refcount.c b/block/qcow2-refcount.c
+index d898324..30570c9 100644
+--- a/block/qcow2-refcount.c
++++ b/block/qcow2-refcount.c
+@@ -841,14 +841,16 @@ fail:
+         old_refcount_writethrough);
+ 
+     /* Update L1 only if it isn't deleted anyway (addend = -1) */
+-    if (addend >= 0 && l1_modified) {
+-        for(i = 0; i < l1_size; i++)
++    if (ret == 0 && addend >= 0 && l1_modified) {
++        for (i = 0; i < l1_size; i++) {
+             cpu_to_be64s(&l1_table[i]);
+-        if (bdrv_pwrite_sync(bs->file, l1_table_offset, l1_table,
+-                        l1_size2) < 0)
+-            goto fail;
+-        for(i = 0; i < l1_size; i++)
++        }
++
++        ret = bdrv_pwrite_sync(bs->file, l1_table_offset, l1_table, l1_size2);
++
++        for (i = 0; i < l1_size; i++) {
+             be64_to_cpus(&l1_table[i]);
++        }
+     }
+     if (l1_allocated)
+         g_free(l1_table);
+-- 
+1.7.11.7
+

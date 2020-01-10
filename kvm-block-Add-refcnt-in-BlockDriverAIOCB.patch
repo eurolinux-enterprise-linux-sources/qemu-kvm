@@ -1,0 +1,87 @@
+From f206a7c26cc7c379ee6cb0b69738f8082a2cdf61 Mon Sep 17 00:00:00 2001
+Message-Id: <f206a7c26cc7c379ee6cb0b69738f8082a2cdf61.1430330503.git.jen@redhat.com>
+In-Reply-To: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+References: <d0ac017560c13e37ad318c0def2bc917bc5eda21.1430330503.git.jen@redhat.com>
+From: Fam Zheng <famz@redhat.com>
+Date: Fri, 24 Apr 2015 08:44:25 -0500
+Subject: [CHANGE 05/29] block: Add refcnt in BlockDriverAIOCB
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Fam Zheng <famz@redhat.com>
+Message-id: <1429865088-13298-6-git-send-email-famz@redhat.com>
+Patchwork-id: 64906
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v7 05/28] block: Add refcnt in BlockDriverAIOCB
+Bugzilla: 1069519
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+
+This will be useful in synchronous cancel emulation with
+bdrv_aio_cancel_async.
+
+Signed-off-by: Fam Zheng <famz@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit f197fe2b2c77259b6570620f288d905bfa38e2da)
+Signed-off-by: Fam Zheng <famz@redhat.com>
+---
+ block.c    | 12 +++++++++++-
+ qemu-aio.h |  2 ++
+ 2 files changed, 13 insertions(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block.c    | 12 +++++++++++-
+ qemu-aio.h |  2 ++
+ 2 files changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/block.c b/block.c
+index f05f7e2..d6deba2 100644
+--- a/block.c
++++ b/block.c
+@@ -4078,13 +4078,23 @@ void *qemu_aio_get(const AIOCBInfo *aiocb_info, BlockDriverState *bs,
+     acb->bs = bs;
+     acb->cb = cb;
+     acb->opaque = opaque;
++    acb->refcnt = 1;
+     return acb;
+ }
+ 
++void qemu_aio_ref(void *p)
++{
++    BlockDriverAIOCB *acb = p;
++    acb->refcnt++;
++}
++
+ void qemu_aio_release(void *p)
+ {
+     BlockDriverAIOCB *acb = p;
+-    g_slice_free1(acb->aiocb_info->aiocb_size, acb);
++    assert(acb->refcnt > 0);
++    if (--acb->refcnt == 0) {
++        g_slice_free1(acb->aiocb_info->aiocb_size, acb);
++    }
+ }
+ 
+ /**************************************************************/
+diff --git a/qemu-aio.h b/qemu-aio.h
+index 4d2bfa3..b362263 100644
+--- a/qemu-aio.h
++++ b/qemu-aio.h
+@@ -31,11 +31,13 @@ struct BlockDriverAIOCB {
+     BlockDriverState *bs;
+     BlockDriverCompletionFunc *cb;
+     void *opaque;
++    int refcnt;
+ };
+ 
+ void *qemu_aio_get(const AIOCBInfo *pool, BlockDriverState *bs,
+                    BlockDriverCompletionFunc *cb, void *opaque);
+ void qemu_aio_release(void *p);
++void qemu_aio_ref(void *p);
+ 
+ typedef struct AioHandler AioHandler;
+ typedef void IOHandler(void *opaque);
+-- 
+2.1.0
+

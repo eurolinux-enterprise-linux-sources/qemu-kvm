@@ -1,0 +1,74 @@
+From 8f1adb2ba176e2828636668b488c28ad2db4175c Mon Sep 17 00:00:00 2001
+From: Radim Krcmar <rkrcmar@redhat.com>
+Date: Fri, 28 Mar 2014 18:00:07 +0100
+Subject: [PATCH 21/30] x86: fix migration from pre-version 12
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Radim Krcmar <rkrcmar@redhat.com>
+Message-id: <1396029608-8095-2-git-send-email-rkrcmar@redhat.com>
+Patchwork-id: 58276
+O-Subject: [RHEL6.6 qemu-kvm PATCH 1/2] x86: fix migration from pre-version 12
+Bugzilla: 1023268
+RH-Acked-by: Andrew Jones <drjones@redhat.com>
+RH-Acked-by: Eduardo Habkost <ehabkost@redhat.com>
+RH-Acked-by: Igor Mammedov <imammedo@redhat.com>
+
+On KVM, the KVM_SET_XSAVE would be executed with a 0 xstate_bv,
+and not restore anything.
+
+Since FP and SSE data are always valid, set them in xstate_bv at reset
+time.  In fact, that value is the same that KVM_GET_XSAVE returns on
+pre-XSAVE hosts.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Gleb Natapov <gleb@redhat.com>
+(cherry picked from commit c74f41bbcc83d12787ac42f2c74fc2be54e9f222)
+
+Conflicts:
+    target-i386/cpu.h    [context]
+    target-i386/cpuid.c  [context & different file]
+
+Signed-off-by: Radim Krčmář <rkrcmar@redhat.com>
+---
+ target-i386/cpu.h   | 4 ++++
+ target-i386/cpuid.c | 1 +
+ 2 files changed, 5 insertions(+)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ target-i386/cpu.h   |    4 ++++
+ target-i386/cpuid.c |    1 +
+ 2 files changed, 5 insertions(+), 0 deletions(-)
+
+diff --git a/target-i386/cpu.h b/target-i386/cpu.h
+index 6387f61..1a265ff 100644
+--- a/target-i386/cpu.h
++++ b/target-i386/cpu.h
+@@ -347,6 +347,10 @@
+ 
+ #define MSR_VM_HSAVE_PA                 0xc0010117
+ 
++#define XSTATE_FP                       1
++#define XSTATE_SSE                      2
++#define XSTATE_YMM                      4
++
+ /* cpuid_features bits */
+ #define CPUID_FP87 (1 << 0)
+ #define CPUID_VME  (1 << 1)
+diff --git a/target-i386/cpuid.c b/target-i386/cpuid.c
+index 0122390..0f4c7a6 100644
+--- a/target-i386/cpuid.c
++++ b/target-i386/cpuid.c
+@@ -1151,6 +1151,7 @@ int cpu_x86_register (CPUX86State *env, const char *cpu_model)
+     env->cpuid_version |= ((def->model & 0xf) << 4) | ((def->model >> 4) << 16);
+     env->cpuid_version |= def->stepping;
+     env->cpuid_features = def->features;
++    env->xstate_bv = XSTATE_FP | XSTATE_SSE;
+     env->pat = 0x0007040600070406ULL;
+     env->cpuid_ext_features = def->ext_features;
+     env->cpuid_ext2_features = def->ext2_features;
+-- 
+1.7.1
+

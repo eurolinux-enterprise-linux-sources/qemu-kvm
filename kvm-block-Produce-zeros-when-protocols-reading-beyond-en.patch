@@ -1,0 +1,108 @@
+From f0d6b82f196bffe17102627696ae3158e476a110 Mon Sep 17 00:00:00 2001
+Message-Id: <f0d6b82f196bffe17102627696ae3158e476a110.1376492227.git.minovotn@redhat.com>
+In-Reply-To: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+References: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+From: Asias He <asias@redhat.com>
+Date: Wed, 14 Aug 2013 10:24:16 +0200
+Subject: [PATCH 15/22] block: Produce zeros when protocols reading beyond end
+ of file
+
+RH-Author: Asias He <asias@redhat.com>
+Message-id: <1376475863-27929-11-git-send-email-asias@redhat.com>
+Patchwork-id: 53397
+O-Subject: [RHEL6.5 qemu-kvm PATCH v4 10/17] block: Produce zeros when protocols reading beyond end of file
+Bugzilla: 848070
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: MORITA Kazutaka <morita.kazutaka@lab.ntt.co.jp>
+
+While Asias is debugging an issue creating qcow2 images on top of
+non-file protocols.  It boils down to this example using NBD:
+
+$ qemu-io -c 'open -g nbd+unix:///?socket=/tmp/nbd.sock' -c 'read -v 0 512'
+
+Notice the open -g option to set bs->growable.  This means you can
+read/write beyond end of file.  Reading beyond end of file is supposed
+to produce zeroes.
+
+We rely on this behavior in qcow2_create2() during qcow2 image
+creation.  We create a new file and then write the qcow2 header
+structure using bdrv_pwrite().  Since QCowHeader is not a multiple of
+sector size, block.c first uses bdrv_read() on the empty file to fetch
+the first sector (should be all zeroes).
+
+Here is the output from the qemu-io NBD example above:
+
+$ qemu-io -c 'open -g nbd+unix:///?socket=/tmp/nbd.sock' -c 'read -v 0 512'
+00000000:  ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab  ................
+00000010:  ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab  ................
+00000020:  ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab  ................
+...
+
+We are not zeroing the buffer!  As a result qcow2 image creation on top
+of protocols is not guaranteed to work even when file creation is
+supported by the protocol.
+
+Signed-off-by: MORITA Kazutaka <morita.kazutaka@lab.ntt.co.jp>
+Signed-off-by: Asias He <asias@redhat.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 4146b46c42e0989cb5842e04d88ab6ccb1713a48)
+
+Use qemu_iovec_memset_skip(qiov, 0, bytes, offset * BDRV_SECTOR_SIZE)
+instead of qemu_iovec_memset(qiov, offset * BDRV_SECTOR_SIZE, 0, bytes)
+in RHEL6.
+---
+ block.c | 30 +++++++++++++++++++++++++++++-
+ 1 file changed, 29 insertions(+), 1 deletion(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ block.c | 30 +++++++++++++++++++++++++++++-
+ 1 file changed, 29 insertions(+), 1 deletion(-)
+
+diff --git a/block.c b/block.c
+index 2aa6e34..5c5e9f7 100644
+--- a/block.c
++++ b/block.c
+@@ -2163,7 +2163,35 @@ static int coroutine_fn bdrv_co_do_readv(BlockDriverState *bs,
+         }
+     }
+ 
+-    ret = drv->bdrv_co_readv(bs, sector_num, nb_sectors, qiov);
++    if (!bs->growable) {
++        ret = drv->bdrv_co_readv(bs, sector_num, nb_sectors, qiov);
++    } else {
++        /* Read zeros after EOF of growable BDSes */
++        int64_t len, total_sectors, max_nb_sectors;
++
++        len = bdrv_getlength(bs);
++        if (len < 0) {
++            ret = len;
++            goto out;
++        }
++
++        total_sectors = len >> BDRV_SECTOR_BITS;
++        max_nb_sectors = MAX(0, total_sectors - sector_num);
++        if (max_nb_sectors > 0) {
++            ret = drv->bdrv_co_readv(bs, sector_num,
++                                     MIN(nb_sectors, max_nb_sectors), qiov);
++        } else {
++            ret = 0;
++        }
++
++        /* Reading beyond end of file is supposed to produce zeroes */
++        if (ret == 0 && total_sectors < sector_num + nb_sectors) {
++            uint64_t offset = MAX(0, total_sectors - sector_num);
++            uint64_t bytes = (sector_num + nb_sectors - offset) *
++                              BDRV_SECTOR_SIZE;
++            qemu_iovec_memset_skip(qiov, 0, bytes, offset * BDRV_SECTOR_SIZE);
++        }
++    }
+ 
+ out:
+     tracked_request_end(&req);
+-- 
+1.7.11.7
+

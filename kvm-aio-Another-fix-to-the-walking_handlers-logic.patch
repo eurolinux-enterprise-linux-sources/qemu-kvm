@@ -1,0 +1,84 @@
+From 4bf69b81e757f82cb235e4187baba28f2c7bcb1d Mon Sep 17 00:00:00 2001
+Message-Id: <4bf69b81e757f82cb235e4187baba28f2c7bcb1d.1376492227.git.minovotn@redhat.com>
+In-Reply-To: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+References: <276ddced7c9181cce17d0ff9eb080f99dcfe0ac3.1376492227.git.minovotn@redhat.com>
+From: Asias He <asias@redhat.com>
+Date: Wed, 14 Aug 2013 10:24:08 +0200
+Subject: [PATCH 07/22] aio: Another fix to the walking_handlers logic
+
+RH-Author: Asias He <asias@redhat.com>
+Message-id: <1376475863-27929-3-git-send-email-asias@redhat.com>
+Patchwork-id: 53389
+O-Subject: [RHEL6.5 qemu-kvm PATCH v4 02/17] aio: Another fix to the walking_handlers logic
+Bugzilla: 848070
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+
+From: Paolo Bonzini <pbonzini@redhat.com>
+
+The AIO dispatch loop will call QLIST_REMOVE and g_free even if there
+are other pending calls to qemu_aio_wait outside the current one.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Bharata B Rao <bharata@linux.vnet.ibm.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+
+(cherry picked from commit 2db2bfc0ccac5fd68dbf0ceb70fbc372c5d8a8c7)
+
+Conflicts:
+  aio.c
+
+  Does not auto-merge.  The actual diff changes are identical though.
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+---
+ aio.c | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ aio.c | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/aio.c b/aio.c
+index 681c37c..784e882 100644
+--- a/aio.c
++++ b/aio.c
+@@ -194,14 +194,14 @@ void qemu_aio_wait(void)
+ 
+         /* if we have any readable fds, dispatch event */
+         if (ret > 0) {
+-            walking_handlers++;
+-
+             /* we have to walk very carefully in case
+              * qemu_aio_set_fd_handler is called while we're walking */
+             node = QLIST_FIRST(&aio_handlers);
+             while (node) {
+                 AioHandler *tmp;
+ 
++                walking_handlers++;
++
+                 if (!node->deleted &&
+                     FD_ISSET(node->fd, &rdfds) &&
+                     node->io_read) {
+@@ -216,13 +216,13 @@ void qemu_aio_wait(void)
+                 tmp = node;
+                 node = QLIST_NEXT(node, node);
+ 
+-                if (tmp->deleted) {
++                walking_handlers--;
++
++                if (!walking_handlers && tmp->deleted) {
+                     QLIST_REMOVE(tmp, node);
+                     qemu_free(tmp);
+                 }
+             }
+-
+-            walking_handlers--;
+         }
+     } while (ret == 0);
+ }
+-- 
+1.7.11.7
+

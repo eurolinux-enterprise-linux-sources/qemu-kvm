@@ -1,0 +1,213 @@
+From 2ea93c4fb633a6e6f529ec6eb772178b6ec392f2 Mon Sep 17 00:00:00 2001
+Message-Id: <2ea93c4fb633a6e6f529ec6eb772178b6ec392f2.1368111914.git.minovotn@redhat.com>
+In-Reply-To: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+References: <405603258af5154387bea676be1f904b6713f6ae.1368111913.git.minovotn@redhat.com>
+From: Amit Shah <amit.shah@redhat.com>
+Date: Wed, 24 Apr 2013 08:18:02 +0200
+Subject: [PATCH 28/65] qemu-char: rename qemu_chr_event to qemu_chr_be_event
+ and make it public
+
+RH-Author: Amit Shah <amit.shah@redhat.com>
+Message-id: <4bd4556616caf1c5b23580075bd608fa697cc0bc.1366724981.git.amit.shah@redhat.com>
+Patchwork-id: 50806
+O-Subject: [RHEL6.5 qemu-kvm PATCH 28/65] qemu-char: rename qemu_chr_event to qemu_chr_be_event and make it public
+Bugzilla: 909059
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Hans de Goede <hdegoede@redhat.com>
+
+Rename qemu_chr_event to qemu_chr_be_event, since it is only to be
+called by backends and make it public so that it can be used by chardev
+code which lives outside of qemu-char.c
+
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit a425d23f8fad482f7792745036896eb2f72330de)
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+
+Conflicts:
+	qemu-char.c
+
+Signed-off-by: Amit Shah <amit.shah@redhat.com>
+---
+ qemu-char.c       | 26 +++++++++++++-------------
+ qemu-char.h       | 11 ++++++++++-
+ spice-qemu-char.c |  4 ++--
+ 3 files changed, 25 insertions(+), 16 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-char.c       | 26 +++++++++++++-------------
+ qemu-char.h       | 11 ++++++++++-
+ spice-qemu-char.c |  4 ++--
+ 3 files changed, 25 insertions(+), 16 deletions(-)
+
+diff --git a/qemu-char.c b/qemu-char.c
+index 48a58c5..f116671 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -107,7 +107,7 @@
+ static QTAILQ_HEAD(CharDriverStateHead, CharDriverState) chardevs =
+     QTAILQ_HEAD_INITIALIZER(chardevs);
+ 
+-void qemu_chr_event(CharDriverState *s, int event)
++void qemu_chr_be_event(CharDriverState *s, int event)
+ {
+     /* Keep track if the char device is open */
+     switch (event) {
+@@ -127,7 +127,7 @@ void qemu_chr_event(CharDriverState *s, int event)
+ static void qemu_chr_generic_open_bh(void *opaque)
+ {
+     CharDriverState *s = opaque;
+-    qemu_chr_event(s, CHR_EVENT_OPENED);
++    qemu_chr_be_event(s, CHR_EVENT_OPENED);
+     qemu_bh_delete(s->bh);
+     s->bh = NULL;
+ }
+@@ -358,7 +358,7 @@ static int mux_proc_byte(CharDriverState *chr, MuxDriver *d, int ch)
+             }
+             break;
+         case 'b':
+-            qemu_chr_event(chr, CHR_EVENT_BREAK);
++            qemu_chr_be_event(chr, CHR_EVENT_BREAK);
+             break;
+         case 'c':
+             /* Switch to the next registered device */
+@@ -578,7 +578,7 @@ static void fd_chr_read(void *opaque)
+     if (size == 0) {
+         /* FD has been closed. Remove it from the active list.  */
+         qemu_set_fd_handler2(s->fd_in, NULL, NULL, NULL, NULL);
+-        qemu_chr_event(chr, CHR_EVENT_CLOSED);
++        qemu_chr_be_event(chr, CHR_EVENT_CLOSED);
+         return;
+     }
+     if (size > 0) {
+@@ -611,7 +611,7 @@ static void fd_chr_close(struct CharDriverState *chr)
+     }
+ 
+     qemu_free(s);
+-    qemu_chr_event(chr, CHR_EVENT_CLOSED);
++    qemu_chr_be_event(chr, CHR_EVENT_CLOSED);
+ }
+ 
+ /* open a character device to a unix fd */
+@@ -707,7 +707,7 @@ static void stdio_read(void *opaque)
+     if (size == 0) {
+         /* stdin has been closed. Remove it from the active list.  */
+         qemu_set_fd_handler2(0, NULL, NULL, NULL, NULL);
+-        qemu_chr_event(chr, CHR_EVENT_CLOSED);
++        qemu_chr_be_event(chr, CHR_EVENT_CLOSED);
+         return;
+     }
+     if (size > 0) {
+@@ -966,7 +966,7 @@ static void pty_chr_close(struct CharDriverState *chr)
+     qemu_del_timer(s->timer);
+     qemu_free_timer(s->timer);
+     qemu_free(s);
+-    qemu_chr_event(chr, CHR_EVENT_CLOSED);
++    qemu_chr_be_event(chr, CHR_EVENT_CLOSED);
+ }
+ 
+ static CharDriverState *qemu_chr_open_pty(QemuOpts *opts)
+@@ -1344,7 +1344,7 @@ static void pp_close(CharDriverState *chr)
+     ioctl(fd, PPRELEASE);
+     close(fd);
+     qemu_free(drv);
+-    qemu_chr_event(chr, CHR_EVENT_CLOSED);
++    qemu_chr_be_event(chr, CHR_EVENT_CLOSED);
+ }
+ 
+ static CharDriverState *qemu_chr_open_pp(QemuOpts *opts)
+@@ -1474,7 +1474,7 @@ static void win_chr_close(CharDriverState *chr)
+     else
+         qemu_del_polling_cb(win_chr_poll, chr);
+ 
+-    qemu_chr_event(chr, CHR_EVENT_CLOSED);
++    qemu_chr_be_event(chr, CHR_EVENT_CLOSED);
+ }
+ 
+ static int win_chr_init(CharDriverState *chr, const char *filename)
+@@ -1865,7 +1865,7 @@ static void udp_chr_close(CharDriverState *chr)
+         closesocket(s->fd);
+     }
+     qemu_free(s);
+-    qemu_chr_event(chr, CHR_EVENT_CLOSED);
++    qemu_chr_be_event(chr, CHR_EVENT_CLOSED);
+ }
+ 
+ static CharDriverState *qemu_chr_open_udp(QemuOpts *opts)
+@@ -1967,7 +1967,7 @@ static void tcp_chr_process_IAC_bytes(CharDriverState *chr,
+             } else {
+                 if ((unsigned char)buf[i] == IAC_BREAK && s->do_telnetopt == 2) {
+                     /* Handle IAC break commands by sending a serial break */
+-                    qemu_chr_event(chr, CHR_EVENT_BREAK);
++                    qemu_chr_be_event(chr, CHR_EVENT_BREAK);
+                     s->do_telnetopt++;
+                 }
+                 s->do_telnetopt++;
+@@ -2075,7 +2075,7 @@ static void tcp_chr_read(void *opaque)
+         qemu_set_fd_handler(s->fd, NULL, NULL, NULL);
+         closesocket(s->fd);
+         s->fd = -1;
+-        qemu_chr_event(chr, CHR_EVENT_CLOSED);
++        qemu_chr_be_event(chr, CHR_EVENT_CLOSED);
+     } else if (size > 0) {
+         if (s->do_telnetopt)
+             tcp_chr_process_IAC_bytes(chr, s, buf, &size);
+@@ -2168,7 +2168,7 @@ static void tcp_chr_close(CharDriverState *chr)
+         closesocket(s->listen_fd);
+     }
+     qemu_free(s);
+-    qemu_chr_event(chr, CHR_EVENT_CLOSED);
++    qemu_chr_be_event(chr, CHR_EVENT_CLOSED);
+ }
+ 
+ static CharDriverState *qemu_chr_open_socket(QemuOpts *opts)
+diff --git a/qemu-char.h b/qemu-char.h
+index 4c6c05d..f09d658 100644
+--- a/qemu-char.h
++++ b/qemu-char.h
+@@ -212,12 +212,21 @@ int qemu_chr_be_can_write(CharDriverState *s);
+  */
+ void qemu_chr_be_write(CharDriverState *s, uint8_t *buf, int len);
+ 
++
++/**
++ * @qemu_chr_be_event:
++ *
++ * Send an event from the back end to the front end.
++ *
++ * @event the event to send
++ */
++void qemu_chr_be_event(CharDriverState *s, int event);
++
+ void qemu_chr_add_handlers(CharDriverState *s,
+                            IOCanRWHandler *fd_can_read,
+                            IOReadHandler *fd_read,
+                            IOEventHandler *fd_event,
+                            void *opaque);
+-void qemu_chr_event(CharDriverState *s, int event);
+ void qemu_chr_generic_open(CharDriverState *s);
+ void qemu_chr_accept_input(CharDriverState *s);
+ void qemu_chr_info_print(Monitor *mon, const QObject *ret_data);
+diff --git a/spice-qemu-char.c b/spice-qemu-char.c
+index c58583c..9f7ae32 100644
+--- a/spice-qemu-char.c
++++ b/spice-qemu-char.c
+@@ -90,8 +90,8 @@ static void vmc_state(SpiceCharDeviceInstance *sin, int connected)
+         return;
+     }
+ 
+-    qemu_chr_event(scd->chr,
+-                   connected ? CHR_EVENT_OPENED : CHR_EVENT_CLOSED);
++    qemu_chr_be_event(scd->chr,
++                      connected ? CHR_EVENT_OPENED : CHR_EVENT_CLOSED);
+ }
+ 
+ static SpiceCharDeviceInterface vmc_interface = {
+-- 
+1.7.11.7
+

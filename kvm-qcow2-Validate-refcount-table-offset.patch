@@ -1,0 +1,92 @@
+From fbc42aa5b864d8c71e7ad1aab05c39a759cb7d3d Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Tue, 25 Mar 2014 11:45:22 +0100
+Subject: [PATCH 04/48] qcow2: Validate refcount table offset
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1395744364-16049-4-git-send-email-kwolf@redhat.com>
+Patchwork-id: n/a
+O-Subject: [EMBARGOED RHEL-6.6/6.5.z qemu-kvm PATCH v2 03/45]
+           qcow2: Validate refcount table offset
+Bugzilla: 1079518
+RH-Acked-by: Max Reitz <mreitz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Jeff Cody <jcody@redhat.com>
+
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1079518
+Upstream status: Series embargoed
+
+The end of the refcount table must not exceed INT64_MAX so that integer
+overflows are avoided.
+
+Also check for misaligned refcount table. Such images are invalid and
+probably the result of data corruption. Error out to avoid further
+corruption.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+
+Conflicts:
+	block/qcow2.c
+	tests/qemu-iotests/080
+	tests/qemu-iotests/080.out
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ block/qcow2.c |   34 ++++++++++++++++++++++++++++++++++
+ 1 files changed, 34 insertions(+), 0 deletions(-)
+
+diff --git a/block/qcow2.c b/block/qcow2.c
+index 0cd126e..9ff85a2 100644
+--- a/block/qcow2.c
++++ b/block/qcow2.c
+@@ -167,6 +167,32 @@ static void cleanup_unknown_header_ext(BlockDriverState *bs)
+     }
+ }
+ 
++static int validate_table_offset(BlockDriverState *bs, uint64_t offset,
++                                 uint64_t entries, size_t entry_len)
++{
++    BDRVQcowState *s = bs->opaque;
++    uint64_t size;
++
++    /* Use signed INT64_MAX as the maximum even for uint64_t header fields,
++     * because values will be passed to qemu functions taking int64_t. */
++    if (entries > INT64_MAX / entry_len) {
++        return -EINVAL;
++    }
++
++    size = entries * entry_len;
++
++    if (INT64_MAX - size < offset) {
++        return -EINVAL;
++    }
++
++    /* Tables must be cluster aligned */
++    if (offset & (s->cluster_size - 1)) {
++        return -EINVAL;
++    }
++
++    return 0;
++}
++
+ static int qcow2_open(BlockDriverState *bs, int flags)
+ {
+     BDRVQcowState *s = bs->opaque;
+@@ -240,6 +266,14 @@ static int qcow2_open(BlockDriverState *bs, int flags)
+         goto fail;
+     }
+ 
++    ret = validate_table_offset(bs, s->refcount_table_offset,
++                                s->refcount_table_size, sizeof(uint64_t));
++    if (ret < 0) {
++         qerror_report(QERR_GENERIC_ERROR,
++                      "Invalid reference count table offset");
++        goto fail;
++    }
++
+     s->snapshots_offset = header.snapshots_offset;
+     s->nb_snapshots = header.nb_snapshots;
+ 
+-- 
+1.7.1
+

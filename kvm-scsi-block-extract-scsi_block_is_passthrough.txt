@@ -1,0 +1,92 @@
+From c0d46d0f9e6d3c8dca6ae5af294e02d1b87ea9b7 Mon Sep 17 00:00:00 2001
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Tue, 29 Jul 2014 15:40:01 -0500
+Subject: [CHANGE 09/11] scsi-block: extract scsi_block_is_passthrough
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: <1406648403-29466-4-git-send-email-pbonzini@redhat.com>
+Patchwork-id: 60304
+O-Subject: [RHEL 6.6/6.5.z qemu-kvm PATCH 3/5] scsi-block: extract scsi_block_is_passthrough
+Bugzilla: 1113917
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+
+This will be used for both scsi_block_new_request and the scsi-block
+implementation of parse_cdb.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+(cherry picked from commit 592c3b289f77ee77d5bff25cb19326cc7f22a532)
+Signed-off-by: jen <jen@redhat.com>
+
+Conflicts:
+	hw/scsi-disk.c [RHEL has scsi_disk_reqops, upstream split them
+        in scsi_disk_emulate_reqops and scsi_disk_dma_reqops]
+---
+ hw/scsi-disk.c | 32 +++++++++++++++++++++++---------
+ 1 file changed, 23 insertions(+), 9 deletions(-)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ hw/scsi-disk.c | 32 +++++++++++++++++++++++---------
+ 1 file changed, 23 insertions(+), 9 deletions(-)
+
+diff --git a/hw/scsi-disk.c b/hw/scsi-disk.c
+index 9eaf5b9..35565fa 100644
+--- a/hw/scsi-disk.c
++++ b/hw/scsi-disk.c
+@@ -1903,12 +1903,8 @@ static int scsi_block_initfn(SCSIDevice *dev)
+     return scsi_initfn(&s->qdev);
+ }
+ 
+-static SCSIRequest *scsi_block_new_request(SCSIDevice *d, uint32_t tag,
+-                                           uint32_t lun, uint8_t *buf,
+-                                           void *hba_private)
++static bool scsi_block_is_passthrough(SCSIDiskState *s, uint8_t *buf)
+ {
+-    SCSIDiskState *s = DO_UPCAST(SCSIDiskState, qdev, d);
+-
+     switch (buf[0]) {
+     case READ_6:
+     case READ_10:
+@@ -1944,13 +1940,31 @@ static SCSIRequest *scsi_block_new_request(SCSIDevice *d, uint32_t tag,
+          * just make scsi-block operate the same as scsi-generic for them.
+          */
+         if (s->qdev.type != TYPE_ROM) {
+-            return scsi_req_alloc(&scsi_disk_reqops, &s->qdev, tag, lun,
+-                                  hba_private);
++            return false;
+         }
++        break;
++
++    default:
++        break;
+     }
+ 
+-    return scsi_req_alloc(&scsi_generic_req_ops, &s->qdev, tag, lun,
+-                          hba_private);
++    return true;
++}
++
++
++static SCSIRequest *scsi_block_new_request(SCSIDevice *d, uint32_t tag,
++                                           uint32_t lun, uint8_t *buf,
++                                           void *hba_private)
++{
++    SCSIDiskState *s = DO_UPCAST(SCSIDiskState, qdev, d);
++
++    if (scsi_block_is_passthrough(s, buf)) {
++        return scsi_req_alloc(&scsi_generic_req_ops, &s->qdev, tag, lun,
++                              hba_private);
++    } else {
++        return scsi_req_alloc(&scsi_disk_reqops, &s->qdev, tag, lun,
++                              hba_private);
++    }
+ }
+ #endif
+ 
+-- 
+1.9.3
+

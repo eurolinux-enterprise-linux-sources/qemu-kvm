@@ -1,0 +1,71 @@
+From 253ae11e53f58d668ec79ae4c3838c9fe0e7ef83 Mon Sep 17 00:00:00 2001
+Message-Id: <253ae11e53f58d668ec79ae4c3838c9fe0e7ef83.1426386477.git.jen@redhat.com>
+In-Reply-To: <14201b27b990437d029fa5df186141d8b0bcd739.1426386477.git.jen@redhat.com>
+References: <14201b27b990437d029fa5df186141d8b0bcd739.1426386477.git.jen@redhat.com>
+From: Juan Quintela <quintela@redhat.com>
+Date: Wed, 11 Mar 2015 10:21:08 -0400
+Subject: [CHANGE 2/2] fix bz 1196970
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Juan Quintela <quintela@redhat.com>
+Message-id: <1426069268-1971-1-git-send-email-quintela@redhat.com>
+Patchwork-id: 64279
+O-Subject: [PATCH qemu-kvm RHEL6.7] fix bz 1196970
+Bugzilla: 1196970
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+RH-Acked-by: Amit Shah <amit.shah@redhat.com>
+
+We introduced buffered_flush() to return errors in
+a7d80288808ba34439889fbafef902a5a593d784.
+
+All callers of migrate_fd_cleanup():
+- don't care about the error returned (because it call it from an error
+  place) and have setup a migration status according to the issue
+- we are on MIG_STATE_COMPLETE, were we care, but we check the ouptut of
+  migrate_fd_cleaunp() there, and set an error if there is one error.
+
+We didn't detect this before because this code patch only matters for
+cancellation.  If we are in success, there are no errors, and if we are
+in one error, and we have already set the status as an error, it don't
+matter if we set the status as an error twice.
+
+All callers audited and tested.
+
+Long explanation:
+- why are we calling close twice?  Well, once it is called from the
+  migrate_cancel command, and the other for the migration callback to
+  clean its fact.
+
+Upstream is synchronous, so they don't face this issue.
+
+bugzilla: 1196970
+brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=8838597
+
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+---
+ migration.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ migration.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/migration.c b/migration.c
+index 0fba529..e5d8f9c 100644
+--- a/migration.c
++++ b/migration.c
+@@ -365,8 +365,6 @@ int migrate_fd_cleanup(FdMigrationState *s)
+         DPRINTF("closing file\n");
+         if (qemu_fclose(s->file) != 0) {
+             ret = -1;
+-            s->state = MIG_STATE_ERROR;
+-            trace_migrate_set_state(MIG_STATE_ERROR);
+         }
+         s->file = NULL;
+     } else {
+-- 
+2.1.0
+

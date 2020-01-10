@@ -1,0 +1,52 @@
+From 17046268bac087f2575a7b9166c1c089d2f1cab7 Mon Sep 17 00:00:00 2001
+Message-Id: <17046268bac087f2575a7b9166c1c089d2f1cab7.1380205090.git.minovotn@redhat.com>
+From: Gerd Hoffmann <kraxel@redhat.com>
+Date: Tue, 10 Sep 2013 11:17:25 +0200
+Subject: [PATCH 1/3] usb-host: remove message
+
+RH-Author: Gerd Hoffmann <kraxel@redhat.com>
+Message-id: <1378811845-29404-2-git-send-email-kraxel@redhat.com>
+Patchwork-id: 54263
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 1/1] usb-host: remove message
+Bugzilla: 1003771
+RH-Acked-by: Hans de Goede <hdegoede@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+It's informational only, not needed and can be confusing.
+
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+---
+ usb-linux.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ usb-linux.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/usb-linux.c b/usb-linux.c
+index 2a411ac..b5b5032 100644
+--- a/usb-linux.c
++++ b/usb-linux.c
+@@ -1787,7 +1787,6 @@ static int usb_host_scan(void *opaque, USBScanFunc *func)
+     FILE *f = NULL;
+     DIR *dir = NULL;
+     int ret = 0;
+-    const char *fs_type[] = {"unknown", "proc", "dev", "sys"};
+     char devpath[PATH_MAX];
+ 
+     /* only check the host once */
+@@ -1834,9 +1833,6 @@ static int usb_host_scan(void *opaque, USBScanFunc *func)
+         /* the module setting (used later for opening devices) */
+         usb_host_device_path = qemu_mallocz(strlen(devpath)+1);
+         strcpy(usb_host_device_path, devpath);
+-        if (mon)
+-            monitor_printf(mon, "husb: using %s file-system with %s\n",
+-                           fs_type[usb_fs_type], usb_host_device_path);
+     }
+ 
+     switch (usb_fs_type) {
+-- 
+1.7.11.7
+

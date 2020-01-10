@@ -1,0 +1,58 @@
+From 8882fa504ac65c8c4e404caab02bada291075504 Mon Sep 17 00:00:00 2001
+Message-Id: <8882fa504ac65c8c4e404caab02bada291075504.1367947969.git.minovotn@redhat.com>
+In-Reply-To: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+References: <707b9b97153063374d2530e72c49b1499fc21af9.1367947969.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Mon, 6 May 2013 19:27:32 +0200
+Subject: [PATCH 067/114] qemu-ga: Remove unreachable code after g_error
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1367868499-27603-10-git-send-email-lersek@redhat.com>
+Patchwork-id: 51108
+O-Subject: [RHEL-6.5 qemu-kvm PATCH v2 09/56] qemu-ga: Remove unreachable code after g_error
+Bugzilla: 952873
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+
+From: Stefan Weil <sw@weilnetz.de>
+
+Report from smatch:
+qemu-ga.c:117 register_signal_handlers(11) info: ignoring unreachable code.
+qemu-ga.c:122 register_signal_handlers(16) info: ignoring unreachable code.
+
+g_error calls abort which terminates the program.
+
+Signed-off-by: Stefan Weil <sw@weilnetz.de>
+Signed-off-by: Stefan Hajnoczi <stefanha@gmail.com>
+(cherry picked from commit b548828862d3bf7214b7ef9cb361356b153b89c9)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qemu-ga.c |    2 --
+ 1 files changed, 0 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-ga.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/qemu-ga.c b/qemu-ga.c
+index 73f660c..7402415 100644
+--- a/qemu-ga.c
++++ b/qemu-ga.c
+@@ -114,12 +114,10 @@ static gboolean register_signal_handlers(void)
+     ret = sigaction(SIGINT, &sigact, NULL);
+     if (ret == -1) {
+         g_error("error configuring signal handler: %s", strerror(errno));
+-        return false;
+     }
+     ret = sigaction(SIGTERM, &sigact, NULL);
+     if (ret == -1) {
+         g_error("error configuring signal handler: %s", strerror(errno));
+-        return false;
+     }
+ 
+     return true;
+-- 
+1.7.11.7
+

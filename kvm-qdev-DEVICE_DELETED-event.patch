@@ -1,0 +1,143 @@
+From 2e0ff1213c233fa7e8a2c61b4dc31b3f2ba1a9a6 Mon Sep 17 00:00:00 2001
+From: Marcel Apfelbaum <marcel.a@redhat.com>
+Date: Thu, 5 Jun 2014 07:09:17 +0200
+Subject: [PATCH 8/9] qdev: DEVICE_DELETED event
+
+RH-Author: Marcel Apfelbaum <marcel.a@redhat.com>
+Message-id: <1401952158-29608-7-git-send-email-marcel.a@redhat.com>
+Patchwork-id: 59152
+O-Subject: [RHEL-6.6 qemu-kvm PATCH v5 6/7] qdev: DEVICE_DELETED event
+Bugzilla: 813748
+RH-Acked-by: Michael S. Tsirkin <mst@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+libvirt has a long-standing bug: when removing the device,
+it can request removal but does not know when the
+removal completes. Add an event so we can fix this in a robust way.
+
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+(cherry picked from commit 0402a5d65ec004df5345d1f736e2ddaa7aee6665)
+
+Conflicts:
+	QMP/qmp-events.txt
+	hw/qdev.c
+	include/monitor/monitor.h
+	monitor.c
+	qapi-schema.json
+
+RHEL6 Notes:
+ - conflicts:
+   - include/monitor/monitor.h: file still in root folder; events missing.
+   - QMP/qmp-events.txt, monitor.c: not the same event before DEVICE_DELETED.
+   - hw/qdev.c: includes mismatch; upstream added the event to device_unparent,
+     but in RHEL6.6 was added to qdev_free.
+   - qapi-schema.json: dropped the hunk because it was a comment for
+     "device_del" that is not yet backported.
+
+Signed-off-by: Marcel Apfelbaum <marcel.a@redhat.com>
+---
+ QMP/qmp-events.txt | 16 ++++++++++++++++
+ hw/qdev.c          | 11 +++++++++++
+ monitor.c          |  1 +
+ monitor.h          |  1 +
+ 4 files changed, 29 insertions(+)
+
+Signed-off-by: jen <jen@redhat.com>
+---
+ QMP/qmp-events.txt |   16 ++++++++++++++++
+ hw/qdev.c          |   11 +++++++++++
+ monitor.c          |    1 +
+ monitor.h          |    1 +
+ 4 files changed, 29 insertions(+), 0 deletions(-)
+
+diff --git a/QMP/qmp-events.txt b/QMP/qmp-events.txt
+index 55bfd46..b6694d9 100644
+--- a/QMP/qmp-events.txt
++++ b/QMP/qmp-events.txt
+@@ -63,6 +63,22 @@ Example:
+ Note: If action is "stop", a STOP event will eventually follow the
+ BLOCK_IO_ERROR event.
+ 
++DEVICE_DELETED
++-----------------
++
++Emitted whenever the device removal completion is acknowledged
++by the guest.
++At this point, it's safe to reuse the specified device ID.
++Device removal can be initiated by the guest or by HMP/QMP commands.
++
++Data:
++
++- "device": device name (json-string, optional)
++
++{ "event": "DEVICE_DELETED",
++  "data": { "device": "virtio-net-pci-0" },
++  "timestamp": { "seconds": 1265044230, "microseconds": 450486 } }
++
+ DEVICE_TRAY_MOVED
+ -----------------
+ 
+diff --git a/hw/qdev.c b/hw/qdev.c
+index 3a27892..b4102ca 100644
+--- a/hw/qdev.c
++++ b/hw/qdev.c
+@@ -28,6 +28,7 @@
+ #include "net.h"
+ #include "qdev.h"
+ #include "sysemu.h"
++#include "qjson.h"
+ #include "monitor.h"
+ 
+ static int qdev_hotplug = 0;
+@@ -354,6 +355,13 @@ void qdev_free(DeviceState *dev)
+ {
+     BusState *bus;
+     Property *prop;
++    QObject *event_data;
++
++    if (dev->id) {
++        event_data = qobject_from_jsonf("{ 'device': %s }", dev->id);
++    } else {
++        event_data = qobject_from_jsonf("{ }");
++    }
+ 
+     if (dev->state == DEV_STATE_INITIALIZED) {
+         while (dev->num_child_bus) {
+@@ -374,6 +382,9 @@ void qdev_free(DeviceState *dev)
+             prop->info->free(dev, prop);
+         }
+     }
++
++    monitor_protocol_event(QEVENT_DEVICE_DELETED, event_data);
++    qobject_decref(event_data);
+     qemu_free(dev);
+ }
+ 
+diff --git a/monitor.c b/monitor.c
+index 6a947b9..4a3375e 100644
+--- a/monitor.c
++++ b/monitor.c
+@@ -501,6 +501,7 @@ static const char *monitor_event_names[] = {
+     [QEVENT_RH_SPICE_DISCONNECTED] = RFQDN_REDHAT "SPICE_DISCONNECTED",
+     [QEVENT_BLOCK_JOB_COMPLETED] = "BLOCK_JOB_COMPLETED",
+     [QEVENT_BLOCK_JOB_CANCELLED] = "BLOCK_JOB_CANCELLED",
++    [QEVENT_DEVICE_DELETED] = "DEVICE_DELETED",
+     [QEVENT_DEVICE_TRAY_MOVED] = "DEVICE_TRAY_MOVED",
+     [QEVENT_SUSPEND] = "SUSPEND",
+     [QEVENT_SUSPEND_DISK] = "SUSPEND_DISK",
+diff --git a/monitor.h b/monitor.h
+index 4b4a00d..06ea58c 100644
+--- a/monitor.h
++++ b/monitor.h
+@@ -39,6 +39,7 @@ typedef enum MonitorEvent {
+     QEVENT_SPICE_CONNECTED,
+     QEVENT_SPICE_INITIALIZED,
+     QEVENT_SPICE_DISCONNECTED,
++    QEVENT_DEVICE_DELETED,
+     QEVENT_DEVICE_TRAY_MOVED,
+     QEVENT_BLOCK_JOB_COMPLETED,
+     QEVENT_BLOCK_JOB_CANCELLED,
+-- 
+1.7.1
+

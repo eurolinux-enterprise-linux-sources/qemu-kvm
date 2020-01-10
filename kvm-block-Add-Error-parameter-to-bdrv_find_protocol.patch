@@ -1,0 +1,260 @@
+From 6f5be4df5e31d585f927f6280d6fd1112ee97a20 Mon Sep 17 00:00:00 2001
+Message-Id: <6f5be4df5e31d585f927f6280d6fd1112ee97a20.1428549624.git.jen@redhat.com>
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Wed, 25 Mar 2015 13:27:48 -0500
+Subject: [CHANGE 1/7] block: Add Error parameter to bdrv_find_protocol()
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Kevin Wolf <kwolf@redhat.com>
+Message-id: <1427290068-8016-1-git-send-email-kwolf@redhat.com>
+Patchwork-id: 64590
+O-Subject: [RHEL-6.7 qemu-kvm PATCH] block: Add Error parameter to bdrv_find_protocol()
+Bugzilla: 1202666
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Max Reitz <mreitz@redhat.com>
+
+The argument given to bdrv_find_protocol() is just a file name, which
+makes it difficult for the caller to reconstruct what protocol
+bdrv_find_protocol() was hoping to find. This patch adds an Error
+parameter to that function to solve this issue.
+
+Suggested-by: Eric Blake <eblake@redhat.com>
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Message-id: 1423162705-32065-4-git-send-email-mreitz@redhat.com
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit b65a5e12a4136b20f9d06675d597b52d64ac903c)
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+
+Conflicts:
+	block.c
+	block/sheepdog.c
+	include/block/block.h
+	qemu-img.c
+
+RHEL 6: Pass errp = NULL for the callers that exist only in downstream.
+They already have usable error messages. This backport is only meant to
+improve callers that use strerror(ENOENT) instead of more specific
+messages.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=1202666
+Brew: http://brewweb.devel.redhat.com/brew/taskinfo?taskID=8902590
+
+=== git-backport-diff output ===
+
+Key:
+[----] : patches are identical
+[####] : number of functional differences between upstream/downstream
+patch
+[down] : patch is downstream-only
+The flags [FC] indicate (F)unctional and (C)ontextual differences,
+respectively
+
+001/1:[0042] [FC] 'block: Add Error parameter to bdrv_find_protocol()'
+
+=== git-compile-check output ===
+
+Performing a test compile on 1 patches
+
+1/1: compiling: 08a1673: block: Add Error parameter to
+bdrv_find_protocol()
+
+All patches in rhel6/master..HEAD compiled successfully!
+---
+ block.c                    | 15 ++++++++++-----
+ block.h                    |  3 ++-
+ block/qcow2.c              |  2 +-
+ blockdev.c                 |  4 ++--
+ qemu-img.c                 | 12 ++++++++----
+ tests/qemu-iotests/051.out |  4 ++--
+ 6 files changed, 25 insertions(+), 15 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ block.c                    | 15 ++++++++++-----
+ block.h                    |  3 ++-
+ block/qcow2.c              |  2 +-
+ blockdev.c                 |  4 ++--
+ qemu-img.c                 | 12 ++++++++----
+ tests/qemu-iotests/051.out |  4 ++--
+ 6 files changed, 25 insertions(+), 15 deletions(-)
+
+diff --git a/block.c b/block.c
+index d22a5d1..524569e 100644
+--- a/block.c
++++ b/block.c
+@@ -391,7 +391,7 @@ int bdrv_create_file(const char* filename, QEMUOptionParameter *options)
+ {
+     BlockDriver *drv;
+ 
+-    drv = bdrv_find_protocol(filename);
++    drv = bdrv_find_protocol(filename, NULL);
+     if (drv == NULL) {
+         drv = bdrv_find_format("file");
+     }
+@@ -452,7 +452,8 @@ static BlockDriver *find_hdev_driver(const char *filename)
+     return drv;
+ }
+ 
+-BlockDriver *bdrv_find_protocol(const char *filename)
++BlockDriver *bdrv_find_protocol(const char *filename,
++                                Error **errp)
+ {
+     BlockDriver *drv1;
+     char protocol[128];
+@@ -489,6 +490,8 @@ BlockDriver *bdrv_find_protocol(const char *filename)
+             return drv1;
+         }
+     }
++
++    error_setg(errp, "Unknown protocol '%s'", protocol);
+     return NULL;
+ }
+ 
+@@ -705,10 +708,13 @@ int bdrv_file_open(BlockDriverState **pbs, const char *filename, int flags)
+ {
+     BlockDriverState *bs;
+     BlockDriver *drv;
++    Error *local_err = NULL;
+     int ret;
+ 
+-    drv = bdrv_find_protocol(filename);
++    drv = bdrv_find_protocol(filename, &local_err);
+     if (!drv) {
++        qerror_report_err(local_err);
++        error_free(local_err);
+         return -ENOENT;
+     }
+ 
+@@ -4509,9 +4515,8 @@ void bdrv_img_create(const char *filename, const char *fmt,
+         return;
+     }
+ 
+-    proto_drv = bdrv_find_protocol(filename);
++    proto_drv = bdrv_find_protocol(filename, errp);
+     if (!proto_drv) {
+-        error_setg(errp, "Unknown protocol '%s'", filename);
+         return;
+     }
+ 
+diff --git a/block.h b/block.h
+index 5c055f4..f9d48c3 100644
+--- a/block.h
++++ b/block.h
+@@ -158,7 +158,8 @@ void bdrv_io_limits_disable(BlockDriverState *bs);
+ 
+ void bdrv_init(void);
+ void bdrv_init_with_whitelist(void);
+-BlockDriver *bdrv_find_protocol(const char *filename);
++BlockDriver *bdrv_find_protocol(const char *filename,
++                                Error **errp);
+ BlockDriver *bdrv_find_format(const char *format_name);
+ BlockDriver *bdrv_find_whitelisted_format(const char *format_name,
+                                           bool readonly);
+diff --git a/block/qcow2.c b/block/qcow2.c
+index 16b8e05..aaf2729 100644
+--- a/block/qcow2.c
++++ b/block/qcow2.c
+@@ -1112,7 +1112,7 @@ static int qcow2_create2(const char *filename, int64_t total_size,
+         nreftablee = align_offset(nreftablee, cluster_size / sizeof(uint64_t));
+         meta_size += nreftablee * sizeof(uint64_t);
+ 
+-        file_drv = bdrv_find_protocol(filename);
++        file_drv = bdrv_find_protocol(filename, NULL);
+         if (file_drv == NULL) {
+             error_report("Could not find protocol for file '%s'", filename);
+             return -ENOENT;
+diff --git a/blockdev.c b/blockdev.c
+index f5e4cc2..aa72843 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -796,7 +796,7 @@ void qmp___com_redhat_drive_reopen(const char *device, const char *new_image_fil
+         drv = NULL;
+     }
+ 
+-    proto_drv = bdrv_find_protocol(new_image_file);
++    proto_drv = bdrv_find_protocol(new_image_file, NULL);
+     if (!proto_drv) {
+         error_set(errp, QERR_INVALID_BLOCK_FORMAT, format);
+         return;
+@@ -1024,7 +1024,7 @@ void qmp_transaction(BlockdevActionList *dev_list, Error **errp)
+         }
+         flags = states->old_bs->open_flags;
+ 
+-        proto_drv = bdrv_find_protocol(new_image_file);
++        proto_drv = bdrv_find_protocol(new_image_file, NULL);
+         if (!proto_drv) {
+             error_set(errp, QERR_INVALID_BLOCK_FORMAT, format);
+             goto delete_and_fail;
+diff --git a/qemu-img.c b/qemu-img.c
+index 96bb5ce..c986213 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -214,6 +214,7 @@ static int print_block_option_help(const char *filename, const char *fmt)
+ {
+     BlockDriver *drv, *proto_drv;
+     QEMUOptionParameter *create_options = NULL;
++    Error *local_err = NULL;
+ 
+     /* Find driver and parse its options */
+     drv = bdrv_find_format(fmt);
+@@ -226,9 +227,10 @@ static int print_block_option_help(const char *filename, const char *fmt)
+                                               drv->create_options);
+ 
+     if (filename) {
+-        proto_drv = bdrv_find_protocol(filename);
++        proto_drv = bdrv_find_protocol(filename, &local_err);
+         if (!proto_drv) {
+-            error_report("Unknown protocol '%s'", filename);
++            qerror_report_err(local_err);
++            error_free(local_err);
+             return 1;
+         }
+         create_options = append_option_parameters(create_options,
+@@ -1119,6 +1121,7 @@ static int img_convert(int argc, char **argv)
+     QEMUOptionParameter *out_baseimg_param;
+     char *options = NULL;
+     int min_sparse = 8; /* Need at least 4k of zeros for sparse detection */
++    Error *local_err = NULL;
+ 
+     fmt = NULL;
+     out_fmt = "raw";
+@@ -1252,9 +1255,10 @@ static int img_convert(int argc, char **argv)
+         goto out;
+     }
+ 
+-    proto_drv = bdrv_find_protocol(out_filename);
++    proto_drv = bdrv_find_protocol(out_filename, &local_err);
+     if (!proto_drv) {
+-        error_report("Unknown protocol '%s'", out_filename);
++        qerror_report_err(local_err);
++        error_free(local_err);
+         ret = -1;
+         goto out;
+     }
+diff --git a/tests/qemu-iotests/051.out b/tests/qemu-iotests/051.out
+index d7b0f50..54a45a5 100644
+--- a/tests/qemu-iotests/051.out
++++ b/tests/qemu-iotests/051.out
+@@ -279,10 +279,10 @@ QEMU_PROG: -drive foo=bar: could not open disk image ide0-hd0: Must specify eith
+ === Parsing protocol from file name ===
+ 
+ Testing: -hda foo:bar
+-QEMU_PROG: -hda foo:bar: could not open disk image foo:bar: Unknown protocol
++QEMU_PROG: -hda foo:bar: could not open disk image foo:bar: Unknown protocol 'foo'
+ 
+ Testing: -drive file=foo:bar
+-QEMU_PROG: -drive file=foo:bar: could not open disk image foo:bar: Unknown protocol
++QEMU_PROG: -drive file=foo:bar: could not open disk image foo:bar: Unknown protocol 'foo'
+ 
+ Testing: -drive file.filename=foo:bar
+ QEMU_PROG: -drive file.filename=foo:bar: could not open disk image ide0-hd0: Could not open 'foo:bar': No such file or directory
+-- 
+2.1.0
+

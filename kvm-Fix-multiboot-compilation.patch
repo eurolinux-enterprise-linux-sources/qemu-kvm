@@ -1,0 +1,128 @@
+From b65ec4efb64ddd9a06fa273237213d8b716b012e Mon Sep 17 00:00:00 2001
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Fri, 11 Jul 2014 07:37:29 +0200
+Subject: [PATCH 34/44] Fix multiboot compilation
+
+RH-Author: Paolo Bonzini <pbonzini@redhat.com>
+Message-id: <1405064249-17652-1-git-send-email-pbonzini@redhat.com>
+Patchwork-id: 59770
+O-Subject: [RHEL 6.6 qemu-kvm PATCH] Fix multiboot compilation
+Bugzilla: 820641
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Igor Mammedov <imammedo@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+
+From: Alexander Graf <agraf@suse.de>
+
+Bugzilla: 820641
+
+Brew build: 7692734
+
+Commit dd4239d6574ca41c94fc0d0f77ddc728510ffc57 broke multiboot. It replaced the
+instruction "rep insb (%dx), %es:(%edi)" by the binary output of
+"addr32 rep insb (%dx), %es:(%di)".
+
+Linuxboot calls the respective helper function in a code16 section. So the
+original instruction was automatically translated to its "addr32" equivalent.
+For multiboot, we're running in code32 so gcc didn't add the "addr32" which
+breaks the instruction.
+
+This patch splits that helper function in one which uses addr32 and one which
+does not, so everyone's happy.
+
+The good news is that nobody probably cared so far. The bundled multiboot.bin
+binary was built before the change and is thus correct.
+
+[Paolo: qemu-kvm's makefile rebuilds multiboot.bin, hence the bug]
+
+Please also put this patch into -stable.
+
+Signed-off-by: Alexander Graf <agraf@suse.de>
+Signed-off-by: Aurelien Jarno <aurelien@aurel32.net>
+(cherry picked from commit 590bf491a49670843ee902c47f7ab1de5e9acd06)
+---
+ pc-bios/optionrom/linuxboot.S |  8 ++++----
+ pc-bios/optionrom/optionrom.h | 32 ++++++++++++++++++++++++--------
+ 2 files changed, 28 insertions(+), 12 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ pc-bios/optionrom/linuxboot.S |    8 ++++----
+ pc-bios/optionrom/optionrom.h |   32 ++++++++++++++++++++++++--------
+ 2 files changed, 28 insertions(+), 12 deletions(-)
+
+diff --git a/pc-bios/optionrom/linuxboot.S b/pc-bios/optionrom/linuxboot.S
+index 8aebe51..c109363 100644
+--- a/pc-bios/optionrom/linuxboot.S
++++ b/pc-bios/optionrom/linuxboot.S
+@@ -106,10 +106,10 @@ copy_kernel:
+ 	/* We're now running in 16-bit CS, but 32-bit ES! */
+ 
+ 	/* Load kernel and initrd */
+-	read_fw_blob(FW_CFG_KERNEL)
+-	read_fw_blob(FW_CFG_INITRD)
+-	read_fw_blob(FW_CFG_CMDLINE)
+-	read_fw_blob(FW_CFG_SETUP)
++	read_fw_blob_addr32(FW_CFG_KERNEL)
++	read_fw_blob_addr32(FW_CFG_INITRD)
++	read_fw_blob_addr32(FW_CFG_CMDLINE)
++	read_fw_blob_addr32(FW_CFG_SETUP)
+ 
+ 	/* And now jump into Linux! */
+ 	mov		$0, %eax
+diff --git a/pc-bios/optionrom/optionrom.h b/pc-bios/optionrom/optionrom.h
+index 4dcb906..fbdd48a 100644
+--- a/pc-bios/optionrom/optionrom.h
++++ b/pc-bios/optionrom/optionrom.h
+@@ -50,13 +50,7 @@
+ 	bswap		%eax
+ .endm
+ 
+-/*
+- * Read a blob from the fw_cfg device.
+- * Requires _ADDR, _SIZE and _DATA values for the parameter.
+- *
+- * Clobbers:	%eax, %edx, %es, %ecx, %edi
+- */
+-#define read_fw_blob(var)				\
++#define read_fw_blob_pre(var)				\
+ 	read_fw		var ## _ADDR;			\
+ 	mov		%eax, %edi;			\
+ 	read_fw		var ## _SIZE;			\
+@@ -65,10 +59,32 @@
+ 	mov		$BIOS_CFG_IOPORT_CFG, %edx;	\
+ 	outw		%ax, (%dx);			\
+ 	mov		$BIOS_CFG_IOPORT_DATA, %dx;	\
+-	cld;						\
++	cld
++
++/*
++ * Read a blob from the fw_cfg device.
++ * Requires _ADDR, _SIZE and _DATA values for the parameter.
++ *
++ * Clobbers:	%eax, %edx, %es, %ecx, %edi
++ */
++#define read_fw_blob(var)				\
++	read_fw_blob_pre(var);				\
+ 	/* old as(1) doesn't like this insn so emit the bytes instead: \
+ 	rep insb	(%dx), %es:(%edi);		\
+ 	*/						\
++	.dc.b		0xf3,0x6c
++
++/*
++ * Read a blob from the fw_cfg device in forced addr32 mode.
++ * Requires _ADDR, _SIZE and _DATA values for the parameter.
++ *
++ * Clobbers:	%eax, %edx, %es, %ecx, %edi
++ */
++#define read_fw_blob_addr32(var)				\
++	read_fw_blob_pre(var);				\
++	/* old as(1) doesn't like this insn so emit the bytes instead: \
++	addr32 rep insb	(%dx), %es:(%edi);		\
++	*/						\
+ 	.dc.b		0x67,0xf3,0x6c
+ 
+ #define OPTION_ROM_START					\
+-- 
+1.7.1
+

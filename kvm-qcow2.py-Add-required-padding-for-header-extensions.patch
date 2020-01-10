@@ -1,0 +1,61 @@
+From 4a216b32a21e002fa6cdebcdcea5293845df20e0 Mon Sep 17 00:00:00 2001
+Message-Id: <4a216b32a21e002fa6cdebcdcea5293845df20e0.1429902956.git.jen@redhat.com>
+In-Reply-To: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+References: <67968bc615637394c3ef7dfefa360dab90f33d5d.1429902956.git.jen@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Wed, 18 Mar 2015 19:22:21 -0500
+Subject: [CHANGE 38/42] qcow2.py: Add required padding for header extensions
+To: rhvirt-patches@redhat.com,
+    jen@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1426706542-30384-39-git-send-email-mreitz@redhat.com>
+Patchwork-id: 64502
+O-Subject: [RHEL-6.7 qemu-kvm PATCH v2 38/39] qcow2.py: Add required padding for header extensions
+Bugzilla: 1129892
+RH-Acked-by: Jeffrey Cody <jcody@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+
+From: Kevin Wolf <kwolf@redhat.com>
+
+BZ: 1129892
+
+The qcow2 specification requires that the header extension data be
+padded to round up the extension size to the next multiple of 8 bytes.
+
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Reviewed-by: Max Reitz <mreitz@redhat.com>
+Message-id: 1416935562-7760-3-git-send-email-kwolf@redhat.com
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 8884dd1bbc5ce42cd657ffcbef3a477443468974)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ tests/qemu-iotests/qcow2.py | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ tests/qemu-iotests/qcow2.py | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/tests/qemu-iotests/qcow2.py b/tests/qemu-iotests/qcow2.py
+index 2058596..9cc4cf7 100755
+--- a/tests/qemu-iotests/qcow2.py
++++ b/tests/qemu-iotests/qcow2.py
+@@ -7,6 +7,10 @@ import string
+ class QcowHeaderExtension:
+ 
+     def __init__(self, magic, length, data):
++        if length % 8 != 0:
++            padding = 8 - (length % 8)
++            data += "\0" * padding
++
+         self.magic  = magic
+         self.length = length
+         self.data   = data
+-- 
+2.1.0
+

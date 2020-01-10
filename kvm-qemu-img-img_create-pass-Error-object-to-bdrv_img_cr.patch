@@ -1,0 +1,65 @@
+From 60eb35766a23d9f1fdfe97eb095396f75fb6e817 Mon Sep 17 00:00:00 2001
+Message-Id: <60eb35766a23d9f1fdfe97eb095396f75fb6e817.1368098699.git.minovotn@redhat.com>
+In-Reply-To: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+References: <618a4b91ddb04b21f9dc0c1defe7693fb7cc1748.1368098699.git.minovotn@redhat.com>
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Thu, 18 Apr 2013 19:04:41 +0200
+Subject: [PATCH 17/24] qemu-img: img_create(): pass Error object to
+ bdrv_img_create()
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1366311884-18091-3-git-send-email-lersek@redhat.com>
+Patchwork-id: 50690
+O-Subject: [RHEL-6.5 qemu-kvm PATCH 2/5] qemu-img: img_create(): pass Error object to bdrv_img_create()
+Bugzilla: 877240
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+
+From: Luiz Capitulino <lcapitulino@redhat.com>
+
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 9b37525a7dbc4f5eef0023fc92716259a3d94612)
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ qemu-img.c |   11 +++++++++--
+ 1 files changed, 9 insertions(+), 2 deletions(-)
+
+Signed-off-by: Michal Novotny <minovotn@redhat.com>
+---
+ qemu-img.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/qemu-img.c b/qemu-img.c
+index df76127..fcf63f0 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -328,6 +328,7 @@ static int img_create(int argc, char **argv)
+     const char *filename;
+     const char *base_filename = NULL;
+     char *options = NULL;
++    Error *local_err = NULL;
+ 
+     for(;;) {
+         c = getopt(argc, argv, "F:b:f:he6o:");
+@@ -387,8 +388,14 @@ static int img_create(int argc, char **argv)
+         goto out;
+     }
+ 
+-    ret = bdrv_img_create(filename, fmt, base_filename, base_fmt,
+-                          options, img_size, BDRV_O_FLAGS, NULL);
++    bdrv_img_create(filename, fmt, base_filename, base_fmt,
++                    options, img_size, BDRV_O_FLAGS, &local_err);
++    if (error_is_set(&local_err)) {
++        error_report("%s", error_get_pretty(local_err));
++        error_free(local_err);
++        ret = -1;
++    }
++
+ out:
+     if (ret) {
+         return 1;
+-- 
+1.7.11.7
+

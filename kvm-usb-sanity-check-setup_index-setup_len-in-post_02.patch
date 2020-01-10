@@ -1,0 +1,58 @@
+From b6841d36205013ccadf933a48c21ab0d5f4a9cfa Mon Sep 17 00:00:00 2001
+From: Michael S. Tsirkin <mst@redhat.com>
+Date: Sun, 11 May 2014 15:35:00 -0500
+Subject: [PATCH 12/20] usb: sanity check setup_index+setup_len in post_load
+
+RH-Author: Michael S. Tsirkin <mst@redhat.com>
+Message-id: <1399822420-8632-3-git-send-email-mst@redhat.com>
+Patchwork-id: 58786
+O-Subject: [PATCH qemu-kvm RHEL6.6 2/2] usb: sanity check setup_index+setup_len in post_load
+Bugzilla: 1096117
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Juan Quintela <quintela@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+CVE-2013-4541
+
+s->setup_len and s->setup_index are fed into usb_packet_copy as
+size/offset into s->data_buf, it's possible for invalid state to exploit
+this to load arbitrary data.
+
+setup_len and setup_index should be checked to make sure
+they are not negative.
+
+Cc: Gerd Hoffmann <kraxel@redhat.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+Reviewed-by: Gerd Hoffmann <kraxel@redhat.com>
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+(cherry picked from commit 9f8e9895c504149d7048e9fc5eb5cbb34b16e49a)
+
+Bugzilla: 1096117
+
+---
+ hw/usb-bus.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ hw/usb-bus.c |    4 +++-
+ 1 files changed, 3 insertions(+), 1 deletions(-)
+
+diff --git a/hw/usb-bus.c b/hw/usb-bus.c
+index 9299d5e..5bed692 100644
+--- a/hw/usb-bus.c
++++ b/hw/usb-bus.c
+@@ -35,7 +35,9 @@ static int usb_device_post_load(void *opaque, int version_id)
+     } else {
+         dev->attached = 1;
+     }
+-    if (dev->setup_index >= sizeof(dev->data_buf) ||
++    if (dev->setup_index < 0 ||
++        dev->setup_len < 0 ||
++        dev->setup_index >= sizeof(dev->data_buf) ||
+         dev->setup_len >= sizeof(dev->data_buf)) {
+         return -EINVAL;
+     }
+-- 
+1.7.1
+

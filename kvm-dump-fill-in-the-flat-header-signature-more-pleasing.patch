@@ -1,0 +1,55 @@
+From 40f622787b1f8b198f3c46f0a6d8acc0706f8bb9 Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Tue, 17 Jun 2014 13:11:42 +0200
+Subject: [PATCH 02/44] dump: fill in the flat header signature more pleasingly to the eye
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1403010708-7504-3-git-send-email-lersek@redhat.com>
+Patchwork-id: 59252
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 2/8] dump: fill in the flat header signature more pleasingly to the eye
+Bugzilla: 1102659
+RH-Acked-by: Luiz Capitulino <lcapitulino@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert (git) <dgilbert@redhat.com>
+RH-Acked-by: Markus Armbruster <armbru@redhat.com>
+
+The "mh.signature" array field has size 16, and is zeroed by the preceding
+memset(). MAKEDUMPFILE_SIGNATURE expands to a string literal with string
+length 12 (size 13). There's no need to measure the length of
+MAKEDUMPFILE_SIGNATURE at runtime, nor for the extra zero-filling of
+"mh.signature" with strncpy().
+
+Use memcpy() with MIN(sizeof, sizeof) for robustness (which is an integer
+constant expression, evaluable at compile time.)
+
+Approximately-suggested-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Luiz Capitulino <lcapitulino@redhat.com>
+(cherry picked from commit ae3f88f60fb9f42bb3679311c2fbff8e1868ea47)
+---
+ dump.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ dump.c |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/dump.c b/dump.c
+index bb320c1..1ef0a4a 100644
+--- a/dump.c
++++ b/dump.c
+@@ -716,8 +716,8 @@ static int write_start_flat_header(int fd)
+     int ret = 0;
+ 
+     memset(&mh, 0, sizeof(mh));
+-    strncpy(mh.signature, MAKEDUMPFILE_SIGNATURE,
+-            strlen(MAKEDUMPFILE_SIGNATURE));
++    memcpy(mh.signature, MAKEDUMPFILE_SIGNATURE,
++           MIN(sizeof mh.signature, sizeof MAKEDUMPFILE_SIGNATURE));
+ 
+     mh.type = cpu_to_be64(TYPE_FLAT_HEADER);
+     mh.version = cpu_to_be64(VERSION_FLAT_HEADER);
+-- 
+1.7.1
+

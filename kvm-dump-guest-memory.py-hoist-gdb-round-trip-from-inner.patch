@@ -1,0 +1,82 @@
+From e0a55854f62936932d5b08f5b45b0e659b09a173 Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Wed, 19 Mar 2014 19:24:05 -0500
+Subject: [PATCH 05/20] dump-guest-memory.py: hoist gdb round-trip from innermost loop (RHEL only)
+
+RH-Author: Laszlo Ersek <lersek@redhat.com>
+Message-id: <1395257047-25109-6-git-send-email-lersek@redhat.com>
+Patchwork-id: 58149
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 5/7] dump-guest-memory.py: hoist gdb round-trip from innermost loop (RHEL only)
+Bugzilla: 826266
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+RH-Acked-by: Vitaly Kuznetsov <vkuznets@redhat.com>
+RH-Acked-by: Jeff Nelson <jenelson@redhat.com>
+
+Profiling with cProfile reported qemu_get_ram_ptr() as the worst
+performance offender in RHEL-6.
+
+gdb.parse_and_eval() is costly. We used to call it in the innermost loop
+of guest_phys_blocks_append(), via qemu_get_ram_ptr(). Upstream executes
+the loop body in question only a handful of times (due to the more frugal
+MemoryRegion representation), but under RHEL-6 it is run for each page.
+
+Cache the RAM blocks for the loop, saving a heavy-weight round-trip to gdb
+at each page.
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ scripts/dump-guest-memory.py | 23 +++++++++++++++++++----
+ 1 file changed, 19 insertions(+), 4 deletions(-)
+
+Signed-off-by: Jeff E. Nelson <jen@redhat.com>
+---
+ scripts/dump-guest-memory.py |   23 +++++++++++++++++++----
+ 1 files changed, 19 insertions(+), 4 deletions(-)
+
+diff --git a/scripts/dump-guest-memory.py b/scripts/dump-guest-memory.py
+index b8262da..0fe097b 100644
+--- a/scripts/dump-guest-memory.py
++++ b/scripts/dump-guest-memory.py
+@@ -117,19 +117,34 @@ shape and this command should mostly work."""
+             var_p = var[field_str]["le_next"]
+ 
+     def qemu_get_ram_block(self, ram_addr):
+-        ram_blocks = gdb.parse_and_eval("ram_list.blocks")
+-        for block in self.qlist_foreach(ram_blocks, "next"):
+-            if (ram_addr - block["offset"] < block["length"]):
++        for block in self.cached_ram_blocks:
++            if (ram_addr >= block.offset and
++                ram_addr <  block.offset + block.length):
+                 return block
+         raise gdb.GdbError("Bad ram offset %x" % ram_addr)
+ 
+     def qemu_get_ram_ptr(self, ram_addr):
+         block = self.qemu_get_ram_block(ram_addr)
+-        return block["host"] + (ram_addr - block["offset"])
++        return block.host + (ram_addr - block.offset)
++
++    class cached_ram_block:
++        def __init__(self):
++            self.offset = None
++            self.length = None
++            self.host   = None
+ 
+     def guest_phys_blocks_init(self):
+         self.guest_phys_blocks = []
+ 
++        self.cached_ram_blocks = []
++        ram_blocks = gdb.parse_and_eval("ram_list.blocks")
++        for block in self.qlist_foreach(ram_blocks, "next"):
++            blk        = self.cached_ram_block()
++            blk.offset = block["offset"]
++            blk.length = block["length"]
++            blk.host   = block["host"]
++            self.cached_ram_blocks.append(blk)
++
+     def guest_phys_blocks_append(self):
+         print "guest RAM blocks:"
+         print ("target_start     target_end       host_addr        message "
+-- 
+1.7.1
+

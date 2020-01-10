@@ -1,0 +1,59 @@
+From db5db731e4db604b114c526bd0c7614334070fe0 Mon Sep 17 00:00:00 2001
+From: Max Reitz <mreitz@redhat.com>
+Date: Sat, 14 Jun 2014 21:41:58 +0200
+Subject: [PATCH 21/26] qemu-img: Report error even with --oformat=json
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1402782119-29688-3-git-send-email-mreitz@redhat.com>
+Patchwork-id: 59224
+O-Subject: [RHEL-6.6 qemu-kvm PATCH 2/3] qemu-img: Report error even with --oformat=json
+Bugzilla: 1054753
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Kevin Wolf <kwolf@redhat.com>
+RH-Acked-by: Amos Kong <akong@redhat.com>
+
+BZ: 1054753
+
+img_check() should report that the format of the given image does not
+support checks even if JSON output is desired. JSON data is output to
+stdout, as opposed to error messages, which are (in the case of
+qemu-img) printed to stderr. Therefore, it is easy to distinguish
+between the two.
+
+Also, img_info() does already use error_report() for human-readable
+messages even though JSON output is desired (through
+collect_image_info_list()).
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Reviewed-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+(cherry picked from commit 55d492d7602c27cabb605f42e72c755de1c186c1)
+
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+---
+ qemu-img.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+Signed-off-by: Miroslav Rezanina <mrezanin@redhat.com>
+---
+ qemu-img.c |    4 +---
+ 1 files changed, 1 insertions(+), 3 deletions(-)
+
+diff --git a/qemu-img.c b/qemu-img.c
+index 5e38dc8..4bd1b2e 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -569,9 +569,7 @@ static int img_check(int argc, char **argv)
+     ret = collect_image_check(bs, check, filename, fmt, fix);
+ 
+     if (ret == -ENOTSUP) {
+-        if (output_format == OFORMAT_HUMAN) {
+-            error_report("This image format does not support checks");
+-        }
++        error_report("This image format does not support checks");
+         ret = 63;
+         goto fail;
+     }
+-- 
+1.7.1
+

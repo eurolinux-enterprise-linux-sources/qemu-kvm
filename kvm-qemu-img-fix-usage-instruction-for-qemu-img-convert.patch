@@ -1,0 +1,47 @@
+From 6a179eef5da8a1c3bc98847a424fe70f4c4bc63d Mon Sep 17 00:00:00 2001
+Message-Id: <6a179eef5da8a1c3bc98847a424fe70f4c4bc63d.1477598874.git.ymankad@redhat.com>
+In-Reply-To: <ddf5944bcc06f57d62aac4d33075fb5b1eb1cb22.1477598874.git.ymankad@redhat.com>
+References: <ddf5944bcc06f57d62aac4d33075fb5b1eb1cb22.1477598874.git.ymankad@redhat.com>
+From: Max Reitz <mreitz@redhat.com>
+Date: Fri, 23 Sep 2016 14:56:56 -0400
+Subject: [CHANGE 2/3] qemu-img: fix usage instruction for qemu-img convert
+To: rhvirt-patches@redhat.com,
+    ymankad@redhat.com
+
+RH-Author: Max Reitz <mreitz@redhat.com>
+Message-id: <1474642616-6415-3-git-send-email-mreitz@redhat.com>
+Patchwork-id: 72416
+O-Subject: [RHEL-6.9 qemu-kvm PATCH v3 2/2] qemu-img: fix usage instruction for qemu-img convert
+Bugzilla: 1297653
+RH-Acked-by: Fam Zheng <famz@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: John Snow <jsnow@redhat.com>
+
+From: Peter Lieven <pl@kamp.de>
+
+Reviewed-by: Eric Blake <eblake@redhat.com>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Peter Lieven <pl@kamp.de>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit 049b09825fe479f4caa013ccde0ff87fc9d82856)
+Signed-off-by: Max Reitz <mreitz@redhat.com>
+Signed-off-by: Yash Mankad <ymankad@redhat.com>
+---
+ qemu-img.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/qemu-img.c b/qemu-img.c
+index a7bc3f9..4ff4bf5 100644
+--- a/qemu-img.c
++++ b/qemu-img.c
+@@ -99,7 +99,6 @@ static void help(void)
+            "       conversion. If the number of bytes is 0, the source will not be scanned for\n"
+            "       unallocated or zero sectors, and the destination image will always be\n"
+            "       fully allocated\n"
+-           "       images will always be fully allocated\n"
+            "  '--output' takes the format in which the output must be done (human or json)\n"
+            "\n"
+            "Parameters to check subcommand:\n"
+-- 
+2.7.4
+
