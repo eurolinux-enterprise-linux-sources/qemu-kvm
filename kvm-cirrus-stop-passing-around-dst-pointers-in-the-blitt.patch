@@ -1,13 +1,13 @@
-From 299c2872d1ce162a75ebfd05d2a4ac293987fcf4 Mon Sep 17 00:00:00 2001
+From f9486567ec49b422526c08c9f5e7c63960a2ba7e Mon Sep 17 00:00:00 2001
 From: Gerd Hoffmann <kraxel@redhat.com>
 Date: Tue, 2 May 2017 13:47:05 +0100
-Subject: [PATCH 2/5] cirrus: stop passing around dst pointers in the blitter
+Subject: [PATCH 6/9] cirrus: stop passing around dst pointers in the blitter
 
 RH-Author: Gerd Hoffmann <kraxel@redhat.com>
 Message-id: <20170502134708.21817-3-kraxel@redhat.com>
 Patchwork-id: 74990
 O-Subject: [RHEL-6.9 qemu-kvm PATCH 2/5] cirrus: stop passing around dst pointers in the blitter
-Bugzilla: 1444377 1444379
+Bugzilla: 1444378 1444380
 RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
 RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
 RH-Acked-by: Thomas Huth <thuth@redhat.com>

@@ -1,13 +1,13 @@
-From 3974cb23e2bd3e7c666a443ea8f5e5c575d798ac Mon Sep 17 00:00:00 2001
+From 0db9c35d408a3a2d56704ac4a70d5fd3ebda706f Mon Sep 17 00:00:00 2001
 From: Gerd Hoffmann <kraxel@redhat.com>
 Date: Tue, 2 May 2017 13:47:08 +0100
-Subject: [PATCH 5/5] cirrus: fix PUTPIXEL macro
+Subject: [PATCH 9/9] cirrus: fix PUTPIXEL macro
 
 RH-Author: Gerd Hoffmann <kraxel@redhat.com>
 Message-id: <20170502134708.21817-6-kraxel@redhat.com>
 Patchwork-id: 74989
 O-Subject: [RHEL-6.9 qemu-kvm PATCH 5/5] cirrus: fix PUTPIXEL macro
-Bugzilla: 1444377 1444379
+Bugzilla: 1444378 1444380
 RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
 RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
 RH-Acked-by: Thomas Huth <thuth@redhat.com>

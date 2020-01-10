@@ -106,9 +106,9 @@
 
 %define buildid %{nil}
 
-%define zrelease 6
+%define zrelease 1
 %define sublevel 0.12.1.2
-%define pkgrelease 2.503
+%define pkgrelease 2.506
 
 %define rpmversion %{sublevel}
 %define full_release %{pkgrelease}%{?dist}.%{zrelease}%{?buildid}
@@ -9144,40 +9144,57 @@ Patch5256: kvm-Revert-cirrus-allow-zero-source-pitch-in-pattern-fil.patch
 Patch5257: kvm-cirrus-add-blit_is_unsafe-call-to-cirrus_bitblt_cput.patch
 # For bz#1428750 - Fails to build in brew
 Patch5258: kvm-vns-tls-don-t-use-depricated-gnutls-functions.patch
-# For bz#1400438 - qemu-kvm coredump in vnc_refresh_server_surface [rhel-6.9.z]
-# For bz#1425943 - CVE-2017-2633 qemu-kvm-rhev: Qemu: VNC: memory corruption due to unchecked resolution limit [rhel-6.9.z]
+# For bz#1430616 - CVE-2017-2633 qemu-kvm: Qemu: VNC: memory corruption due to unchecked resolution limit [rhel-6.10]
+# For bz#1430617 - CVE-2017-2633 qemu-kvm-rhev: Qemu: VNC: memory corruption due to unchecked resolution limit [rhel-6.10]
 Patch5259: kvm-vnc-apply-display-size-limits.patch
-# For bz#1443447 - CVE-2017-7718 qemu-kvm: Qemu: display: cirrus: OOB read access issue [rhel-6.9.z]
-# For bz#1443449 - CVE-2017-7718 qemu-kvm-rhev: Qemu: display: cirrus: OOB read access issue [rhel-6.9.z]
+# For bz#1443448 - CVE-2017-7718 qemu-kvm: Qemu: display: cirrus: OOB read access issue [rhel-6.10]
+# For bz#1443450 - CVE-2017-7718 qemu-kvm-rhev: Qemu: display: cirrus: OOB read access issue [rhel-6.10]
 Patch5260: kvm-fix-cirrus_vga-fix-OOB-read-case-qemu-Segmentation-f.patch
-# For bz#1447544 - CVE-2016-9603 qemu-kvm-rhev: Qemu: cirrus: heap buffer overflow via vnc connection [rhel-6.9.z]
-# For bz#1447540 - CVE-2016-9603 qemu-kvm: Qemu: cirrus: heap buffer overflow via vnc connection [rhel-6.9.z]
+# For bz#1443448 - CVE-2017-7718 qemu-kvm: Qemu: display: cirrus: OOB read access issue [rhel-6.10]
+# For bz#1443450 - CVE-2017-7718 qemu-kvm-rhev: Qemu: display: cirrus: OOB read access issue [rhel-6.10]
+# For bz#1447542 - CVE-2016-9603 qemu-kvm: Qemu: cirrus: heap buffer overflow via vnc connection [rhel-6.10]
+# For bz#1447545 - CVE-2016-9603 qemu-kvm-rhev: Qemu: cirrus: heap buffer overflow via vnc connection [rhel-6.10]
 Patch5261: kvm-cirrus-vnc-zap-bitblit-support-from-console-code.patch
-# For bz#1444377 - CVE-2017-7980 qemu-kvm: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.9.z]
-# For bz#1444379 - CVE-2017-7980 qemu-kvm-rhev: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.9.z]
+# For bz#1444378 - CVE-2017-7980 qemu-kvm: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.10]
+# For bz#1444380 - CVE-2017-7980 qemu-kvm-rhev: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.10]
 Patch5262: kvm-cirrus-avoid-write-only-variables.patch
-# For bz#1444377 - CVE-2017-7980 qemu-kvm: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.9.z]
-# For bz#1444379 - CVE-2017-7980 qemu-kvm-rhev: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.9.z]
+# For bz#1444378 - CVE-2017-7980 qemu-kvm: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.10]
+# For bz#1444380 - CVE-2017-7980 qemu-kvm-rhev: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.10]
 Patch5263: kvm-cirrus-stop-passing-around-dst-pointers-in-the-blitt.patch
-# For bz#1444377 - CVE-2017-7980 qemu-kvm: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.9.z]
-# For bz#1444379 - CVE-2017-7980 qemu-kvm-rhev: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.9.z]
+# For bz#1444378 - CVE-2017-7980 qemu-kvm: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.10]
+# For bz#1444380 - CVE-2017-7980 qemu-kvm-rhev: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.10]
 Patch5264: kvm-cirrus-stop-passing-around-src-pointers-in-the-blitt.patch
-# For bz#1444377 - CVE-2017-7980 qemu-kvm: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.9.z]
-# For bz#1444379 - CVE-2017-7980 qemu-kvm-rhev: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.9.z]
+# For bz#1444378 - CVE-2017-7980 qemu-kvm: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.10]
+# For bz#1444380 - CVE-2017-7980 qemu-kvm-rhev: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.10]
 Patch5265: kvm-cirrus-fix-off-by-one-in-cirrus_bitblt_rop_bkwd_tran.patch
-# For bz#1444377 - CVE-2017-7980 qemu-kvm: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.9.z]
-# For bz#1444379 - CVE-2017-7980 qemu-kvm-rhev: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.9.z]
+# For bz#1444378 - CVE-2017-7980 qemu-kvm: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.10]
+# For bz#1444380 - CVE-2017-7980 qemu-kvm-rhev: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.10]
 Patch5266: kvm-cirrus-fix-PUTPIXEL-macro.patch
-# For CVE-2017-5715
+# For bz#1525939 - CVE-2017-5715 qemu-kvm: hw: cpu: speculative execution branch target injection [rhel-6.10]
+# For bz#1528024 - CVE-2017-5715 qemu-kvm-rhev: hw: cpu: speculative execution branch target injection [rhel-6.10]
 Patch5267: kvm-target-i386-add-support-for-SPEC_CTRL-MSR.patch
-# For CVE-2017-5715
+# For bz#1525939 - CVE-2017-5715 qemu-kvm: hw: cpu: speculative execution branch target injection [rhel-6.10]
+# For bz#1528024 - CVE-2017-5715 qemu-kvm-rhev: hw: cpu: speculative execution branch target injection [rhel-6.10]
 Patch5268: kvm-target-i386-cpu-add-new-CPUID-bits-for-indirect-bran.patch
-# For CVE-2017-5715
+# For bz#1525939 - CVE-2017-5715 qemu-kvm: hw: cpu: speculative execution branch target injection [rhel-6.10]
+# For bz#1528024 - CVE-2017-5715 qemu-kvm-rhev: hw: cpu: speculative execution branch target injection [rhel-6.10]
 Patch5269: kvm-target-i386-cpu-add-new-CPU-models-for-indirect-bran.patch
-# For bz#1501296 - CVE-2017-15289 qemu-kvm: Qemu: cirrus: OOB access issue in  mode4and5 write functions [rhel-6.9.z]
+# For bz#1501298 - CVE-2017-15289 qemu-kvm: Qemu: cirrus: OOB access issue in  mode4and5 write functions [rhel-6.10]
 Patch5270: kvm-cirrus-fix-oob-access-in-mode4and5-write-functions.patch
-# For bz#1574067 - EMBARGOED CVE-2018-3639 qemu-kvm: Kernel: omega-4 [rhel-6.9.z]
-Patch5271: qemu-kvm-i386-define-the-ssbd-CPUID-feature-bit-CVE-2018-3639.patch
+# For bz#1486641 - CVE-2017-13672 qemu-kvm-rhev: Qemu: vga: OOB read access during display update [rhel-6.10]
+Patch5271: kvm-vga-stop-passing-pointers-to-vga_draw_line-functions.patch
+# For bz#1534692 - CVE-2018-5683 qemu-kvm: Qemu: Out-of-bounds read in vga_draw_text routine [rhel-6.10]
+Patch5272: kvm-vga-check-the-validation-of-memory-addr-when-draw-te.patch
+# For bz#1553674 - CVE-2018-7858 qemu-kvm: Qemu: cirrus: OOB access when updating vga display [rhel-6]
+Patch5273: kvm-vga-add-share_surface-flag.patch
+# For bz#1553674 - CVE-2018-7858 qemu-kvm: Qemu: cirrus: OOB access when updating vga display [rhel-6]
+Patch5274: kvm-vga-add-sanity-checks.patch
+# For bz#1574074 - CVE-2018-3639 qemu-kvm: hw: cpu: speculative store bypass [rhel-6.10.z]
+Patch5275: qemu-kvm-i386-define-the-ssbd-CPUID-feature-bit-CVE-2018-3639.patch
+# For bz#1574074 - CVE-2018-3639 qemu-kvm: hw: cpu: speculative store bypass [rhel-6.10.z]
+Patch5276: qemu-kvm-i386-Define-the-Virt-SSBD-MSR-and-handling-of-it-CVE.patch
+# For bz#1574074 - CVE-2018-3639 qemu-kvm: hw: cpu: speculative store bypass [rhel-6.10.z]
+Patch5277: qemu-kvm-i386-define-the-AMD-virt-ssbd-CPUID-feature-bit-CVE-.patch
 
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires: SDL-devel zlib-devel which texi2html gnutls-devel cyrus-sasl-devel
@@ -13603,6 +13620,12 @@ MakeIOtestsExecutable()
 %patch5269 -p1
 %patch5270 -p1
 %patch5271 -p1
+%patch5272 -p1
+%patch5273 -p1
+%patch5274 -p1
+%patch5275 -p1
+%patch5276 -p1
+%patch5277 -p1
 
 ApplyOptionalPatch qemu-kvm-test.patch
 
@@ -13989,51 +14012,67 @@ fi
 %endif # with qemu_kvm
 
 %changelog
-* Fri May 11 2018 Wainer dos Santos Moschetta <wainersm@redhat.com> - 0.12.1.2-2.503.el6_9.6
-- qemu-kvm-i386-define-the-ssbd-CPUID-feature-bit-CVE-2018-3639.patch [bz#1574067]
-- Resolves: bz#1574067
-  (EMBARGOED CVE-2018-3639 qemu-kvm: Kernel: omega-4 [rhel-6.9.z])
+* Thu Jun 21 2018 Wainer dos Santos Moschetta <wainersm@redhat.com> - 0.12.1.2-2.506.el6_10.1
+- qemu-kvm-i386-define-the-ssbd-CPUID-feature-bit-CVE-2018-3639.patch [bz#1574074]
+- qemu-kvm-i386-Define-the-Virt-SSBD-MSR-and-handling-of-it-CVE.patch [bz#1574074]
+- qemu-kvm-i386-define-the-AMD-virt-ssbd-CPUID-feature-bit-CVE-.patch [bz#1574074]
+- Resolves: bz#1574074
+  (CVE-2018-3639 qemu-kvm: hw: cpu: speculative store bypass [rhel-6.10.z])
 
-* Fri Feb 16 2018 Wainer dos Santos Moschetta <wainersm@redhat.com> - 0.12.1.2-2.503.el6_9.5
-- kvm-cirrus-fix-oob-access-in-mode4and5-write-functions.patch [bz#1501296]
-- Resolves: bz#1501296
-  (CVE-2017-15289 qemu-kvm: Qemu: cirrus: OOB access issue in  mode4and5 write functions [rhel-6.9.z])
+* Mon May 14 2018 Wainer dos Santos Moschetta <wainersm@redhat.com> - 0.12.1.2-2.506.el6
+- kvm-vga-add-share_surface-flag.patch [bz#1553674]
+- kvm-vga-add-sanity-checks.patch [bz#1553674]
+- Resolves: bz#1553674
+  (CVE-2018-7858 qemu-kvm: Qemu: cirrus: OOB access when updating vga display [rhel-6])
 
-* Thu Dec 14 2017 Wainer dos Santos Moschetta <wainersm@redhat.com> - 0.12.1.2-2.503.el6_9.4
-- Fix CVE-2017-5715
+* Mon Feb 26 2018 Wainer dos Santos Moschetta <wainersm@redhat.com> - 0.12.1.2-2.505.el6
+- kvm-target-i386-add-support-for-SPEC_CTRL-MSR.patch [bz#1525939 bz#1528024]
+- kvm-target-i386-cpu-add-new-CPUID-bits-for-indirect-bran.patch [bz#1525939 bz#1528024]
+- kvm-target-i386-cpu-add-new-CPU-models-for-indirect-bran.patch [bz#1525939 bz#1528024]
+- kvm-cirrus-fix-oob-access-in-mode4and5-write-functions.patch [bz#1501298]
+- kvm-vga-stop-passing-pointers-to-vga_draw_line-functions.patch [bz#1486641]
+- kvm-vga-check-the-validation-of-memory-addr-when-draw-te.patch [bz#1534692]
+- Resolves: bz#1486641
+  (CVE-2017-13672 qemu-kvm-rhev: Qemu: vga: OOB read access during display update [rhel-6.10])
+- Resolves: bz#1501298
+  (CVE-2017-15289 qemu-kvm: Qemu: cirrus: OOB access issue in  mode4and5 write functions [rhel-6.10])
+- Resolves: bz#1525939
+  (CVE-2017-5715 qemu-kvm: hw: cpu: speculative execution branch target injection [rhel-6.10])
+- Resolves: bz#1528024
+  (CVE-2017-5715 qemu-kvm-rhev: hw: cpu: speculative execution branch target injection [rhel-6.10])
+- Resolves: bz#1534692
+  (CVE-2018-5683 qemu-kvm: Qemu: Out-of-bounds read in vga_draw_text routine [rhel-6.10])
+- Resolves: bz#1549152
+  (qemu-kvm-rhev: remove unused patch file [rhel-6.10])
 
-* Fri May 05 2017 Danilo Cesar Lemes de Paula <ddepaula@redhat.com> - 0.12.1.2-2.503.el6_9.3
-- kvm-cirrus-avoid-write-only-variables.patch [bz#1444377 bz#1444379]
-- kvm-cirrus-stop-passing-around-dst-pointers-in-the-blitt.patch [bz#1444377 bz#1444379]
-- kvm-cirrus-stop-passing-around-src-pointers-in-the-blitt.patch [bz#1444377 bz#1444379]
-- kvm-cirrus-fix-off-by-one-in-cirrus_bitblt_rop_bkwd_tran.patch [bz#1444377 bz#1444379]
-- kvm-cirrus-fix-PUTPIXEL-macro.patch [bz#1444377 bz#1444379]
-- Resolves: bz#1444377
-  (CVE-2017-7980 qemu-kvm: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.9.z])
-- Resolves: bz#1444379
-  (CVE-2017-7980 qemu-kvm-rhev: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.9.z])
-
-* Thu Apr 27 2017 Danilo Cesar Lemes de Paula <ddepaula@redhat.com> - 0.12.1.2-2.503.el6_9.2
-- kvm-fix-cirrus_vga-fix-OOB-read-case-qemu-Segmentation-f.patch [bz#1443447 bz#1443449]
-- kvm-cirrus-vnc-zap-bitblit-support-from-console-code.patch [bz#1443447 bz#1443449]
-- Resolves: bz#1443447
-  (CVE-2017-7718 qemu-kvm: Qemu: display: cirrus: OOB read access issue [rhel-6.9.z])
-- Resolves: bz#1443449
-  (CVE-2017-7718 qemu-kvm-rhev: Qemu: display: cirrus: OOB read access issue [rhel-6.9.z])
-- Resolves: bz#1447544
-  (CVE-2016-9603 qemu-kvm-rhev: Qemu: cirrus: heap buffer overflow via vnc connection [rhel-6.9.z] )
-- Resolves: bz#1447540
-  (CVE-2016-9603 qemu-kvm: Qemu: cirrus: heap buffer overflow via vnc connection [rhel-6.9.z])
-
-* Mon Mar 27 2017 Danilo Cesar Lemes de Paula <ddepaula@redhat.com> - 0.12.1.2-2.503.el6_9.1
+* Thu Jun 08 2017 Danilo Cesar Lemes de Paula <ddepaula@redhat.com> - 0.12.1.2-2.504.el6
 - kvm-vns-tls-don-t-use-depricated-gnutls-functions.patch [bz#1428750]
-- kvm-vnc-apply-display-size-limits.patch [bz#1400438 bz#1425943]
-- Resolves: bz#1400438
-  (qemu-kvm coredump in vnc_refresh_server_surface [rhel-6.9.z])
-- Resolves: bz#1425943
-  (CVE-2017-2633 qemu-kvm-rhev: Qemu: VNC: memory corruption due to unchecked resolution limit [rhel-6.9.z])
+- kvm-vnc-apply-display-size-limits.patch [bz#1430616 bz#1430617]
+- kvm-fix-cirrus_vga-fix-OOB-read-case-qemu-Segmentation-f.patch [bz#1443448 bz#1443450]
+- kvm-cirrus-vnc-zap-bitblit-support-from-console-code.patch [bz#1443448 bz#1443450 bz#1447542 bz#1447545]
+- kvm-cirrus-avoid-write-only-variables.patch [bz#1444378 bz#1444380]
+- kvm-cirrus-stop-passing-around-dst-pointers-in-the-blitt.patch [bz#1444378 bz#1444380]
+- kvm-cirrus-stop-passing-around-src-pointers-in-the-blitt.patch [bz#1444378 bz#1444380]
+- kvm-cirrus-fix-off-by-one-in-cirrus_bitblt_rop_bkwd_tran.patch [bz#1444378 bz#1444380]
+- kvm-cirrus-fix-PUTPIXEL-macro.patch [bz#1444378 bz#1444380]
 - Resolves: bz#1428750
   (Fails to build in brew)
+- Resolves: bz#1430616
+  (CVE-2017-2633 qemu-kvm: Qemu: VNC: memory corruption due to unchecked resolution limit [rhel-6.10])
+- Resolves: bz#1430617
+  (CVE-2017-2633 qemu-kvm-rhev: Qemu: VNC: memory corruption due to unchecked resolution limit [rhel-6.10])
+- Resolves: bz#1443448
+  (CVE-2017-7718 qemu-kvm: Qemu: display: cirrus: OOB read access issue [rhel-6.10])
+- Resolves: bz#1443450
+  (CVE-2017-7718 qemu-kvm-rhev: Qemu: display: cirrus: OOB read access issue [rhel-6.10])
+- Resolves: bz#1444378
+  (CVE-2017-7980 qemu-kvm: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.10])
+- Resolves: bz#1444380
+  (CVE-2017-7980 qemu-kvm-rhev: Qemu: display: cirrus: OOB r/w access issues in bitblt routines [rhel-6.10])
+- Resolves: bz#1447542
+  (CVE-2016-9603 qemu-kvm: Qemu: cirrus: heap buffer overflow via vnc connection [rhel-6.10])
+- Resolves: bz#1447545
+  (CVE-2016-9603 qemu-kvm-rhev: Qemu: cirrus: heap buffer overflow via vnc connection [rhel-6.10])
 
 * Mon Feb 13 2017 Danilo Cesar Lemes de Paula <ddepaula@redhat.com> - 0.12.1.2-2.503.el6
 - kvm-cirrus-fix-patterncopy-checks.patch [bz#1420487 bz#1420489]

@@ -1,7 +1,7 @@
-From b1e40cd7d4c04506b2184151fca9b6abfa3bb5d4 Mon Sep 17 00:00:00 2001
+From 5fb41f8e2356af0a0d1980bcda5d08ae5c9074b6 Mon Sep 17 00:00:00 2001
 From: Gerd Hoffmann <kraxel@redhat.com>
 Date: Tue, 2 May 2017 13:47:07 +0100
-Subject: [PATCH 4/5] cirrus: fix off-by-one in
+Subject: [PATCH 8/9] cirrus: fix off-by-one in
  cirrus_bitblt_rop_bkwd_transp_*_16
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -11,7 +11,7 @@ RH-Author: Gerd Hoffmann <kraxel@redhat.com>
 Message-id: <20170502134708.21817-5-kraxel@redhat.com>
 Patchwork-id: 74987
 O-Subject: [RHEL-6.9 qemu-kvm PATCH 4/5] cirrus: fix off-by-one in cirrus_bitblt_rop_bkwd_transp_*_16
-Bugzilla: 1444377 1444379
+Bugzilla: 1444378 1444380
 RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
 RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
 RH-Acked-by: Thomas Huth <thuth@redhat.com>

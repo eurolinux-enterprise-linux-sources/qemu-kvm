@@ -1,13 +1,13 @@
-From f71a2100b4b76751098d9852d7b2c371b2b6d189 Mon Sep 17 00:00:00 2001
+From 59fb21ff87df0238001f6b02e1ac29abfcef3372 Mon Sep 17 00:00:00 2001
 From: Gerd Hoffmann <kraxel@redhat.com>
 Date: Fri, 21 Apr 2017 05:24:21 +0100
-Subject: [PATCH 2/2] cirrus/vnc: zap bitblit support from console code.
+Subject: [PATCH 4/9] cirrus/vnc: zap bitblit support from console code.
 
 RH-Author: Gerd Hoffmann <kraxel@redhat.com>
 Message-id: <20170421052421.20195-4-kraxel@redhat.com>
 Patchwork-id: 74812
 O-Subject: [RHEL-6.9 qemu-kvm PATCH 3/3] cirrus/vnc: zap bitblit support from console code.
-Bugzilla: 1443447 1443449
+Bugzilla: 1443448 1443450 1447542 1447545
 RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
 RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
 RH-Acked-by: John Snow <jsnow@redhat.com>

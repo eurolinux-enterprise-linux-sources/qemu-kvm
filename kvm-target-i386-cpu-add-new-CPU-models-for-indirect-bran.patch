@@ -1,8 +1,17 @@
-From 04982c06692749a33350538a029934781ff22b4a Mon Sep 17 00:00:00 2001
+From 070050aa7872522dc4f7c4b2662f141133ffc069 Mon Sep 17 00:00:00 2001
 From: Eduardo Habkost <ehabkost@redhat.com>
-Date: Wed, 13 Dec 2017 15:41:04 -0200
-Subject: [PATCH 3/3] target-i386: cpu: add new CPU models for indirect branch
+Date: Thu, 1 Feb 2018 02:30:49 -0200
+Subject: [PATCH 3/6] target-i386: cpu: add new CPU models for indirect branch
  predictor restrictions
+
+RH-Author: Eduardo Habkost <ehabkost@redhat.com>
+Message-id: <20180201023049.14738-4-ehabkost@redhat.com>
+Patchwork-id: 78834
+O-Subject: [RHEL-6.10 qemu-kvm PATCH 3/3] target-i386: cpu: add new CPU models for indirect branch predictor restrictions
+Bugzilla: 1525939 1528024
+RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
 
 RHEL-6 backport notes:
 
@@ -25,14 +34,7 @@ CPU models that are copies of the existing ones for the original
 CPU models.  This will ensure compatibility will be kept for the
 new CPU models.
 
-RH-Author: Eduardo Habkost <ehabkost@redhat.com>
-Message-id: <20171213174104.20121-4-ehabkost@redhat.com>
-Patchwork-id: n/a
-O-Subject: [CONFIDENTIAL][RHEL-6.9.z qemu-kvm PATCH v2 3/3] target-i386: cpu: add new CPU models for indirect branch predictor restrictions
-Bugzilla: CVE-2017-5715
-RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
-RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
-RH-Acked-by: Wainer dos Santos Moschetta <wainersm@redhat.com>
+Signed-off-by: Wainer dos Santos Moschetta <wainersm@redhat.com>
 ---
  target-i386/cpu.h   |   4 +
  target-i386/cpuid.c | 224 ++++++++++++++++++++++++++++++++++++++++++++++++++++

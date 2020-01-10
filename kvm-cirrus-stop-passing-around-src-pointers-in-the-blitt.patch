@@ -1,13 +1,13 @@
-From 4cb79e451feb43441ae009678189b06b1e728468 Mon Sep 17 00:00:00 2001
+From d6515e659634b00093ca1476a0efdc3b01035fa0 Mon Sep 17 00:00:00 2001
 From: Gerd Hoffmann <kraxel@redhat.com>
 Date: Tue, 2 May 2017 13:47:06 +0100
-Subject: [PATCH 3/5] cirrus: stop passing around src pointers in the blitter
+Subject: [PATCH 7/9] cirrus: stop passing around src pointers in the blitter
 
 RH-Author: Gerd Hoffmann <kraxel@redhat.com>
 Message-id: <20170502134708.21817-4-kraxel@redhat.com>
 Patchwork-id: 74988
 O-Subject: [RHEL-6.9 qemu-kvm PATCH 3/5] cirrus: stop passing around src pointers in the blitter
-Bugzilla: 1444377 1444379
+Bugzilla: 1444378 1444380
 RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
 RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
 RH-Acked-by: Thomas Huth <thuth@redhat.com>

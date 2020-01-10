@@ -1,17 +1,23 @@
-From d49fd675f5d4440db1f0885a0cc25492d1071553 Mon Sep 17 00:00:00 2001
+From d5e7d7aaf91c8913c719cf34b41ceb4f488abaa4 Mon Sep 17 00:00:00 2001
 From: Eduardo Habkost <ehabkost@redhat.com>
-Date: Wed, 13 Dec 2017 15:41:03 -0200
-Subject: [PATCH 2/3] target-i386: cpu: add new CPUID bits for indirect branch
+Date: Thu, 1 Feb 2018 02:30:48 -0200
+Subject: [PATCH 2/6] target-i386: cpu: add new CPUID bits for indirect branch
  predictor restrictions
 
 RH-Author: Eduardo Habkost <ehabkost@redhat.com>
-Message-id: <20171213174104.20121-3-ehabkost@redhat.com>
-Patchwork-id: n/a
-O-Subject: [CONFIDENTIAL][RHEL-6.9.z qemu-kvm PATCH v2 2/3] target-i386: cpu: add new CPUID bits for indirect branch predictor restrictions
-Bugzilla: CVE-2017-5715
+Message-id: <20180201023049.14738-3-ehabkost@redhat.com>
+Patchwork-id: 78836
+O-Subject: [RHEL-6.10 qemu-kvm PATCH 2/3] target-i386: cpu: add new CPUID bits for indirect branch predictor restrictions
+Bugzilla: 1525939 1528024
 RH-Acked-by: Paolo Bonzini <pbonzini@redhat.com>
-RH-Acked-by: Miroslav Rezanina <mrezanin@redhat.com>
-RH-Acked-by: Wainer dos Santos Moschetta <wainersm@redhat.com>
+RH-Acked-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+---
+ target-i386/cpu.h   |  2 ++
+ target-i386/cpuid.c | 75 ++++++++++++++++++++++++++++++++++++++++++++++-------
+ 2 files changed, 67 insertions(+), 10 deletions(-)
+Signed-off-by: Wainer dos Santos Moschetta <wainersm@redhat.com>
 ---
  target-i386/cpu.h   |  2 ++
  target-i386/cpuid.c | 75 ++++++++++++++++++++++++++++++++++++++++++++++-------
