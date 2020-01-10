@@ -106,7 +106,7 @@
 
 %define buildid %{nil}
 
-%define zrelease 1
+%define zrelease 3
 %define sublevel 0.12.1.2
 %define pkgrelease 2.506
 
@@ -9195,6 +9195,8 @@ Patch5275: qemu-kvm-i386-define-the-ssbd-CPUID-feature-bit-CVE-2018-3639.patch
 Patch5276: qemu-kvm-i386-Define-the-Virt-SSBD-MSR-and-handling-of-it-CVE.patch
 # For bz#1574074 - CVE-2018-3639 qemu-kvm: hw: cpu: speculative store bypass [rhel-6.10.z]
 Patch5277: qemu-kvm-i386-define-the-AMD-virt-ssbd-CPUID-feature-bit-CVE-.patch
+# For bz#1698996 - CVE-2018-12130 qemu-kvm: hardware: MFBDS [rhel-6.10.z]
+Patch5278: kvm-target-i386-define-md-clear-bit.patch
 
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires: SDL-devel zlib-devel which texi2html gnutls-devel cyrus-sasl-devel
@@ -13626,6 +13628,7 @@ MakeIOtestsExecutable()
 %patch5275 -p1
 %patch5276 -p1
 %patch5277 -p1
+%patch5278 -p1
 
 ApplyOptionalPatch qemu-kvm-test.patch
 
@@ -14012,6 +14015,11 @@ fi
 %endif # with qemu_kvm
 
 %changelog
+* Fri May 10 2019 Danilo Cesar Lemes de Paula <ddepaula@redhat.com> - 0.12.1.2-2.506.el6_10.3
+- kvm-target-i386-define-md-clear-bit.patch [bz#1698996]
+- Resolves: bz#1698996
+  (CVE-2018-12130 qemu-kvm: hardware: MFBDS)
+
 * Thu Jun 21 2018 Wainer dos Santos Moschetta <wainersm@redhat.com> - 0.12.1.2-2.506.el6_10.1
 - qemu-kvm-i386-define-the-ssbd-CPUID-feature-bit-CVE-2018-3639.patch [bz#1574074]
 - qemu-kvm-i386-Define-the-Virt-SSBD-MSR-and-handling-of-it-CVE.patch [bz#1574074]

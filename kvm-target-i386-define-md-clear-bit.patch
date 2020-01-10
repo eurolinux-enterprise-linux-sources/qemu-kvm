@@ -1,0 +1,55 @@
+From pbonzini@redhat.com Fri May 10 21:44:44 2019
+Return-Path: <pbonzini@redhat.com>
+Received: from zmta04.collab.prod.int.phx2.redhat.com (LHLO
+ zmta04.collab.prod.int.phx2.redhat.com) (10.5.81.11) by
+ zmail18.collab.prod.int.phx2.redhat.com with LMTP; Fri, 10 May 2019
+ 13:51:26 -0400 (EDT)
+Received: from smtp.corp.redhat.com (int-mx05.intmail.prod.int.phx2.redhat.com [10.5.11.15])
+	by zmta04.collab.prod.int.phx2.redhat.com (Postfix) with ESMTP id C6C9DDA144
+	for <ddepaula@mail.corp.redhat.com>; Fri, 10 May 2019 13:51:26 -0400 (EDT)
+Received: by smtp.corp.redhat.com (Postfix)
+	id C24F05D717; Fri, 10 May 2019 17:51:26 +0000 (UTC)
+Delivered-To: ddepaula@redhat.com
+Received: from donizetti.redhat.com (ovpn-112-60.ams2.redhat.com [10.36.112.60])
+	by smtp.corp.redhat.com (Postfix) with ESMTP id CD56C5D6A9;
+	Fri, 10 May 2019 17:51:25 +0000 (UTC)
+From: Paolo Bonzini <pbonzini@redhat.com>
+To: ddepaula@redhat.com,
+	mrezanin@redhat.com
+Subject: [EMBARGOED RHEL6 qemu-kvm PATCH] target-i386: define md-clear bit
+Date: Fri, 10 May 2019 19:51:24 +0200
+Message-Id: <20190510175124.9928-1-pbonzini@redhat.com>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+X-Scanned-By: MIMEDefang 2.79 on 10.5.11.15
+X-getmail-retrieved-from-mailbox: rhvirt-patches
+Status: O
+Content-Length: 785
+Lines: 25
+
+md-clear is a new CPUID bit which is set when microcode provides the
+mechanism to invoke a flush of various exploitable CPU buffers by invoking
+the VERW instruction.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ target-i386/cpuid.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/target-i386/cpuid.c b/target-i386/cpuid.c
+index f51c7007ba..a8f3558926 100644
+--- a/target-i386/cpuid.c
++++ b/target-i386/cpuid.c
+@@ -84,7 +84,7 @@ static const char *cpuid_7_0_ebx_feature_name[] = {
+ static const char *cpuid_7_0_edx_feature_name[] = {
+     NULL, NULL, NULL, NULL,
+     NULL, NULL, NULL, NULL,
+-    NULL, NULL, NULL, NULL,
++    NULL, NULL, "md-clear", NULL,
+     NULL, NULL, NULL, NULL,
+     NULL, NULL, NULL, NULL,
+     NULL, NULL, NULL, NULL,
+-- 
+2.21.0
+
+
