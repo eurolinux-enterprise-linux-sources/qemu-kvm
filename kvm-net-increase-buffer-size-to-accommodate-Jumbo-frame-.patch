@@ -1,0 +1,138 @@
+From 28295b2cc6fe648d669478edc7e47dc92438762c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Philippe=20Mathieu-Daud=C3=A9?= <philmd@redhat.com>
+Date: Fri, 5 Jul 2019 10:26:33 -0300
+Subject: [PATCH 06/14] net: increase buffer size to accommodate Jumbo frame
+ pkts
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Philippe Mathieu-Daudé <philmd@redhat.com>
+Message-id: <20190705102635.19149-3-philmd@redhat.com>
+Patchwork-id: 89380
+O-Subject: [RHEL-6.10.z qemu-kvm PATCH 2/4] net: increase buffer size to accommodate Jumbo frame pkts
+Bugzilla: 1636415
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Stefano Garzarella <sgarzare@redhat.com>
+RH-Acked-by: Xiao Wang <jasowang@redhat.com>
+
+From: Scott Feldman <sfeldma@cumulusnetworks.com>
+
+Socket buffer sizes were hard-coded to 4K for VDE and socket netdevs.  Bump this
+up to 68K (ala tap netdev) to handle maximum GSO packet size (64k) plus plenty
+of room for the ethernet and virtio_net headers.
+
+Originally, ran into this limitation when using -netdev UDP sockets to connect
+VM-to-VM, where VM interface is configure with MTU=9000.  (Using virtio_net
+NIC model).  Test is simple: ping -M do -s 8500 <target>.  This test will
+attempt to ping with unfragmented packet of given size.  Without patch, size
+is limited to < 4K (minus protocol hdrs).  With patch, ping test works with pkt
+size up to 9000 (again, minus protocol hdrs).
+
+v2: per Stefan, increase buf size to (4096+65536) as done in tap and apply
+    to vde and socket netdevs.
+v1: increase buf size to 12K just for -netdev UDP sockets
+
+Signed-off-by: Scott Feldman <sfeldma@cumulusnetworks.com>
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+(cherry picked from commit d32fcad366e5f45d33dab2ee4de0e5729439680b)
+Signed-off-by: Philippe Mathieu-Daudé <philmd@redhat.com>
+Signed-off-by: Wainer dos Santos Moschetta <wainersm@redhat.com>
+---
+ net.c        | 2 +-
+ net.h        | 5 +++++
+ net/socket.c | 4 ++--
+ net/tap.c    | 7 +------
+ net/vde.c    | 2 +-
+ 5 files changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/net.c b/net.c
+index ae0522eeb6..3393b6b5a2 100644
+--- a/net.c
++++ b/net.c
+@@ -588,7 +588,7 @@ ssize_t qemu_send_packet_raw(VLANClientState *vc, const uint8_t *buf, int size)
+ static ssize_t vc_sendv_compat(VLANClientState *vc, const struct iovec *iov,
+                                int iovcnt)
+ {
+-    uint8_t buffer[4096];
++    uint8_t buffer[NET_BUFSIZE];
+     size_t offset;
+ 
+     offset = iov_to_buf(iov, iovcnt, buffer, 0, sizeof(buffer));
+diff --git a/net.h b/net.h
+index 540a3d1c70..7fe3b9e961 100644
+--- a/net.h
++++ b/net.h
+@@ -7,6 +7,11 @@
+ #include "qemu-option.h"
+ #include "net/queue.h"
+ 
++/* Maximum GSO packet size (64k) plus plenty of room for
++ * the ethernet and virtio_net headers
++ */
++#define NET_BUFSIZE (4096 + 65536)
++
+ struct MACAddr {
+     uint8_t a[6];
+ };
+diff --git a/net/socket.c b/net/socket.c
+index 1c4e153e3f..eb0640ac0a 100644
+--- a/net/socket.c
++++ b/net/socket.c
+@@ -38,7 +38,7 @@ typedef struct NetSocketState {
+     int state; /* 0 = getting length, 1 = getting data */
+     unsigned int index;
+     unsigned int packet_len;
+-    uint8_t buf[4096];
++    uint8_t buf[NET_BUFSIZE];
+     struct sockaddr_in dgram_dst; /* contains inet host and port destination iff connectionless (SOCK_DGRAM) */
+ } NetSocketState;
+ 
+@@ -73,7 +73,7 @@ static void net_socket_send(void *opaque)
+     NetSocketState *s = opaque;
+     int size, err;
+     unsigned l;
+-    uint8_t buf1[4096];
++    uint8_t buf1[NET_BUFSIZE];
+     const uint8_t *buf;
+ 
+     size = recv(s->fd, (void *)buf1, sizeof(buf1), 0);
+diff --git a/net/tap.c b/net/tap.c
+index 5b229be686..d40fa8be2d 100644
+--- a/net/tap.c
++++ b/net/tap.c
+@@ -44,17 +44,12 @@
+ 
+ #include "hw/vhost_net.h"
+ 
+-/* Maximum GSO packet size (64k) plus plenty of room for
+- * the ethernet and virtio_net headers
+- */
+-#define TAP_BUFSIZE (4096 + 65536)
+-
+ typedef struct TAPState {
+     VLANClientState nc;
+     int fd;
+     char down_script[1024];
+     char down_script_arg[128];
+-    uint8_t buf[TAP_BUFSIZE];
++    uint8_t buf[NET_BUFSIZE];
+     unsigned int read_poll : 1;
+     unsigned int write_poll : 1;
+     unsigned int using_vnet_hdr : 1;
+diff --git a/net/vde.c b/net/vde.c
+index 0b46fa6405..b3925614f9 100644
+--- a/net/vde.c
++++ b/net/vde.c
+@@ -41,7 +41,7 @@ typedef struct VDEState {
+ static void vde_to_qemu(void *opaque)
+ {
+     VDEState *s = opaque;
+-    uint8_t buf[4096];
++    uint8_t buf[NET_BUFSIZE];
+     int size;
+ 
+     size = vde_recv(s->vde, (char *)buf, sizeof(buf), 0);
+-- 
+2.13.6
+

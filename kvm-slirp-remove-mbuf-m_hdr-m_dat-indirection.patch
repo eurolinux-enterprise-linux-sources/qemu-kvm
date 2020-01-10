@@ -1,0 +1,162 @@
+From 2d138515d69f9e72905f44c388aa75088fddf46d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Philippe=20Mathieu-Daud=C3=A9?= <philmd@redhat.com>
+Date: Fri, 5 Jul 2019 17:34:36 -0300
+Subject: [PATCH 11/14] slirp: remove mbuf(m_hdr, m_dat) indirection
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Philippe Mathieu-Daudé <philmd@redhat.com>
+Message-id: <20190705173438.11188-4-philmd@redhat.com>
+Patchwork-id: 89390
+O-Subject: [RHEL-6.10.z qemu-kvm PATCH 3/5] slirp: remove mbuf(m_hdr, m_dat) indirection
+Bugzilla: 1586251
+RH-Acked-by: Xiao Wang <jasowang@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Stefano Garzarella <sgarzare@redhat.com>
+
+From: Michael Tokarev <mjt@tls.msk.ru>
+
+Author: Michael Tokarev <mjt@tls.msk.ru>
+(cherry picked from commit 0e44486cdccb4c1f9e5fad390cfd7186850c7204)
+Signed-off-by: Philippe Mathieu-DaudÃ© <philmd@redhat.com>
+Signed-off-by: Wainer dos Santos Moschetta <wainersm@redhat.com>
+---
+ slirp/mbuf.h     | 52 +++++++++++++++++++---------------------------------
+ slirp/tcp_subr.c | 12 ++++++------
+ 2 files changed, 25 insertions(+), 39 deletions(-)
+
+diff --git a/slirp/mbuf.h b/slirp/mbuf.h
+index 97729e24b0..0abcb984f9 100644
+--- a/slirp/mbuf.h
++++ b/slirp/mbuf.h
+@@ -52,22 +52,6 @@
+  * free the m_ext.  This is inefficient memory-wise, but who cares.
+  */
+ 
+-/* XXX should union some of these! */
+-/* header at beginning of each mbuf: */
+-struct m_hdr {
+-	struct	mbuf *mh_next;		/* Linked list of mbufs */
+-	struct	mbuf *mh_prev;
+-	struct	mbuf *mh_nextpkt;	/* Next packet in queue/record */
+-	struct	mbuf *mh_prevpkt; /* Flags aren't used in the output queue */
+-	int	mh_flags;	  /* Misc flags */
+-
+-	int	mh_size;		/* Size of data */
+-	struct	socket *mh_so;
+-
+-	caddr_t	mh_data;		/* Location of data */
+-	int	mh_len;			/* Amount of data in this mbuf */
+-};
+-
+ /*
+  * How much room is in the mbuf, from m_data to the end of the mbuf
+  */
+@@ -83,26 +67,28 @@ struct m_hdr {
+ #define M_TRAILINGSPACE M_FREEROOM
+ 
+ struct mbuf {
+-	struct	m_hdr m_hdr;
++	/* XXX should union some of these! */
++	/* header at beginning of each mbuf: */
++	struct	mbuf *m_next;		/* Linked list of mbufs */
++	struct	mbuf *m_prev;
++	struct	mbuf *m_nextpkt;	/* Next packet in queue/record */
++	struct	mbuf *m_prevpkt;	/* Flags aren't used in the output queue */
++	int	m_flags;		/* Misc flags */
++
++	int	m_size;			/* Size of data */
++	struct	socket *m_so;
++
++	caddr_t	m_data;			/* Location of data */
++	int	m_len;			/* Amount of data in this mbuf */
++
+ 	Slirp *slirp;
+-	union M_dat {
+-		char	m_dat_[1]; /* ANSI don't like 0 sized arrays */
+-		char	*m_ext_;
+-	} M_dat;
++	/* start of dynamic buffer area, must be last element */
++	union {
++		char	m_dat[1]; /* ANSI don't like 0 sized arrays */
++		char	*m_ext;
++	};
+ };
+ 
+-#define m_next		m_hdr.mh_next
+-#define m_prev		m_hdr.mh_prev
+-#define m_nextpkt	m_hdr.mh_nextpkt
+-#define m_prevpkt	m_hdr.mh_prevpkt
+-#define m_flags		m_hdr.mh_flags
+-#define	m_len		m_hdr.mh_len
+-#define	m_data		m_hdr.mh_data
+-#define m_size		m_hdr.mh_size
+-#define m_dat		M_dat.m_dat_
+-#define m_ext		M_dat.m_ext_
+-#define m_so		m_hdr.mh_so
+-
+ #define ifq_prev m_prev
+ #define ifq_next m_next
+ #define ifs_prev m_prevpkt
+diff --git a/slirp/tcp_subr.c b/slirp/tcp_subr.c
+index 1f2993f2c5..fac939184e 100644
+--- a/slirp/tcp_subr.c
++++ b/slirp/tcp_subr.c
+@@ -635,7 +635,7 @@ tcp_emu(struct socket *so, struct mbuf *m)
+ 			n4 =  (laddr & 0xff);
+ 
+ 			m->m_len = bptr - m->m_data; /* Adjust length */
+-                        m->m_len += snprintf(bptr, m->m_hdr.mh_size - m->m_len,
++                        m->m_len += snprintf(bptr, m->m_size - m->m_len,
+                                              "ORT %d,%d,%d,%d,%d,%d\r\n%s",
+                                              n1, n2, n3, n4, n5, n6, x==7?buff:"");
+ 			return 1;
+@@ -668,7 +668,7 @@ tcp_emu(struct socket *so, struct mbuf *m)
+ 			n4 =  (laddr & 0xff);
+ 
+ 			m->m_len = bptr - m->m_data; /* Adjust length */
+-			m->m_len += snprintf(bptr, m->m_hdr.mh_size - m->m_len,
++			m->m_len += snprintf(bptr, m->m_size - m->m_len,
+                                              "27 Entering Passive Mode (%d,%d,%d,%d,%d,%d)\r\n%s",
+                                              n1, n2, n3, n4, n5, n6, x==7?buff:"");
+ 
+@@ -694,7 +694,7 @@ tcp_emu(struct socket *so, struct mbuf *m)
+ 		if (m->m_data[m->m_len-1] == '\0' && lport != 0 &&
+ 		    (so = tcp_listen(slirp, INADDR_ANY, 0, so->so_laddr.s_addr,
+ 		                     htons(lport), SS_FACCEPTONCE)) != NULL)
+-                    m->m_len = snprintf(m->m_data, m->m_hdr.mh_size, "%d",
++                    m->m_len = snprintf(m->m_data, m->m_size, "%d",
+                                         ntohs(so->so_fport)) + 1;
+ 		return 1;
+ 
+@@ -715,7 +715,7 @@ tcp_emu(struct socket *so, struct mbuf *m)
+ 				return 1;
+ 			}
+ 			m->m_len = bptr - m->m_data; /* Adjust length */
+-                        m->m_len += snprintf(bptr, m->m_hdr.mh_size,
++                        m->m_len += snprintf(bptr, m->m_size,
+                                              "DCC CHAT chat %lu %u%c\n",
+                                              (unsigned long)ntohl(so->so_faddr.s_addr),
+                                              ntohs(so->so_fport), 1);
+@@ -726,7 +726,7 @@ tcp_emu(struct socket *so, struct mbuf *m)
+ 				return 1;
+ 			}
+ 			m->m_len = bptr - m->m_data; /* Adjust length */
+-                        m->m_len += snprintf(bptr, m->m_hdr.mh_size,
++                        m->m_len += snprintf(bptr, m->m_size,
+                                              "DCC SEND %s %lu %u %u%c\n", buff,
+                                              (unsigned long)ntohl(so->so_faddr.s_addr),
+                                              ntohs(so->so_fport), n1, 1);
+@@ -737,7 +737,7 @@ tcp_emu(struct socket *so, struct mbuf *m)
+ 				return 1;
+ 			}
+ 			m->m_len = bptr - m->m_data; /* Adjust length */
+-                        m->m_len += snprintf(bptr, m->m_hdr.mh_size,
++                        m->m_len += snprintf(bptr, m->m_size,
+                                              "DCC MOVE %s %lu %u %u%c\n", buff,
+                                              (unsigned long)ntohl(so->so_faddr.s_addr),
+                                              ntohs(so->so_fport), n1, 1);
+-- 
+2.13.6
+

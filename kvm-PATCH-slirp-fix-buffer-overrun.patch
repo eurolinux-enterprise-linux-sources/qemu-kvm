@@ -1,0 +1,57 @@
+From aa89405071b1c64a39be3ee40ed933757bcefdf0 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Philippe=20Mathieu-Daud=C3=A9?= <philmd@redhat.com>
+Date: Fri, 5 Jul 2019 17:34:34 -0300
+Subject: [PATCH 09/14] PATCH] slirp: fix buffer overrun
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Philippe Mathieu-Daudé <philmd@redhat.com>
+Message-id: <20190705173438.11188-2-philmd@redhat.com>
+Patchwork-id: 89388
+O-Subject: [RHEL-6.10.z qemu-kvm PATCH 1/5] PATCH] slirp: fix buffer overrun
+Bugzilla: 1586251
+RH-Acked-by: Xiao Wang <jasowang@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Stefano Garzarella <sgarzare@redhat.com>
+
+From: Bruce Rogers <brogers@novell.com>
+
+Since the addition of the slirp member to struct mbuf, the value of
+SLIRP_MSIZE and the initialization of m_size have not been correct,
+resulting in overrunning the end of the malloc'd buffer in some cases.
+
+Signed-off-by: Bruce Rogers <brogers@novell.com>
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 53fae6d27f342a17bdc218dc51ccccebd99f3545)
+Signed-off-by: Philippe Mathieu-DaudÃ© <philmd@redhat.com>
+Signed-off-by: Wainer dos Santos Moschetta <wainersm@redhat.com>
+---
+ slirp/mbuf.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/slirp/mbuf.c b/slirp/mbuf.c
+index 87508ba013..eadc802241 100644
+--- a/slirp/mbuf.c
++++ b/slirp/mbuf.c
+@@ -23,7 +23,7 @@
+  * Find a nice value for msize
+  * XXX if_maxlinkhdr already in mtu
+  */
+-#define SLIRP_MSIZE (IF_MTU + IF_MAXLINKHDR + sizeof(struct m_hdr ) + 6)
++#define SLIRP_MSIZE (IF_MTU + IF_MAXLINKHDR + offsetof(struct mbuf, m_dat) + 6)
+ 
+ void
+ m_init(Slirp *slirp)
+@@ -65,7 +65,7 @@ m_get(Slirp *slirp)
+ 	m->m_flags = (flags | M_USEDLIST);
+ 
+ 	/* Initialise it */
+-	m->m_size = SLIRP_MSIZE - sizeof(struct m_hdr);
++	m->m_size = SLIRP_MSIZE - offsetof(struct m_hdr, m_dat);
+ 	m->m_data = m->m_dat;
+ 	m->m_len = 0;
+         m->m_nextpkt = NULL;
+-- 
+2.13.6
+

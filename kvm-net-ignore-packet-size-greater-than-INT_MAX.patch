@@ -1,0 +1,58 @@
+From 2616249e363885c8242332736027edccd7c486a5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Philippe=20Mathieu-Daud=C3=A9?= <philmd@redhat.com>
+Date: Fri, 5 Jul 2019 10:26:34 -0300
+Subject: [PATCH 07/14] net: ignore packet size greater than INT_MAX
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Philippe Mathieu-Daudé <philmd@redhat.com>
+Message-id: <20190705102635.19149-4-philmd@redhat.com>
+Patchwork-id: 89382
+O-Subject: [RHEL-6.10.z qemu-kvm PATCH 3/4] net: ignore packet size greater than INT_MAX
+Bugzilla: 1636415
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Stefano Garzarella <sgarzare@redhat.com>
+RH-Acked-by: Xiao Wang <jasowang@redhat.com>
+
+From: Jason Wang <jasowang@redhat.com>
+
+There should not be a reason for passing a packet size greater than
+INT_MAX. It's usually a hint of bug somewhere, so ignore packet size
+greater than INT_MAX in qemu_deliver_packet_iov()
+
+CC: qemu-stable@nongnu.org
+Reported-by: Daniel Shapira <daniel@twistlock.com>
+Reviewed-by: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Jason Wang <jasowang@redhat.com>
+(cherry picked from commit 1592a9947036d60dde5404204a5d45975133caf5)
+[PMD: adapted net/net.c -> net.c]
+Signed-off-by: Philippe Mathieu-Daudé <philmd@redhat.com>
+Signed-off-by: Wainer dos Santos Moschetta <wainersm@redhat.com>
+---
+ net.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/net.c b/net.c
+index 3393b6b5a2..55bea25788 100644
+--- a/net.c
++++ b/net.c
+@@ -603,9 +603,14 @@ static ssize_t qemu_deliver_packet_iov(VLANClientState *sender,
+                                        void *opaque)
+ {
+     VLANClientState *vc = opaque;
++    size_t size = iov_size(iov, iovcnt);
++
++    if (size > INT_MAX) {
++        return size;
++    }
+ 
+     if (vc->link_down) {
+-        return iov_size(iov, iovcnt);
++        return size;
+     }
+ 
+     if (vc->info->receive_iov) {
+-- 
+2.13.6
+

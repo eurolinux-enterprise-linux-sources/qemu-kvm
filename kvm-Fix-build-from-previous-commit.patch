@@ -1,0 +1,45 @@
+From e35ad0366446520adf11333e828d0a1372f55c63 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Philippe=20Mathieu-Daud=C3=A9?= <philmd@redhat.com>
+Date: Fri, 5 Jul 2019 17:34:35 -0300
+Subject: [PATCH 10/14] Fix build from previous commit
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Philippe Mathieu-Daudé <philmd@redhat.com>
+Message-id: <20190705173438.11188-3-philmd@redhat.com>
+Patchwork-id: 89389
+O-Subject: [RHEL-6.10.z qemu-kvm PATCH 2/5] Fix build from previous commit
+Bugzilla: 1586251
+RH-Acked-by: Xiao Wang <jasowang@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Stefano Garzarella <sgarzare@redhat.com>
+
+From: Anthony Liguori <aliguori@us.ibm.com>
+
+I unfortunately got on an unnamed branch and pushed the wrong bits
+
+Signed-off-by: Anthony Liguori <aliguori@us.ibm.com>
+(cherry picked from commit 8fe3046f17ff98469c5874a0e7be823adc768485)
+Signed-off-by: Philippe Mathieu-DaudÃ© <philmd@redhat.com>
+Signed-off-by: Wainer dos Santos Moschetta <wainersm@redhat.com>
+---
+ slirp/mbuf.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/slirp/mbuf.c b/slirp/mbuf.c
+index eadc802241..ce2eb843f5 100644
+--- a/slirp/mbuf.c
++++ b/slirp/mbuf.c
+@@ -65,7 +65,7 @@ m_get(Slirp *slirp)
+ 	m->m_flags = (flags | M_USEDLIST);
+ 
+ 	/* Initialise it */
+-	m->m_size = SLIRP_MSIZE - offsetof(struct m_hdr, m_dat);
++	m->m_size = SLIRP_MSIZE - offsetof(struct mbuf, m_dat);
+ 	m->m_data = m->m_dat;
+ 	m->m_len = 0;
+         m->m_nextpkt = NULL;
+-- 
+2.13.6
+

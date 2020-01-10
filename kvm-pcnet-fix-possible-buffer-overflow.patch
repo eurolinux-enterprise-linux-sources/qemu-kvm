@@ -1,0 +1,62 @@
+From 6e0ba2c2eff98fa39192596659f9538712abcd02 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Philippe=20Mathieu-Daud=C3=A9?= <philmd@redhat.com>
+Date: Sat, 13 Jul 2019 12:42:38 -0300
+Subject: [PATCH 14/14] pcnet: fix possible buffer overflow
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Philippe Mathieu-Daudé <philmd@redhat.com>
+Message-id: <20190713124238.24434-2-philmd@redhat.com>
+Patchwork-id: 89510
+O-Subject: [RHEL-6.10.z qemu-kvm PATCH 1/1] pcnet: fix possible buffer overflow
+Bugzilla: 1636774
+RH-Acked-by: Xiao Wang <jasowang@redhat.com>
+RH-Acked-by: Stefan Hajnoczi <stefanha@redhat.com>
+RH-Acked-by: Stefano Garzarella <sgarzare@redhat.com>
+
+From: Jason Wang <jasowang@redhat.com>
+
+In pcnet_receive(), we try to assign size_ to size which converts from
+size_t to integer. This will cause troubles when size_ is greater
+INT_MAX, this will lead a negative value in size and it can then pass
+the check of size < MIN_BUF_SIZE which may lead out of bound access
+for both buf and buf1.
+
+Fixing by converting the type of size to size_t.
+
+CC: qemu-stable@nongnu.org
+Reported-by: Daniel Shapira <daniel@twistlock.com>
+Reviewed-by: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Jason Wang <jasowang@redhat.com>
+(cherry picked from commit b1d80d12c5f7ff081bb80ab4f4241d4248691192)
+[PMD: hw/net/ -> hw/]
+Signed-off-by: Philippe Mathieu-Daudé <philmd@redhat.com>
+Signed-off-by: Wainer dos Santos Moschetta <wainersm@redhat.com>
+---
+ hw/pcnet.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/hw/pcnet.c b/hw/pcnet.c
+index eab843047e..e9072a7a07 100644
+--- a/hw/pcnet.c
++++ b/hw/pcnet.c
+@@ -1047,13 +1047,13 @@ ssize_t pcnet_receive(VLANClientState *nc, const uint8_t *buf, size_t size_)
+     uint8_t buf1[60];
+     int remaining;
+     int crc_err = 0;
+-    int size = size_;
++    size_t size = size_;
+ 
+     if (CSR_DRX(s) || CSR_STOP(s) || CSR_SPND(s) || !size)
+         return -1;
+ 
+ #ifdef PCNET_DEBUG
+-    printf("pcnet_receive size=%d\n", size);
++    printf("pcnet_receive size=%zu\n", size);
+ #endif
+ 
+     /* if too small buffer, then expand it */
+-- 
+2.13.6
+

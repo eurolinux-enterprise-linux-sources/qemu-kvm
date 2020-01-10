@@ -1,0 +1,51 @@
+From 919288452708f96768dba293740541d56035dcae Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Philippe=20Mathieu-Daud=C3=A9?= <philmd@redhat.com>
+Date: Wed, 19 Jun 2019 15:58:59 -0300
+Subject: [PATCH 04/14] qxl: check release info object
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+RH-Author: Philippe Mathieu-Daudé <philmd@redhat.com>
+Message-id: <20190619155859.14960-2-philmd@redhat.com>
+Patchwork-id: 88731
+O-Subject: [RHEL-6.10.z qemu-kvm PATCH 1/1] qxl: check release info object
+Bugzilla: 1712728
+RH-Acked-by: Christophe de Dinechin <dinechin@redhat.com>
+RH-Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+RH-Acked-by: Laszlo Ersek <lersek@redhat.com>
+
+From: Prasad J Pandit <pjp@fedoraproject.org>
+
+When releasing spice resources in release_resource() routine,
+if release info object 'ext.info' is null, it leads to null
+pointer dereference. Add check to avoid it.
+
+Reported-by: Bugs SysSec <bugs-syssec@rub.de>
+Signed-off-by: Prasad J Pandit <pjp@fedoraproject.org>
+Message-id: 20190425063534.32747-1-ppandit@redhat.com
+Signed-off-by: Gerd Hoffmann <kraxel@redhat.com>
+(cherry picked from commit d52680fc932efb8a2f334cc6993e705ed1e31e99)
+[apply to hw/qxl.c instead of hw/display/qxl.c]
+Signed-off-by: Wainer dos Santos Moschetta <wainersm@redhat.com>
+---
+ hw/qxl.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/hw/qxl.c b/hw/qxl.c
+index 5fc592e09b..b2feb83f02 100644
+--- a/hw/qxl.c
++++ b/hw/qxl.c
+@@ -725,6 +725,9 @@ static void interface_release_resource(QXLInstance *sin,
+     QXLReleaseRing *ring;
+     uint64_t *item, id;
+ 
++    if (!ext.info) {
++        return;
++    }
+     if (ext.group_id == MEMSLOT_GROUP_HOST) {
+         /* host group -> vga mode update request */
+         qemu_spice_destroy_update(&qxl->ssd, (void*)ext.info->id);
+-- 
+2.13.6
+

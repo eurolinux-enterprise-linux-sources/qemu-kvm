@@ -106,7 +106,7 @@
 
 %define buildid %{nil}
 
-%define zrelease 4
+%define zrelease 5
 %define sublevel 0.12.1.2
 %define pkgrelease 2.506
 
@@ -9201,6 +9201,34 @@ Patch5278: kvm-target-i386-define-md-clear-bit.patch
 Patch5279: kvm-target-i386-Sanitize-the-XSAVE-related-feature-bits.patch
 # For bz#1689790 - CVE-2019-9824 qemu-kvm: QEMU: Slirp: information leakage in tcp_emu() due to uninitialized stack variables [rhel-6]
 Patch5280: kvm-slirp-check-sscanf-result-when-emulating-ident.patch
+# For bz#1669066 - CVE-2019-6778 qemu-kvm: QEMU: slirp: heap buffer overflow in tcp_emu() [rhel-6.10.z]
+Patch5281: kvm-slirp-fix-big-little-endian-conversion-in-ident-prot.patch
+# For bz#1669066 - CVE-2019-6778 qemu-kvm: QEMU: slirp: heap buffer overflow in tcp_emu() [rhel-6.10.z]
+Patch5282: kvm-slirp-ensure-there-is-enough-space-in-mbuf-to-null-t.patch
+# For bz#1669066 - CVE-2019-6778 qemu-kvm: QEMU: slirp: heap buffer overflow in tcp_emu() [rhel-6.10.z]
+Patch5283: kvm-slirp-don-t-manipulate-so_rcv-in-tcp_emu.patch
+# For bz#1712728 - CVE-2019-12155 qemu-kvm: QEMU: qxl: null pointer dereference while releasing spice resources [rhel-6]
+Patch5284: kvm-qxl-check-release-info-object.patch
+# For bz#1636415 - CVE-2018-10839 qemu-kvm: Qemu: ne2000: integer overflow leads to buffer overflow issue [rhel-6]
+Patch5285: kvm-net-Use-iov-helper-functions.patch
+# For bz#1636415 - CVE-2018-10839 qemu-kvm: Qemu: ne2000: integer overflow leads to buffer overflow issue [rhel-6]
+Patch5286: kvm-net-increase-buffer-size-to-accommodate-Jumbo-frame-.patch
+# For bz#1636415 - CVE-2018-10839 qemu-kvm: Qemu: ne2000: integer overflow leads to buffer overflow issue [rhel-6]
+Patch5287: kvm-net-ignore-packet-size-greater-than-INT_MAX.patch
+# For bz#1636415 - CVE-2018-10839 qemu-kvm: Qemu: ne2000: integer overflow leads to buffer overflow issue [rhel-6]
+Patch5288: kvm-net-drop-too-large-packet-early.patch
+# For bz#1586251 - CVE-2018-11806 qemu-kvm: QEMU: slirp: heap buffer overflow while reassembling fragmented datagrams [rhel-6.10.z]
+Patch5289: kvm-PATCH-slirp-fix-buffer-overrun.patch
+# For bz#1586251 - CVE-2018-11806 qemu-kvm: QEMU: slirp: heap buffer overflow while reassembling fragmented datagrams [rhel-6.10.z]
+Patch5290: kvm-Fix-build-from-previous-commit.patch
+# For bz#1586251 - CVE-2018-11806 qemu-kvm: QEMU: slirp: heap buffer overflow while reassembling fragmented datagrams [rhel-6.10.z]
+Patch5291: kvm-slirp-remove-mbuf-m_hdr-m_dat-indirection.patch
+# For bz#1586251 - CVE-2018-11806 qemu-kvm: QEMU: slirp: heap buffer overflow while reassembling fragmented datagrams [rhel-6.10.z]
+Patch5292: kvm-slirp-Convert-mbufs-to-use-g_malloc-and-g_free.patch
+# For bz#1586251 - CVE-2018-11806 qemu-kvm: QEMU: slirp: heap buffer overflow while reassembling fragmented datagrams [rhel-6.10.z]
+Patch5293: kvm-slirp-correct-size-computation-while-concatenating-m.patch
+# For bz#1636774 - CVE-2018-17962 qemu-kvm: Qemu: pcnet: integer overflow leads to buffer overflow [rhel-6]
+Patch5294: kvm-pcnet-fix-possible-buffer-overflow.patch
 
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires: SDL-devel zlib-devel which texi2html gnutls-devel cyrus-sasl-devel
@@ -13635,6 +13663,20 @@ MakeIOtestsExecutable()
 %patch5278 -p1
 %patch5279 -p1
 %patch5280 -p1
+%patch5281 -p1
+%patch5282 -p1
+%patch5283 -p1
+%patch5284 -p1
+%patch5285 -p1
+%patch5286 -p1
+%patch5287 -p1
+%patch5288 -p1
+%patch5289 -p1
+%patch5290 -p1
+%patch5291 -p1
+%patch5292 -p1
+%patch5293 -p1
+%patch5294 -p1
 
 ApplyOptionalPatch qemu-kvm-test.patch
 
@@ -14021,6 +14063,32 @@ fi
 %endif # with qemu_kvm
 
 %changelog
+* Mon Sep 09 2019 Wainer dos Santos Moschetta <wainersm@redhat.com> - 0.12.1.2-2.506.el6_10.5
+- kvm-slirp-fix-big-little-endian-conversion-in-ident-prot.patch [bz#1669066]
+- kvm-slirp-ensure-there-is-enough-space-in-mbuf-to-null-t.patch [bz#1669066]
+- kvm-slirp-don-t-manipulate-so_rcv-in-tcp_emu.patch [bz#1669066]
+- kvm-qxl-check-release-info-object.patch [bz#1712728]
+- kvm-net-Use-iov-helper-functions.patch [bz#1636415]
+- kvm-net-increase-buffer-size-to-accommodate-Jumbo-frame-.patch [bz#1636415]
+- kvm-net-ignore-packet-size-greater-than-INT_MAX.patch [bz#1636415]
+- kvm-net-drop-too-large-packet-early.patch [bz#1636415]
+- kvm-PATCH-slirp-fix-buffer-overrun.patch [bz#1586251]
+- kvm-Fix-build-from-previous-commit.patch [bz#1586251]
+- kvm-slirp-remove-mbuf-m_hdr-m_dat-indirection.patch [bz#1586251]
+- kvm-slirp-Convert-mbufs-to-use-g_malloc-and-g_free.patch [bz#1586251]
+- kvm-slirp-correct-size-computation-while-concatenating-m.patch [bz#1586251]
+- kvm-pcnet-fix-possible-buffer-overflow.patch [bz#1636774]
+- Resolves: bz#1586251
+  (CVE-2018-11806 qemu-kvm: QEMU: slirp: heap buffer overflow while reassembling fragmented datagrams [rhel-6.10.z])
+- Resolves: bz#1636415
+  (CVE-2018-10839 qemu-kvm: Qemu: ne2000: integer overflow leads to buffer overflow issue [rhel-6])
+- Resolves: bz#1636774
+  (CVE-2018-17962 qemu-kvm: Qemu: pcnet: integer overflow leads to buffer overflow [rhel-6])
+- Resolves: bz#1669066
+  (CVE-2019-6778 qemu-kvm: QEMU: slirp: heap buffer overflow in tcp_emu() [rhel-6.10.z])
+- Resolves: bz#1712728
+  (CVE-2019-12155 qemu-kvm: QEMU: qxl: null pointer dereference while releasing spice resources [rhel-6])
+
 * Thu Jun 18 2019 Wainer dos Santos Moschetta <wainersm@redhat.com> - 0.12.1.2-2.506.el6_10.4
 - kvm-target-i386-Sanitize-the-XSAVE-related-feature-bits.patch [bz#1673779]
 - kvm-slirp-check-sscanf-result-when-emulating-ident.patch [bz#1689790]
