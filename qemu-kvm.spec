@@ -106,7 +106,7 @@
 
 %define buildid %{nil}
 
-%define zrelease 3
+%define zrelease 4
 %define sublevel 0.12.1.2
 %define pkgrelease 2.506
 
@@ -9197,6 +9197,10 @@ Patch5276: qemu-kvm-i386-Define-the-Virt-SSBD-MSR-and-handling-of-it-CVE.patch
 Patch5277: qemu-kvm-i386-define-the-AMD-virt-ssbd-CPUID-feature-bit-CVE-.patch
 # For bz#1698996 - CVE-2018-12130 qemu-kvm: hardware: MFBDS [rhel-6.10.z]
 Patch5278: kvm-target-i386-define-md-clear-bit.patch
+# For bz#1673779 - RHEL8 VM's do not install on RHEL6 KVM hypervisor
+Patch5279: kvm-target-i386-Sanitize-the-XSAVE-related-feature-bits.patch
+# For bz#1689790 - CVE-2019-9824 qemu-kvm: QEMU: Slirp: information leakage in tcp_emu() due to uninitialized stack variables [rhel-6]
+Patch5280: kvm-slirp-check-sscanf-result-when-emulating-ident.patch
 
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires: SDL-devel zlib-devel which texi2html gnutls-devel cyrus-sasl-devel
@@ -13629,6 +13633,8 @@ MakeIOtestsExecutable()
 %patch5276 -p1
 %patch5277 -p1
 %patch5278 -p1
+%patch5279 -p1
+%patch5280 -p1
 
 ApplyOptionalPatch qemu-kvm-test.patch
 
@@ -14015,6 +14021,14 @@ fi
 %endif # with qemu_kvm
 
 %changelog
+* Thu Jun 18 2019 Wainer dos Santos Moschetta <wainersm@redhat.com> - 0.12.1.2-2.506.el6_10.4
+- kvm-target-i386-Sanitize-the-XSAVE-related-feature-bits.patch [bz#1673779]
+- kvm-slirp-check-sscanf-result-when-emulating-ident.patch [bz#1689790]
+- Resolves: bz#1673779
+  (RHEL8 VM's do not install on RHEL6 KVM hypervisor)
+- Resolves: bz#1689790
+  (CVE-2019-9824 qemu-kvm: QEMU: Slirp: information leakage in tcp_emu() due to uninitialized stack variables [rhel-6])
+
 * Fri May 10 2019 Danilo Cesar Lemes de Paula <ddepaula@redhat.com> - 0.12.1.2-2.506.el6_10.3
 - kvm-target-i386-define-md-clear-bit.patch [bz#1698996]
 - Resolves: bz#1698996
