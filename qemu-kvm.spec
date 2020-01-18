@@ -76,7 +76,7 @@ Obsoletes: %1 < %{obsoletes_version}                                      \
 Summary: QEMU is a machine emulator and virtualizer
 Name: %{pkgname}%{?pkgsuffix}
 Version: 1.5.3
-Release: 167%{?dist}
+Release: 167%{?dist}.1
 # Epoch because we pushed a qemu-1.0 package. AIUI this can't ever be dropped
 Epoch: 10
 License: GPLv2 and GPLv2+ and CC-BY
@@ -3969,6 +3969,10 @@ Patch1955: kvm-slirp-fix-big-little-endian-conversion-in-ident-prot.patch
 Patch1956: kvm-slirp-ensure-there-is-enough-space-in-mbuf-to-null-t.patch
 # For bz#1669068 - CVE-2019-6778 qemu-kvm: QEMU: slirp: heap buffer overflow in tcp_emu() [rhel-7.7]
 Patch1957: kvm-slirp-don-t-manipulate-so_rcv-in-tcp_emu.patch
+# For bz#1732337 - CVE-2019-12155 qemu-kvm: QEMU: qxl: null pointer dereference while releasing spice resources [rhel-7] [rhel-7.7.z]
+Patch1958: kvm-qxl-check-release-info-object.patch
+# For bz#1734748 - CVE-2019-14378 qemu-kvm: QEMU: slirp: heap buffer overflow during packet reassembly [rhel-7.7.z]
+Patch1959: kvm-Fix-heap-overflow-in-ip_reass-on-big-packet-input.patch
 
 
 BuildRequires: zlib-devel
@@ -6104,6 +6108,8 @@ tar -xf %{SOURCE21}
 %patch1955 -p1
 %patch1956 -p1
 %patch1957 -p1
+%patch1958 -p1
+%patch1959 -p1
 
 %build
 buildarch="%{kvm_target}-softmmu"
@@ -6549,6 +6555,14 @@ sh %{_sysconfdir}/sysconfig/modules/kvm.modules &> /dev/null || :
 %{_mandir}/man8/qemu-nbd.8*
 
 %changelog
+* Mon Aug 12 2019 Miroslav Rezanina <mrezanin@redhat.com> - 1.5.3-167.el7_7.1
+- kvm-qxl-check-release-info-object.patch [bz#1732337]
+- kvm-Fix-heap-overflow-in-ip_reass-on-big-packet-input.patch [bz#1734748]
+- Resolves: bz#1732337
+  (CVE-2019-12155 qemu-kvm: QEMU: qxl: null pointer dereference while releasing spice resources [rhel-7] [rhel-7.7.z])
+- Resolves: bz#1734748
+  (CVE-2019-14378 qemu-kvm: QEMU: slirp: heap buffer overflow during packet reassembly [rhel-7.7.z])
+
 * Wed Jun 12 2019 Miroslav Rezanina <mrezanin@redhat.com> - 1.5.3-167.el7
 - Reverting kvm-seccomp-set-the-seccomp-filter-to-all-threads.patch [bz#1618503]
 - Resolves: bz#1618503
