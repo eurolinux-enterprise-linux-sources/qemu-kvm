@@ -76,7 +76,7 @@ Obsoletes: %1 < %{obsoletes_version}                                      \
 Summary: QEMU is a machine emulator and virtualizer
 Name: %{pkgname}%{?pkgsuffix}
 Version: 1.5.3
-Release: 160%{?dist}.1
+Release: 160%{?dist}.2
 # Epoch because we pushed a qemu-1.0 package. AIUI this can't ever be dropped
 Epoch: 10
 License: GPLv2 and GPLv2+ and CC-BY
@@ -3941,6 +3941,8 @@ Patch1941: kvm-ide-avoid-referencing-NULL-dev-in-rotational-rate-se.patch
 Patch1942: kvm-slirp-Correct-size-check-in-m_inc.patch
 # For bz#1664792 - mode="host-model" VMs include broken "arch-facilities" flag name [qemu-kvm] [rhel-7.6.z]
 Patch1943: kvm-i386-Deprecate-arch-facilities-and-make-it-block-liv.patch
+# For bz#1693216 - qemu-kvm: hardware: Microarchitectural Store Buffer Data Sampling [rhel-7.6.z]
+Patch1944: kvm-target-i386-define-md-clear-bit-rhel.patch
 
 
 BuildRequires: zlib-devel
@@ -6062,6 +6064,7 @@ tar -xf %{SOURCE21}
 %patch1941 -p1
 %patch1942 -p1
 %patch1943 -p1
+%patch1944 -p1
 
 %build
 buildarch="%{kvm_target}-softmmu"
@@ -6507,6 +6510,11 @@ sh %{_sysconfdir}/sysconfig/modules/kvm.modules &> /dev/null || :
 %{_mandir}/man8/qemu-nbd.8*
 
 %changelog
+* Wed Apr 10 2019 Danilo C. L. de Paula <ddepaula@redhat.com> - 1.5.3-160.el7_6.2
+- kvm-target-i386-define-md-clear-bit-rhel.patch
+- Resolves: bz#1693216
+  (qemu-kvm: hardware: Microarchitectural Store Buffer Data Sampling)
+
 * Mon Jan 14 2019 Miroslav Rezanina <mrezanin@redhat.com> - 1.5.3-160.el7_6.1
 - kvm-i386-Deprecate-arch-facilities-and-make-it-block-liv.patch [bz#1664792]
 - Resolves: bz#1664792
